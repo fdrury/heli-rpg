@@ -1,0 +1,466 @@
+namespace Rotorwash.Sim;
+
+/// <summary>Rigid-body state in world NED axes.</summary>
+public struct FlightState
+{
+    public Vec3 Position;        // NED, m. Altitude = -Z
+    public Vec3 Velocity;        // NED, m/s
+    public Quat Orientation;     // body -> world
+    public Vec3 AngularVelocity; // body axes, rad/s
+
+    public double Altitude => -Position.Z;
+
+    public static FlightState AtRest(double altitude = 0) => new()
+    {
+        Position = new Vec3(0, 0, -altitude),
+        Velocity = Vec3.Zero,
+        Orientation = Quat.Identity,
+        AngularVelocity = Vec3.Zero,
+    };
+}
+
+/// <summary>Everything the HUD, the audio system and the tuning tools want to know.</summary>
+public struct FlightTelemetry
+{
+    public double RotorRpmPercent;
+    public double TorquePercent;
+    public double CollectivePitchDeg;
+    public double AirspeedTrue;      // m/s
+    public double GroundSpeed;       // m/s
+    public double VerticalSpeed;     // m/s, positive up
+    public double HeightAgl;
+    public double DensityAltitude;
+    public double Thrust;
+    public double PowerRequired;
+    public double PowerAvailable;
+    public double FuelKg;
+    public double FuelFlow;          // kg/s
+    public double Sideslip;          // rad
+    public double AngleOfAttack;     // rad
+    public double VrsSeverity;
+    public double BladeLoading;      // Ct/sigma
+    public double TipMach;
+    public double StalledFraction;
+    public double Coning;
+    public double FlapBack;
+    public double FlapSide;
+    public bool Autorotating;
+    public bool TailRotorSaturated;
+    public bool TorqueLimited;
+    public bool OnGround;
+    public EngineState Engine;
+    public double LoadFactor;        // g
+}
+
+/// <summary>
+/// Assembles rotors, engine and airframe into a flying machine.
+///
+/// Two ways to use it:
+///   * <see cref="ComputeWrench"/> - advance the internal rotor/engine state and get the
+///     force and moment to hand to an external rigid-body solver. This is what the Godot
+///     layer calls, so collisions and contacts stay the engine's job.
+///   * <see cref="Step"/> - do all that and integrate the rigid body internally. Used by
+///     the headless test suite and the tuning harness, where launching an engine to find
+///     out whether the rotor can hover would be absurd.
+/// </summary>
+public sealed class Helicopter
+{
+    public Airframe Airframe { get; }
+    public MainRotor Rotor { get; }
+    public TailRotor Tail { get; }
+    public Powerplant Engine { get; }
+    public IEnvironment Env { get; set; }
+
+    public FlightState State;
+    public Controls Input;
+
+    /// <summary>Main rotor speed, rad/s.</summary>
+    public double RotorOmega { get; set; }
+
+    /// <summary>Fuel remaining, kg.</summary>
+    public double Fuel { get; set; }
+
+    /// <summary>Last computed telemetry.</summary>
+    public FlightTelemetry Telemetry;
+
+    /// <summary>Force and moment computed on the last call, body axes. Diagnostics only.</summary>
+    public Vec3 LastForceBody { get; private set; }
+    public Vec3 LastMomentBody { get; private set; }
+
+    /// <summary>
+    /// Control positions actually reaching the swashplate, after actuator rate limiting.
+    /// Pilot input is a demand; hydraulic actuators and a human wrist both take time,
+    /// and without this an autopilot (or a digital joystick) can slam full cyclic in a
+    /// single tick and generate a hub moment no real rotor could ever see.
+    /// </summary>
+    public Controls Actual => _actual;
+
+    private Controls _actual = Controls.Neutral;
+
+    /// <summary>Seconds for a control to travel its full range. Roughly a real servo.</summary>
+    public double ActuatorFullTravelTime { get; set; } = 0.35;
+
+    /// <summary>Enable the simple spring-damper ground model (headless use only).</summary>
+    public bool UseInternalGroundModel { get; set; } = true;
+
+    private Vec3 _lastAccelBody;
+    private double _cachedMass;
+    private Vec3 _cachedCg;
+    private Mat3 _inertia, _inertiaInv;
+    private bool _massDirty = true;
+
+    public Helicopter(Airframe airframe, IEnvironment? env = null)
+    {
+        Airframe = airframe;
+        Rotor = new MainRotor(airframe.MainRotor);
+        Tail = new TailRotor(airframe.TailRotor);
+        Engine = new Powerplant(airframe.Engine);
+        Env = env ?? new FlatEnvironment();
+        Fuel = airframe.FuelCapacity * 0.6;
+        RotorOmega = 0;
+        State = FlightState.AtRest();
+        Input = Controls.Neutral;
+    }
+
+    /// <summary>Call after changing masses, fuel load or the build.</summary>
+    public void InvalidateMass() => _massDirty = true;
+
+    public double TotalMass { get { EnsureMass(); return _cachedMass; } }
+    public Vec3 CentreOfGravity { get { EnsureMass(); return _cachedCg; } }
+    public Mat3 Inertia { get { EnsureMass(); return _inertia; } }
+
+    private void EnsureMass()
+    {
+        if (!_massDirty) return;
+        var mp = Airframe.Mass;
+        mp.Remove("fuel");
+        mp.Add("fuel", Airframe.FuelPosition, Math.Max(Fuel, 0.0));
+        _cachedMass = mp.TotalMass;
+        _cachedCg = mp.CentreOfGravity;
+        _inertia = mp.InertiaAboutCg();
+        _inertiaInv = _inertia.Inverse();
+        _massDirty = false;
+    }
+
+    /// <summary>Spawn the aircraft running and governed, sitting on its skids.</summary>
+    public void PlaceOnGround(double north = 0, double east = 0, double headingRad = 0, bool running = true)
+    {
+        double ground = Env.GroundHeight(north, east);
+        EnsureMass();
+        double skidZ = 0;
+        foreach (var c in Airframe.ContactPoints) skidZ = Math.Max(skidZ, c.Z - _cachedCg.Z);
+        State = new FlightState
+        {
+            Position = new Vec3(north, east, -(ground + skidZ)),
+            Velocity = Vec3.Zero,
+            Orientation = Quat.FromEuler(0, 0, headingRad),
+            AngularVelocity = Vec3.Zero,
+        };
+        Rotor.Reset();
+        Tail.Reset();
+        if (running)
+        {
+            Engine.SetRunning();
+            RotorOmega = Airframe.MainRotor.NominalOmega;
+            SeedRotorForWeight();
+        }
+        else { Engine.Reset(); RotorOmega = 0; }
+    }
+
+    /// <summary>Spawn the aircraft airborne, trimmed straight and level at a given speed.</summary>
+    public void PlaceInFlight(double altitude, double forwardSpeed = 0, double headingRad = 0)
+    {
+        State = new FlightState
+        {
+            Position = new Vec3(0, 0, -altitude),
+            Velocity = new Vec3(Math.Cos(headingRad) * forwardSpeed, Math.Sin(headingRad) * forwardSpeed, 0),
+            Orientation = Quat.FromEuler(0, 0, headingRad),
+            AngularVelocity = Vec3.Zero,
+        };
+        Rotor.Reset();
+        Tail.Reset();
+        Engine.SetRunning();
+        RotorOmega = Airframe.MainRotor.NominalOmega;
+        SeedRotorForWeight();
+    }
+
+    /// <summary>Seed the rotor inflow and coning for a rotor already carrying the aircraft.</summary>
+    private void SeedRotorForWeight()
+    {
+        // Put the actuators where a hovering aircraft would have them. Otherwise the
+        // rate limiter starts at full-down collective and the aircraft drops a rotor
+        // disc's worth of altitude before the controls even reach the trim position.
+        _actual = new Controls { Collective = 0.5, Throttle = 1.0 };
+        Input = _actual;
+
+        EnsureMass();
+        double rho = Env.Atmosphere.DensityAt(State.Altitude);
+        double weight = _cachedMass * Atmosphere.Gravity;
+        Rotor.Seed(weight, rho, RotorOmega);
+
+        // Estimate the anti-torque the tail will be carrying, so it does not spike either.
+        var cfg = Airframe.MainRotor;
+        double vh = Math.Sqrt(weight / (2 * rho * cfg.DiscArea));
+        double hoverPower = weight * vh / 0.65;
+        double torque = hoverPower / Math.Max(RotorOmega, 1.0);
+        double arm = Math.Abs(Airframe.TailRotor.Position.X - _cachedCg.X);
+        Tail.Seed(torque / Math.Max(arm, 1.0), rho, RotorOmega * Airframe.TailRotor.GearRatio);
+    }
+
+    /// <summary>
+    /// Advance rotors, engine and drivetrain, and return the total force and moment
+    /// about the centre of gravity, in body axes, excluding gravity and ground contact.
+    /// </summary>
+    public void ComputeWrench(double dt, out Vec3 forceBody, out Vec3 momentBody)
+    {
+        EnsureMass();
+        var af = Airframe;
+        var cfg = af.MainRotor;
+
+        Input.ClampToRange();
+        RateLimitControls(dt);
+        Controls cmd = _actual;
+
+        double altitude = State.Altitude;
+        var atmo = Env.Atmosphere;
+        double rho = atmo.DensityAt(altitude);
+        double soundSpeed = atmo.SpeedOfSoundAt(altitude);
+
+        Vec3 wind = Env.Wind(State.Position);
+        Vec3 vAirWorld = State.Velocity - wind;
+        Vec3 vAirBody = State.Orientation.InverseRotate(vAirWorld);
+        Vec3 omega = State.AngularVelocity;
+
+        double groundZ = Env.GroundHeight(State.Position.X, State.Position.Y);
+        double heightAgl = altitude - groundZ;
+        double hubAgl = heightAgl + (_cachedCg.Z - cfg.HubPosition.Z)
+                        * Math.Cos(State.Orientation.Pitch) * Math.Cos(State.Orientation.Roll);
+
+        // --- Control mapping -------------------------------------------------
+        double collective = cfg.CollectiveMin + (cfg.CollectiveMax - cfg.CollectiveMin) * cmd.Collective;
+        double cyclicFwd = cmd.CyclicPitch * cfg.CyclicRange;
+        double cyclicRight = cmd.CyclicRoll * cfg.CyclicRange;
+
+        var tailCfg = af.TailRotor;
+        double pedalCentre = (tailCfg.PitchMax + tailCfg.PitchMin) * 0.5;
+        double pedalHalf = (tailCfg.PitchMax - tailCfg.PitchMin) * 0.5;
+        // Torque reaction yaws the nose right on an anticlockwise rotor, so the tail
+        // rotor is always working to yaw it left, and LEFT pedal is the one that asks
+        // for more tail rotor thrust. Right pedal unloads it. Getting this backwards
+        // makes the aircraft depart the moment anybody touches the pedals.
+        double tailPitch = pedalCentre - cmd.Pedal * pedalHalf * cfg.SpinSign;
+
+        Engine.FlightIdle = cmd.Throttle < 0.5;
+
+        // --- Rotors ----------------------------------------------------------
+        var mr = Rotor.Update(vAirBody, omega, RotorOmega, collective, cyclicFwd, cyclicRight,
+                              rho, soundSpeed, hubAgl, dt, _cachedCg);
+
+        var tr = Tail.Update(vAirBody, omega, RotorOmega, tailPitch, rho, soundSpeed, dt, _cachedCg);
+
+        // --- Drivetrain ------------------------------------------------------
+        double tailTorqueAtMain = tr.ShaftTorque * tailCfg.GearRatio;
+        double losses = Math.Abs(mr.ShaftTorque) * af.DrivetrainLoss;
+        double loadTorque = mr.ShaftTorque + tailTorqueAtMain + losses;
+
+        double densityRatio = rho / Atmosphere.SeaLevelDensity;
+        var pp = Engine.Update(RotorOmega, cfg.NominalOmega, loadTorque, densityRatio, dt);
+
+        double brakeTorque = cmd.Brake * 4000.0 * Math.Sign(RotorOmega);
+        double netTorque = pp.ShaftTorque - loadTorque - brakeTorque;
+        RotorOmega = Math.Max(0.0, RotorOmega + netTorque / Math.Max(cfg.RotorInertia, 1.0) * dt);
+
+        // --- Assemble the wrench ---------------------------------------------
+        forceBody = mr.Force + tr.Force;
+
+        // The shaft-axis component of the MAIN ROTOR moment is not transmitted to the
+        // airframe directly - it spins the rotor. What the airframe feels instead is the
+        // reaction to the torque the engine puts through the mast, which is why a
+        // helicopter in autorotation needs almost no pedal.
+        //
+        // This substitution has to happen on the main rotor moment alone. Doing it on
+        // the combined moment also deletes the tail rotor's yaw authority, and the
+        // aircraft then spins up no matter what the pilot does with the pedals.
+        Vec3 spinAxis = Rotor.ShaftAxisDown * -cfg.SpinSign;   // rotor angular velocity direction
+        Vec3 rotorMoment = mr.Moment;
+        rotorMoment -= spinAxis * Vec3.Dot(rotorMoment, spinAxis);
+        rotorMoment += spinAxis * -pp.ShaftTorque;
+
+        Vec3 moment = rotorMoment + tr.Moment;
+
+        // --- Airframe aerodynamics -------------------------------------------
+        double downwash = Rotor.Inflow.Lambda0 * RotorOmega * cfg.Radius * 2.0;
+        double advanceRatio = RotorOmega > 1 ? vAirBody.Length / (RotorOmega * cfg.Radius) : 0;
+
+        foreach (var s in af.Surfaces)
+        {
+            s.Compute(vAirBody, omega, rho, soundSpeed, downwash, advanceRatio, out var sf, out var sm, _cachedCg);
+            forceBody += sf;
+            moment += sm;
+        }
+
+        // Parasite drag, per axis, plus the download the rotor wake presses onto the
+        // fuselage - a real and annoying few percent of thrust you never get back.
+        double q = 0.5 * rho;
+        Vec3 vb = vAirBody;
+        forceBody += new Vec3(
+            -q * af.DragArea.X * vb.X * Math.Abs(vb.X),
+            -q * af.DragArea.Y * vb.Y * Math.Abs(vb.Y),
+            -q * af.DragArea.Z * vb.Z * Math.Abs(vb.Z));
+        forceBody += Vec3.Down * (Math.Max(mr.Thrust, 0) * af.VerticalDrag / (1.0 + advanceRatio * 12.0));
+
+        // Fuselage static moments: a helicopter fuselage is aerodynamically unstable in
+        // pitch and mildly stabilising in yaw, and the player should feel both.
+        double speed = vb.Length;
+        if (speed > 2.0)
+        {
+            double qbar = 0.5 * rho * speed * speed * af.ReferenceLength;
+            double alpha = Math.Atan2(vb.Z, Math.Max(vb.X, 0.5));
+            double beta = Math.Asin(Math.Clamp(vb.Y / speed, -1, 1));
+            moment += new Vec3(0, qbar * af.FuselageCmAlpha * alpha * 0.02,
+                                  qbar * af.FuselageCnBeta * beta * 0.02);
+        }
+
+        // --- Damping from air on the fuselage in rotation ---------------------
+        moment += new Vec3(-omega.X * 900.0, -omega.Y * 2200.0, -omega.Z * 1500.0) * (0.3 + densityRatio);
+
+        momentBody = moment;
+        LastForceBody = forceBody;
+        LastMomentBody = moment;
+
+        // --- Fuel ------------------------------------------------------------
+        if (Fuel > 0)
+        {
+            Fuel = Math.Max(0, Fuel - pp.FuelFlow * dt);
+            _massDirty = true;
+            if (Fuel <= 0) Engine.FuelAvailable = false;
+        }
+
+        // --- Telemetry --------------------------------------------------------
+        Telemetry.RotorRpmPercent = RotorOmega / cfg.NominalOmega * 100.0;
+        Telemetry.TorquePercent = pp.TorquePercent * 100.0;
+        Telemetry.CollectivePitchDeg = collective * 180.0 / Math.PI;
+        Telemetry.AirspeedTrue = vAirBody.Length;
+        Telemetry.GroundSpeed = new Vec3(State.Velocity.X, State.Velocity.Y, 0).Length;
+        Telemetry.VerticalSpeed = -State.Velocity.Z;
+        Telemetry.HeightAgl = heightAgl;
+        Telemetry.DensityAltitude = atmo.DensityAltitude(altitude);
+        Telemetry.Thrust = mr.Thrust;
+        Telemetry.PowerRequired = loadTorque * RotorOmega;
+        Telemetry.PowerAvailable = pp.PowerAvailable;
+        Telemetry.FuelKg = Fuel;
+        Telemetry.FuelFlow = pp.FuelFlow;
+        Telemetry.Sideslip = speed > 1 ? Math.Asin(Math.Clamp(vb.Y / speed, -1, 1)) : 0;
+        Telemetry.AngleOfAttack = speed > 1 ? Math.Atan2(vb.Z, Math.Max(vb.X, 0.5)) : 0;
+        Telemetry.VrsSeverity = Rotor.Inflow.VrsSeverity;
+        Telemetry.BladeLoading = mr.CtOverSigma;
+        Telemetry.TipMach = mr.TipMachAdvancing;
+        Telemetry.StalledFraction = mr.StalledFraction;
+        Telemetry.Coning = mr.Coning;
+        Telemetry.FlapBack = mr.FlapBack;
+        Telemetry.FlapSide = mr.FlapSide;
+        Telemetry.Autorotating = !pp.FreewheelEngaged && Engine.State != EngineState.Running
+                                 || (pp.ShaftTorque <= 1.0 && RotorOmega > cfg.NominalOmega * 0.4);
+        Telemetry.TailRotorSaturated = tr.Saturated;
+        Telemetry.TorqueLimited = pp.TorqueLimited;
+        Telemetry.Engine = Engine.State;
+    }
+
+    /// <summary>Move the actual control positions toward the pilot demand at a finite rate.</summary>
+    private void RateLimitControls(double dt)
+    {
+        double maxStep = dt / Math.Max(ActuatorFullTravelTime, 1e-3);
+        static double Move(double current, double target, double step)
+        {
+            double d = target - current;
+            return Math.Abs(d) <= step ? target : current + Math.Sign(d) * step;
+        }
+        _actual.Collective = Move(_actual.Collective, Input.Collective, maxStep);
+        _actual.CyclicPitch = Move(_actual.CyclicPitch, Input.CyclicPitch, maxStep * 2.0);
+        _actual.CyclicRoll = Move(_actual.CyclicRoll, Input.CyclicRoll, maxStep * 2.0);
+        _actual.Pedal = Move(_actual.Pedal, Input.Pedal, maxStep * 2.0);
+        _actual.Throttle = Input.Throttle;
+        _actual.Brake = Input.Brake;
+    }
+
+    /// <summary>
+    /// Full step including gravity, the internal ground model and rigid-body integration.
+    /// Used headless; in the game Godot integrates instead.
+    /// </summary>
+    public void Step(double dt)
+    {
+        EnsureMass();
+        ComputeWrench(dt, out Vec3 fBody, out Vec3 mBody);
+
+        Vec3 forceWorld = State.Orientation.Rotate(fBody);
+        forceWorld += new Vec3(0, 0, _cachedMass * Atmosphere.Gravity);
+
+        bool onGround = false;
+        if (UseInternalGroundModel)
+            ApplyGroundContact(ref forceWorld, ref mBody, dt, out onGround);
+        Telemetry.OnGround = onGround;
+
+        Vec3 accelWorld = forceWorld / _cachedMass;
+        _lastAccelBody = State.Orientation.InverseRotate(accelWorld);
+        Telemetry.LoadFactor = (-_lastAccelBody.Z) / Atmosphere.Gravity;
+
+        // Angular: I w' = M - w x (I w)
+        Vec3 iw = _inertia * State.AngularVelocity;
+        Vec3 angAccel = _inertiaInv * (mBody - Vec3.Cross(State.AngularVelocity, iw));
+
+        // Semi-implicit Euler: stable enough at 240 Hz for a vehicle this size, and it
+        // matches what Godot does internally so the two paths behave the same.
+        State.Velocity += accelWorld * dt;
+        State.Position += State.Velocity * dt;
+        State.AngularVelocity += angAccel * dt;
+        State.Orientation = State.Orientation.Integrated(State.AngularVelocity, dt);
+
+        if (!State.Position.IsFinite || !State.Velocity.IsFinite)
+            throw new InvalidOperationException("Flight state diverged - the integrator produced a non-finite value.");
+    }
+
+    /// <summary>
+    /// Crude but adequate skid/wheel contact for headless work: a spring-damper per
+    /// contact point plus Coulomb friction. The game uses Godot collision shapes instead.
+    /// </summary>
+    private void ApplyGroundContact(ref Vec3 forceWorld, ref Vec3 momentBody, double dt, out bool onGround)
+    {
+        onGround = false;
+        var pts = Airframe.ContactPoints;
+        if (pts.Count == 0) return;
+
+        double k = _cachedMass * 40.0;
+        double c = _cachedMass * 8.0;
+
+        foreach (var pLocal in pts)
+        {
+            Vec3 rBody = pLocal - _cachedCg;
+            Vec3 rWorld = State.Orientation.Rotate(rBody);
+            Vec3 pWorld = State.Position + rWorld;
+            double ground = Env.GroundHeight(pWorld.X, pWorld.Y);
+            double penetration = pWorld.Z - (-ground);   // positive when below the surface
+            if (penetration <= 0) continue;
+
+            onGround = true;
+            Vec3 vPoint = State.Velocity + State.Orientation.Rotate(Vec3.Cross(State.AngularVelocity, rBody));
+            double vDown = vPoint.Z;
+
+            double normalForce = k * penetration + (vDown > 0 ? c * vDown : 0);
+            normalForce = Math.Max(0, normalForce) / pts.Count * 4.0;
+
+            Vec3 fw = new(0, 0, -normalForce);
+
+            Vec3 vTangent = new(vPoint.X, vPoint.Y, 0);
+            double vt = vTangent.Length;
+            if (vt > 1e-4)
+            {
+                double mu = 0.6;
+                double friction = Math.Min(mu * normalForce, _cachedMass * vt / Math.Max(dt, 1e-4) * 0.25);
+                fw += -vTangent / vt * friction;
+            }
+
+            forceWorld += fw;
+            momentBody += Vec3.Cross(rBody, State.Orientation.InverseRotate(fw));
+        }
+    }
+}

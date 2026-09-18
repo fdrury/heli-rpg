@@ -66,3 +66,26 @@ tethered balloons and weather — never rival helicopters.
 Placeholder; rotorwash is the downwash that flattens grass, kicks up dust and announces your
 arrival from a mile away — which is thematically the whole game. Trivially renameable
 (one constant + folder name). **Reversibility:** high.
+
+### D-010 — Air defence is the gating system · 2026-09-18 · **[FRED'S IDEA]**
+A helicopter trivialises terrain, so terrain cannot be the gate. Instead the map is
+gated by **threat envelopes**: radar-guided and IR-guided ground systems, tethered
+aerostats, drone patrols and flak over the places worth reaching. The keys are physical
+and findable, and every one of them is a real system rather than a stat:
+
+| Key | What it unlocks | How it feels |
+|---|---|---|
+| Radar warning receiver | Knowing you are painted at all | The map stops being a coin flip |
+| Chaff | Surviving radar SAMs | Lets you cross open ground |
+| Flares + IR suppressor | Surviving MANPADS | Lets you fly low and slow near people |
+| Terrain-masking charts | Knowing which valleys are dead ground | Knowledge, not hardware - and it is free |
+| Jammer / emitter locator | Hunting the sites themselves | Turns a wall into a target |
+
+**Why this is the right spine:** it makes the progression (D-005) *spatial*. The player
+does not level up and then go somewhere; they acquire a capability and a whole region of
+the map opens. It gives scavenging a destination, gives factions something to trade, and
+makes the "last airframe" premise (D-008) load-bearing - everyone defends against the one
+aircraft that exists. It also means a skilled pilot can sometimes beat a gate with flying
+alone by masking in terrain, which is exactly the kind of optional mastery this project
+should reward.
+**Reversibility:** high - threat envelopes are data.
