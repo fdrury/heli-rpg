@@ -17,7 +17,9 @@ public sealed partial class ChaseCamera : Camera3D
     [Export] public NodePath TargetPath { get; set; } = "";
     [Export] public CameraMode Mode { get; set; } = CameraMode.Chase;
 
-    [Export] public Vector3 ChaseOffset { get; set; } = new(0, 3.2f, 13.5f);
+    // Low and well back. Sitting the camera high turns the game into a map: a pilot
+    // reads attitude against the horizon, so the horizon has to be in shot.
+    [Export] public Vector3 ChaseOffset { get; set; } = new(0, 2.1f, 16.0f);
     [Export] public Vector3 CockpitOffset { get; set; } = new(-0.62f, 0.55f, 1.45f);
 
     [Export] public float PositionLag { get; set; } = 6.5f;
@@ -106,7 +108,7 @@ public sealed partial class ChaseCamera : Camera3D
 
         GlobalPosition = GlobalPosition.Lerp(desired, 1f - Mathf.Exp(-PositionLag * dt));
 
-        Vector3 lookAt = _target.GlobalPosition + _target.GlobalTransform.Basis.Y * 1.0f;
+        Vector3 lookAt = _target.GlobalPosition + Vector3.Up * 0.4f + flatForward * 14f;
         var targetXform = GlobalTransform.LookingAt(lookAt, Vector3.Up);
         GlobalTransform = new Transform3D(
             GlobalTransform.Basis.Slerp(targetXform.Basis, 1f - Mathf.Exp(-RotationLag * dt)),

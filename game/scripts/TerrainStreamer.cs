@@ -63,7 +63,14 @@ public sealed partial class TerrainStreamer : Node3D
     {
         public Vector2I Coord;
         public int Lod;
-        public Godot.Collections.Array Arrays = null!;
+        // Plain .NET arrays only. Godot.Collections.Array is an engine-owned object and
+        // touching one from a worker thread crashes the process with an access violation
+        // - reliably, but only sometimes visibly, which is the worst kind of bug.
+        public Vector3[] Verts = Array.Empty<Vector3>();
+        public Vector3[] Normals = Array.Empty<Vector3>();
+        public Vector2[] Uvs = Array.Empty<Vector2>();
+        public Color[] Colours = Array.Empty<Color>();
+        public int[] Indices = Array.Empty<int>();
         public float[]? Heights;
         public int HeightRes;
     }
@@ -149,12 +156,30 @@ public sealed partial class TerrainStreamer : Node3D
             Vector2I c = coord;
             int l = lod;
             bool needsCollision = Math.Max(Math.Abs(c.X - centre.X), Math.Abs(c.Y - centre.Y)) <= CollisionRadius;
-            Task.Run(() => BuildChunk(c, l, needsCollision));
+
+            // A chunk has to know how detailed its neighbours are, because that is what
+            // decides whether its edge has to be stitched down to match them.
+            var neighbours = new int[4];
+            neighbours[(int)Edge.North] = LodAt(new Vector2I(c.X, c.Y - 1), centre);
+            neighbours[(int)Edge.South] = LodAt(new Vector2I(c.X, c.Y + 1), centre);
+            neighbours[(int)Edge.West] = LodAt(new Vector2I(c.X - 1, c.Y), centre);
+            neighbours[(int)Edge.East] = LodAt(new Vector2I(c.X + 1, c.Y), centre);
+
+            Task.Run(() => BuildChunk(c, l, needsCollision, neighbours));
         }
     }
 
+    /// <summary>Level of detail a chunk would be given, or the coarsest if out of range.</summary>
+    private int LodAt(Vector2I coord, Vector2I centre)
+    {
+        int ring = Math.Max(Math.Abs(coord.X - centre.X), Math.Abs(coord.Y - centre.Y));
+        for (int i = 0; i < LodRings.Length; i++)
+            if (ring <= LodRings[i]) return i;
+        return LodRings.Length - 1;
+    }
+
     /// <summary>Worker-thread mesh generation. Touches no scene-tree state.</summary>
-    private void BuildChunk(Vector2I coord, int lod, bool withCollision)
+    private void BuildChunk(Vector2I coord, int lod, bool withCollision, int[] neighbourLods)
     {
         try
         {
@@ -162,17 +187,10 @@ public sealed partial class TerrainStreamer : Node3D
             float cell = ChunkSize / (res - 1);
             float ox = coord.X * ChunkSize, oz = coord.Y * ChunkSize;
 
-            int skirtRing = res * 4;
-            int vertCount = res * res + skirtRing;
-
-            var verts = new Vector3[vertCount];
-            var normals = new Vector3[vertCount];
-            var uvs = new Vector2[vertCount];
-            // Vertex colour carries two things the shader cannot work out for itself:
-            //   R = the surface slope at this column, so a skirt blends exactly like the
-            //       ground it hangs from instead of being read as a vertical rock face;
-            //   G = a skirt flag, used to darken it into shadow.
-            var colours = new Color[vertCount];
+            var verts = new Vector3[res * res];
+            var normals = new Vector3[res * res];
+            var uvs = new Vector2[res * res];
+            var colours = new Color[res * res];
 
             for (int j = 0; j < res; j++)
             {
@@ -180,8 +198,8 @@ public sealed partial class TerrainStreamer : Node3D
                 {
                     float x = i * cell, z = j * cell;
                     float h = WorldHeight.At(ox + x, oz + z);
-                    int idx = j * res + i;
                     Vector3 nrm = WorldHeight.NormalAt(ox + x, oz + z, cell * 0.5f);
+                    int idx = j * res + i;
                     verts[idx] = new Vector3(x, h, z);
                     normals[idx] = nrm;
                     uvs[idx] = new Vector2((ox + x) * 0.02f, (oz + z) * 0.02f);
@@ -189,33 +207,54 @@ public sealed partial class TerrainStreamer : Node3D
                 }
             }
 
-            var indices = new List<int>((res - 1) * (res - 1) * 6 + skirtRing * 6);
+            // --- Stitch the edges to coarser neighbours -----------------------
+            //
+            // The honest fix for LOD cracks, and the one that costs nothing. Where this
+            // chunk is finer than the chunk next to it, the neighbour draws a straight
+            // line between vertices that this chunk has extra detail between - and the
+            // gap between the two is the crack.
+            //
+            // So: collapse the extra vertices onto that straight line. The two meshes
+            // then agree exactly along the shared edge and there is nothing to hide.
+            //
+            // The previous approach hung vertical skirts over the seam instead, and on
+            // near-flat terrain a wall at every chunk boundary is visible for kilometres.
+            // It drew a grid across the entire landscape. This draws nothing.
+            for (int e = 0; e < 4; e++)
+            {
+                int step = 1 << Math.Max(0, neighbourLods[e] - lod);
+                if (step <= 1) continue;
+
+                for (int i = 0; i < res; i++)
+                {
+                    int rem = i % step;
+                    if (rem == 0) continue;
+
+                    int lo = i - rem, hi = Math.Min(lo + step, res - 1);
+                    float t = (float)rem / step;
+
+                    int idx = EdgeIndex((Edge)e, i, res);
+                    int idxLo = EdgeIndex((Edge)e, lo, res);
+                    int idxHi = EdgeIndex((Edge)e, hi, res);
+
+                    Vector3 v = verts[idx];
+                    v.Y = Mathf.Lerp(verts[idxLo].Y, verts[idxHi].Y, t);
+                    verts[idx] = v;
+                    normals[idx] = normals[idxLo].Lerp(normals[idxHi], t).Normalized();
+                    colours[idx] = new Color(normals[idx].Y, 0f, 0f, 1f);
+                }
+            }
+
+            var indices = new List<int>((res - 1) * (res - 1) * 6);
             for (int j = 0; j < res - 1; j++)
             {
                 for (int i = 0; i < res - 1; i++)
                 {
-                    int a = j * res + i, b = a + 1, c = (j + 1) * res + i + 1, d = (j + 1) * res + i;
-                    indices.Add(a); indices.Add(d); indices.Add(c);
-                    indices.Add(a); indices.Add(c); indices.Add(b);
+                    int a = j * res + i, b = a + 1, c2 = (j + 1) * res + i + 1, d = (j + 1) * res + i;
+                    indices.Add(a); indices.Add(d); indices.Add(c2);
+                    indices.Add(a); indices.Add(c2); indices.Add(b);
                 }
             }
-
-            // Skirts: a vertical curtain dropped from every edge vertex. This is the
-            // cheapest fix for the cracks that appear where two LODs meet, and from the
-            // air the curtain is never visible.
-            int s = res * res;
-            AddSkirt(verts, normals, uvs, colours, indices, res, ref s, cell, ox, oz, Edge.North);
-            AddSkirt(verts, normals, uvs, colours, indices, res, ref s, cell, ox, oz, Edge.South);
-            AddSkirt(verts, normals, uvs, colours, indices, res, ref s, cell, ox, oz, Edge.West);
-            AddSkirt(verts, normals, uvs, colours, indices, res, ref s, cell, ox, oz, Edge.East);
-
-            var arrays = new Godot.Collections.Array();
-            arrays.Resize((int)Mesh.ArrayType.Max);
-            arrays[(int)Mesh.ArrayType.Vertex] = verts;
-            arrays[(int)Mesh.ArrayType.Normal] = normals;
-            arrays[(int)Mesh.ArrayType.TexUV] = uvs;
-            arrays[(int)Mesh.ArrayType.Color] = colours;
-            arrays[(int)Mesh.ArrayType.Index] = indices.ToArray();
 
             float[]? heights = null;
             int heightRes = 0;
@@ -236,7 +275,9 @@ public sealed partial class TerrainStreamer : Node3D
             {
                 _ready.Enqueue(new ChunkBuild
                 {
-                    Coord = coord, Lod = lod, Arrays = arrays,
+                    Coord = coord, Lod = lod,
+                    Verts = verts, Normals = normals, Uvs = uvs, Colours = colours,
+                    Indices = indices.ToArray(),
                     Heights = heights, HeightRes = heightRes,
                 });
             }
@@ -248,79 +289,16 @@ public sealed partial class TerrainStreamer : Node3D
         }
     }
 
-    private enum Edge { North, South, West, East }
+    private enum Edge { North = 0, South = 1, West = 2, East = 3 }
 
-    private static void AddSkirt(Vector3[] verts, Vector3[] normals, Vector2[] uvs, Color[] colours,
-                                 List<int> indices, int res, ref int next,
-                                 float cell, float originX, float originZ, Edge edge)
+    /// <summary>Index of the i-th vertex along one edge of a res x res grid.</summary>
+    private static int EdgeIndex(Edge edge, int i, int res) => edge switch
     {
-        for (int i = 0; i < res; i++)
-        {
-            int top = edge switch
-            {
-                Edge.North => i,                        // j = 0
-                Edge.South => (res - 1) * res + i,       // j = res-1
-                Edge.West => i * res,                    // i = 0
-                _ => i * res + res - 1,                  // i = res-1
-            };
-
-            // Depth comes from LOCAL RELIEF, not from cell size. The crack between two
-            // levels of detail is about as deep as the height changes across one coarse
-            // cell, which on flat ground is nothing. A fixed deep skirt instead puts a
-            // wall at every chunk boundary, visible for kilometres from the air - which
-            // is exactly what it looked like.
-            Vector3 world = verts[top] + new Vector3(originX, 0, originZ);
-            float h0 = verts[top].Y;
-            float relief = 0f;
-            for (int k = -2; k <= 2; k += 4)
-            {
-                relief = Math.Max(relief, Math.Abs(WorldHeight.At(world.X + cell * k, world.Z) - h0));
-                relief = Math.Max(relief, Math.Abs(WorldHeight.At(world.X, world.Z + cell * k) - h0));
-            }
-            // On genuinely flat ground there is no crack, so the skirt collapses to
-            // nothing and cannot be seen. Where there is relief it appears, and is tucked
-            // back under the surface so it only shows through an actual gap rather than
-            // catching a pixel of its own at grazing angles.
-            float depth = Math.Clamp(relief * 1.6f, 0.0f, cell * 2.0f);
-            Vector3 inward = edge switch
-            {
-                Edge.North => new Vector3(0, 0, cell * 0.30f),
-                Edge.South => new Vector3(0, 0, -cell * 0.30f),
-                Edge.West => new Vector3(cell * 0.30f, 0, 0),
-                _ => new Vector3(-cell * 0.30f, 0, 0),
-            };
-
-            verts[next] = verts[top] + inward - new Vector3(0, depth + 0.15f, 0);
-            normals[next] = normals[top];
-            uvs[next] = uvs[top];
-            colours[next] = new Color(colours[top].R, 1f, 0f, 1f);
-
-            if (i > 0)
-            {
-                int prevTop = edge switch
-                {
-                    Edge.North => i - 1,
-                    Edge.South => (res - 1) * res + i - 1,
-                    Edge.West => (i - 1) * res,
-                    _ => (i - 1) * res + res - 1,
-                };
-                int prevSkirt = next - 1;
-
-                bool flip = edge is Edge.South or Edge.West;
-                if (flip)
-                {
-                    indices.Add(prevTop); indices.Add(top); indices.Add(next);
-                    indices.Add(prevTop); indices.Add(next); indices.Add(prevSkirt);
-                }
-                else
-                {
-                    indices.Add(prevTop); indices.Add(prevSkirt); indices.Add(next);
-                    indices.Add(prevTop); indices.Add(next); indices.Add(top);
-                }
-            }
-            next++;
-        }
-    }
+        Edge.North => i,                        // j = 0
+        Edge.South => (res - 1) * res + i,      // j = res-1
+        Edge.West => i * res,                   // i = 0
+        _ => i * res + res - 1,                 // i = res-1
+    };
 
     /// <summary>Hand a small number of finished chunks to the scene tree per frame.</summary>
     private void ApplyReady()
@@ -334,8 +312,16 @@ public sealed partial class TerrainStreamer : Node3D
                 build = _ready.Dequeue();
             }
 
+            var arrays = new Godot.Collections.Array();
+            arrays.Resize((int)Mesh.ArrayType.Max);
+            arrays[(int)Mesh.ArrayType.Vertex] = build.Verts;
+            arrays[(int)Mesh.ArrayType.Normal] = build.Normals;
+            arrays[(int)Mesh.ArrayType.TexUV] = build.Uvs;
+            arrays[(int)Mesh.ArrayType.Color] = build.Colours;
+            arrays[(int)Mesh.ArrayType.Index] = build.Indices;
+
             var arrayMesh = new ArrayMesh();
-            arrayMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, build.Arrays);
+            arrayMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
 
             if (!_active.TryGetValue(build.Coord, out Chunk? chunk))
             {

@@ -69,7 +69,7 @@ uniform float normal_strength = 1.1;
 
 varying vec3 world_pos;
 varying vec3 world_normal;
-varying vec2 surface_flags;   // x = slope of the ground above, y = skirt flag
+varying vec2 surface_flags;   // x = true surface slope at this column
 
 float hash12(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -102,12 +102,11 @@ void vertex() {
 
 void fragment() {
     vec2 uv = world_pos.xz;
-    // Slope comes from the vertex rather than the interpolated geometric normal, so the
-    // LOD skirts hanging from each chunk edge blend exactly like the ground they hang
-    // from. Reading the geometric normal makes every skirt a vertical face, which the
-    // blend below turns into bare rock - a bright grey wall around every chunk.
+    // Slope comes from the vertex rather than the interpolated geometric normal. Edge
+    // vertices are stitched down to match coarser neighbours, which tilts their geometric
+    // normal without the ground under them having changed; reading the vertex value keeps
+    // the material blend continuous across every chunk boundary.
     float slope = clamp(surface_flags.x, 0.0, 1.0);
-    float skirt = surface_flags.y;
 
     // --- Blend weights ----------------------------------------------------
     float patch = fbm(uv * patch_frequency);
@@ -175,9 +174,6 @@ void fragment() {
 
     col = desaturate(col, saturation) * grade_tint;
     col *= mix(0.80, 1.14, fbm(uv * 0.00026));   // very large scale brightness drift
-
-    // Skirts sit under the lip of the terrain and should read as shadow, not surface.
-    col *= mix(1.0, 0.42, skirt);
 
     ALBEDO = clamp(col, vec3(0.0), vec3(1.0));
     NORMAL_MAP = nrm;

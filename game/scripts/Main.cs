@@ -18,6 +18,7 @@ public sealed partial class Main : Node3D
     private PropScatter _scatter = null!;
     private LandingController _landing = null!;
     private RotorwashDust _dust = null!;
+    private SiteStreamer _sites = null!;
     private FlightHud _hud = null!;
     private Label _debugLabel = null!;
     private bool _showDebug;
@@ -48,11 +49,15 @@ public sealed partial class Main : Node3D
         };
         AddChild(_scatter);
 
+        _sites = new SiteStreamer { Name = "Sites" };
+        AddChild(_sites);
+
         _heli = BuildHelicopter();
         AddChild(_heli);
 
         _terrain.Target = _heli;
         _scatter.Target = _heli;
+        _sites.Target = _heli;
 
         _camera = new ChaseCamera { Name = "Camera", TargetPath = _heli.GetPath() };
         AddChild(_camera);
@@ -102,6 +107,12 @@ public sealed partial class Main : Node3D
                 AddChild(new GodotBridgeSelfTest(_heli) { Name = "SelfTest" });
                 break;
             }
+            if (arg == "--worldreport")
+            {
+                WorldReport.Run();
+                GetTree().Quit(0);
+                return;
+            }
             if (arg == "--screenshot")
             {
                 GD.Print("[main] running the screenshot pass");
@@ -117,6 +128,7 @@ public sealed partial class Main : Node3D
                      $"{r.RollDegrees:F1} deg bank on a {r.SlopeDegrees:F1} deg slope" +
                      (r.StructuralDamage > 0.01 ? $"  [damage {r.StructuralDamage:P0}]" : ""));
         _landing.RotorStrike += what => GD.PrintErr($"[landing] ROTOR STRIKE: {what}");
+        _sites.Entered += s2 => GD.Print($"[world] over {s2.Name} ({s2.Kind}, {s2.Region}, tier {s2.Tier})");
         _heli.Sim.Damage.Damaged += e =>
             GD.Print($"[damage] {e.Component} -{e.Amount:P0} ({e.Cause}) {e.Note}");
 
@@ -148,12 +160,12 @@ public sealed partial class Main : Node3D
             AmbientLightSkyContribution = 1.0f,
             AmbientLightEnergy = 1.35f,
             TonemapMode = Godot.Environment.ToneMapper.Aces,
-            TonemapExposure = 1.05f,
+            TonemapExposure = 1.28f,
             SsaoEnabled = QualityTier.Current >= QualityTier.Tier.Medium,
             GlowEnabled = QualityTier.Current >= QualityTier.Tier.Medium,
             FogEnabled = true,
             FogLightColor = new Color(0.66f, 0.65f, 0.60f),
-            FogDensity = 0.0011f,
+            FogDensity = 0.00085f,
             FogAerialPerspective = 0.7f,
             FogSkyAffect = 0.35f,
 
@@ -161,7 +173,7 @@ public sealed partial class Main : Node3D
             // pulled off full saturation and warmed slightly. Applied here rather than in
             // every material so one knob moves the whole look.
             AdjustmentEnabled = true,
-            AdjustmentSaturation = 0.86f,
+            AdjustmentSaturation = 0.89f,
             AdjustmentContrast = 1.06f,
             AdjustmentBrightness = 1.0f,
         };
@@ -208,7 +220,7 @@ public sealed partial class Main : Node3D
             Name = "Helicopter",
             StartAltitude = 140f,
         };
-        heli.Position = new Vector3(0, 200, 0);
+        heli.Position = new Vector3(0, 200, 1200);
 
         var af = Airframe.Workhorse();
         float rotorR = (float)af.MainRotor.Radius;
