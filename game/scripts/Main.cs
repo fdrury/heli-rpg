@@ -14,7 +14,8 @@ public sealed partial class Main : Node3D
 {
     private HelicopterController _heli = null!;
     private ChaseCamera _camera = null!;
-    private Terrain _terrain = null!;
+    private TerrainStreamer _terrain = null!;
+    private PropScatter _scatter = null!;
     private FlightHud _hud = null!;
     private Label _debugLabel = null!;
     private bool _showDebug;
@@ -26,19 +27,30 @@ public sealed partial class Main : Node3D
         BuildSky();
         BuildLighting();
 
-        _terrain = new Terrain { Name = "Terrain" };
+        _terrain = new TerrainStreamer
+        {
+            Name = "Terrain",
+            LodRings = QualityTier.Current >= QualityTier.Tier.High
+                ? new[] { 2, 5, 9, 16 }
+                : new[] { 2, 4, 7, 12 },
+        };
         AddChild(_terrain);
 
-        AddChild(new Scatter
+        _scatter = new PropScatter
         {
             Name = "Scatter",
-            TerrainPath = "../Terrain",
-            Radius = QualityTier.Current >= QualityTier.Tier.High ? 1800f : 1200f,
-            ScrubDensity = QualityTier.Current >= QualityTier.Tier.Medium ? 0.020f : 0.010f,
-        });
+            ScrubRadius = QualityTier.Current >= QualityTier.Tier.Medium ? 3 : 2,
+            RockRadius = QualityTier.Current >= QualityTier.Tier.High ? 10 : 7,
+            TreeRadius = QualityTier.Current >= QualityTier.Tier.High ? 18 : 12,
+            ScrubDensity = QualityTier.Current >= QualityTier.Tier.Medium ? 0.022f : 0.011f,
+        };
+        AddChild(_scatter);
 
         _heli = BuildHelicopter();
         AddChild(_heli);
+
+        _terrain.Target = _heli;
+        _scatter.Target = _heli;
 
         _camera = new ChaseCamera { Name = "Camera", TargetPath = _heli.GetPath() };
         AddChild(_camera);
@@ -167,7 +179,6 @@ public sealed partial class Main : Node3D
         var heli = new HelicopterController
         {
             Name = "Helicopter",
-            TerrainPath = "../Terrain",
             StartAltitude = 140f,
         };
         heli.Position = new Vector3(0, 200, 0);

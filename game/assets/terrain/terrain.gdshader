@@ -34,8 +34,14 @@ uniform sampler2D gravel_nrm : hint_normal, filter_linear_mipmap_anisotropic, re
 uniform sampler2D gravel_rgh : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
 
 uniform float detail_scale = 0.22;
-uniform float detail_fade_start = 90.0;
-uniform float detail_fade_end = 520.0;
+uniform float detail_fade_start = 140.0;
+uniform float detail_fade_end = 1150.0;
+
+// Macro texture for the far field: ONE sample at a very large scale, standing in for the
+// twelve the near field uses. A helicopter spends most of its time at 100-500 m, so most
+// of the screen is always far field - it has to carry the image, not just be cheap.
+uniform float macro_scale = 0.0045;
+uniform float macro_strength = 0.55;
 
 uniform float slope_rock_start = 0.68;
 uniform float slope_rock_end = 0.44;
@@ -49,10 +55,10 @@ uniform float field_frequency = 0.00048;
 // Averaged far-field colours, used once detail sampling has faded out. Chosen by eye to
 // match the textures under the grade rather than measured, because what matters is that
 // the transition is invisible.
-uniform vec3 far_grass : source_color = vec3(0.235, 0.255, 0.150);
-uniform vec3 far_dirt : source_color = vec3(0.250, 0.205, 0.150);
-uniform vec3 far_rock : source_color = vec3(0.235, 0.225, 0.210);
-uniform vec3 far_gravel : source_color = vec3(0.300, 0.285, 0.250);
+uniform vec3 far_grass : source_color = vec3(0.265, 0.285, 0.168);
+uniform vec3 far_dirt : source_color = vec3(0.290, 0.238, 0.172);
+uniform vec3 far_rock : source_color = vec3(0.272, 0.260, 0.243);
+uniform vec3 far_gravel : source_color = vec3(0.345, 0.328, 0.288);
 
 uniform float saturation = 0.58;
 uniform vec3 grade_tint : source_color = vec3(1.02, 1.00, 0.88);
@@ -63,6 +69,7 @@ uniform float normal_strength = 1.1;
 
 varying vec3 world_pos;
 varying vec3 world_normal;
+varying vec2 surface_flags;   // x = slope of the ground above, y = skirt flag
 
 float hash12(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -90,11 +97,17 @@ vec3 desaturate(vec3 c, float amount) {
 void vertex() {
     world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
     world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+    surface_flags = COLOR.rg;
 }
 
 void fragment() {
     vec2 uv = world_pos.xz;
-    float slope = clamp(world_normal.y, 0.0, 1.0);
+    // Slope comes from the vertex rather than the interpolated geometric normal, so the
+    // LOD skirts hanging from each chunk edge blend exactly like the ground they hang
+    // from. Reading the geometric normal makes every skirt a vertical face, which the
+    // blend below turns into bare rock - a bright grey wall around every chunk.
+    float slope = clamp(surface_flags.x, 0.0, 1.0);
+    float skirt = surface_flags.y;
 
     // --- Blend weights ----------------------------------------------------
     float patch = fbm(uv * patch_frequency);
@@ -119,6 +132,15 @@ void fragment() {
     vec3 col = far_grass * grass_w + far_dirt * dirt_w + far_rock * rock_w + far_gravel * gravel_w;
     float rgh = 0.85;
     vec3 nrm = vec3(0.5, 0.5, 1.0);
+
+    // Macro breakup, always on. Two rotated samples of one texture at a scale of tens of
+    // metres, which from the air reads as ground cover rather than as a repeating tile.
+    {
+        vec2 muv = uv * macro_scale;
+        vec2 muv2 = vec2(muv.x * 0.7071 - muv.y * 0.7071, muv.x * 0.7071 + muv.y * 0.7071) * 2.31;
+        float m = texture(grass_col, muv).g * 0.62 + texture(rock_col, muv2).g * 0.38;
+        col *= mix(1.0, 0.55 + m * 1.35, macro_strength);
+    }
 
     if (detail > 0.004) {
         vec2 duv = uv * detail_scale;
@@ -153,6 +175,9 @@ void fragment() {
 
     col = desaturate(col, saturation) * grade_tint;
     col *= mix(0.80, 1.14, fbm(uv * 0.00026));   // very large scale brightness drift
+
+    // Skirts sit under the lip of the terrain and should read as shadow, not surface.
+    col *= mix(1.0, 0.42, skirt);
 
     ALBEDO = clamp(col, vec3(0.0), vec3(1.0));
     NORMAL_MAP = nrm;

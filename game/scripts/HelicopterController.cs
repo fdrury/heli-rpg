@@ -7,7 +7,6 @@ namespace Rotorwash;
 /// <summary>Exposes the game world to the flight model.</summary>
 public sealed class GodotEnvironment : IEnvironment
 {
-    private readonly Terrain? _terrain;
     public Atmosphere Atmosphere { get; } = new();
     public Vec3 SteadyWind { get; set; }
     public double GustIntensity { get; set; } = 1.2;
@@ -21,16 +20,17 @@ public sealed class GodotEnvironment : IEnvironment
     };
     private double _time;
 
-    public GodotEnvironment(Terrain? terrain) { _terrain = terrain; }
-
     public void Advance(double dt) => _time += dt;
 
-    /// <summary>Terrain height, converted from the sim's north/east into Godot's XZ.</summary>
+    /// <summary>
+    /// Terrain height, converted from the sim's north/east into Godot's XZ. Answered by
+    /// the same pure function the mesh and the collider come from, so ground effect and
+    /// the radar altimeter can never disagree with what the aircraft can actually hit.
+    /// </summary>
     public double GroundHeight(double north, double east)
     {
-        if (_terrain is null) return 0;
         // sim north = -godot Z, sim east = +godot X
-        return _terrain.HeightAt((float)east, (float)-north);
+        return WorldHeight.At((float)east, (float)-north);
     }
 
     public Vec3 Wind(Vec3 positionNed)
@@ -56,7 +56,6 @@ public sealed class GodotEnvironment : IEnvironment
 /// </summary>
 public sealed partial class HelicopterController : RigidBody3D
 {
-    [Export] public NodePath TerrainPath { get; set; } = "../Terrain";
     [Export] public bool StartRunning { get; set; } = true;
     [Export] public float StartAltitude { get; set; } = 120f;
 
@@ -76,7 +75,6 @@ public sealed partial class HelicopterController : RigidBody3D
     /// </summary>
     public Controls? OverrideControls { get; set; }
 
-    private Terrain? _terrain;
     private Node3D? _rotorVisual;
     private Node3D? _tailRotorVisual;
     private MeshInstance3D? _rotorDisc;
@@ -85,8 +83,7 @@ public sealed partial class HelicopterController : RigidBody3D
 
     public override void _Ready()
     {
-        _terrain = GetNodeOrNull<Terrain>(TerrainPath);
-        Environment = new GodotEnvironment(_terrain);
+        Environment = new GodotEnvironment();
 
         var airframe = Airframe.Workhorse();
         Sim = new Helicopter(airframe, Environment)
@@ -137,7 +134,7 @@ public sealed partial class HelicopterController : RigidBody3D
 
     private void PlaceAtStart()
     {
-        float ground = _terrain?.HeightAt(GlobalPosition.X, GlobalPosition.Z) ?? 0f;
+        float ground = WorldHeight.At(GlobalPosition.X, GlobalPosition.Z);
         var p = GlobalPosition;
         p.Y = ground + StartAltitude;
         GlobalPosition = p;
@@ -251,7 +248,7 @@ public sealed partial class HelicopterController : RigidBody3D
     /// <summary>Height above the terrain directly below, metres.</summary>
     public float HeightAgl()
     {
-        float ground = _terrain?.HeightAt(GlobalPosition.X, GlobalPosition.Z) ?? 0f;
+        float ground = WorldHeight.At(GlobalPosition.X, GlobalPosition.Z);
         return GlobalPosition.Y - ground;
     }
 
@@ -273,7 +270,7 @@ public sealed partial class HelicopterController : RigidBody3D
         AngularVelocity = Vector3.Zero;
         var t = GlobalTransform;
         t.Basis = Basis.Identity;
-        t.Origin = new Vector3(t.Origin.X, (_terrain?.HeightAt(t.Origin.X, t.Origin.Z) ?? 0) + StartAltitude, t.Origin.Z);
+        t.Origin = new Vector3(t.Origin.X, WorldHeight.At(t.Origin.X, t.Origin.Z) + StartAltitude, t.Origin.Z);
         GlobalTransform = t;
         Sim.PlaceInFlight(t.Origin.Y);
         Input.SetCollectivePosition(0.5f);
