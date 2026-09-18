@@ -55,6 +55,12 @@ public static class Program
         Run("touchdown", LandingTests.Touchdowns);
         Run("brownout", LandingTests.Brownout);
         Run("damage", LandingTests.DamageEffects);
+        Run("dialogue", DialogueTests.Selection);
+        Run("repetition", DialogueTests.Repetition);
+        Run("codagating", DialogueTests.CodaGating);
+        Run("codavalidation", DialogueTests.Validation);
+        Run("codastreaming", DialogueTests.Streaming);
+        Run("npcmemory", DialogueTests.Memory);
         Run("masking", ThreatTests.Masking);
         Run("altbands", ThreatTests.AltitudeBands);
         Run("countermeasures", ThreatTests.Countermeasures);

@@ -355,3 +355,43 @@ to a rectangle that includes water.
 Skyrim at 14.8 km² playable, and this project's own measured cruise speed. Recorded so that
 nobody - including me - later reasons from the Witcher or RDR2 numbers as though they were
 measured. They are not.
+
+### D-015 — Dialogue: the model, built memory-first · 2026-09-18
+Built to D-006a. The research found the same thing twice, independently, in the
+baked-corpus prior art and in the shipped local-model prior art: **the perceived magic is
+memory, not prose.** Playtesters singled out an NPC remembering a name and a weapon
+preference, not the quality of its sentences. So memory is what got built first.
+
+**The baked layer.** Lines carry *requirements* and the selector scores by how SPECIFIC a
+match is, not merely whether it is legal. Measured: seven different arrival states produce
+seven different openings, and a damaged first arrival gets the line written for a damaged
+first arrival rather than the generic one.
+
+**Repetition is a corpus problem, not a selector problem.** Six identical arrivals half an
+hour apart originally produced the same line six times — because only one line legally
+matched that state. No amount of selection cleverness fixes that; it is why the real corpus
+is generated offline in the thousands. With six interchangeable openings available it now
+rotates through all six with zero immediate repeats.
+
+**The coda gate, measured.** At a p95 latency of 0.55 s the bar is 0.83 s of spoken line.
+"You." is 0.8 s and is refused; "Back again." is 1.1 s and is accepted. A coda is also
+refused when there is no model, and when there is genuinely nothing worth remarking on —
+a full tank and an undamaged aircraft is not a sentence.
+
+**Validation catches what the prompt cannot.** Twelve candidate sentences, twelve judged
+correctly: questions, invented quests, invented destinations, restating the baked line,
+anachronisms, forbidden phrases, over-length and empty all rejected. One miss on the first
+run is worth recording — the blocklist had `"i can offer"` and let *"I could offer you work
+if you want it"* straight through. Block **phrasings**, not sentences.
+
+**Sentence-granular commit** works: tokens arrive one at a time, nothing is released until
+a full stop arrives, and a decimal point is not mistaken for one.
+
+**The prompt that actually goes to the model** is 115 words, which is comfortably inside
+the budget for a 1.7B at the measured latency. By the third visit it reads:
+
+> You remember about this pilot: last time the tail rotor at 35 %; they scavenge parts;
+> they have a radar warning receiver on it
+
+**Reversibility:** high. The corpus is data, the coda is strictly additive, and the whole
+thing degrades to the baked layer if the model is absent, slow or wrong.

@@ -80,13 +80,21 @@ else misses. Chaff takes a SAM from 7 hits to 0 and does nothing to a heat seeke
 the reverse. 45 s in two envelopes: everything damaged, 62% forced down, none deleted. The
 RWR logs every emitter that paints you, so the sortie that nearly killed you pays out.
 
+**Dialogue** — a baked corpus conditioned on state, with a selector that prefers the most
+specific match, plus the local-model coda contract: gated on whether the spoken line covers
+the measured latency, committed a whole sentence at a time, and validated against invented
+quests, questions and anachronisms. NPCs remember across visits, which the research found is
+where the perceived magic actually lives. No model wired up yet — the contract and the
+guardrails are, and everything degrades to the baked layer without one.
+
 **Play** — refuel, repair, salvage, survey, tune a relay, ask around. Carried load is real
 mass and is felt in the hover. The kneeboard records facts, not inferences, and shows the
 empty bays.
 
 ## Next
 
-1. Dialogue: baked corpus plus the local-SLM coda (D-006a)
+1. Wire dialogue into the game: NPCs at settlements, the conversation UI, and the
+   llama-server subprocess behind the coda (D-006a names the runtime and the flags)
 4. The refit system — modules on real hardpoints (D-011)
 5. On-foot: third person, Rotor Time
 6. Weather, night, and the flying that goes with them
