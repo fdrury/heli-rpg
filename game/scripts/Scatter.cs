@@ -92,7 +92,13 @@ public sealed partial class Scatter : Node3D
             DiffuseMode = BaseMaterial3D.DiffuseModeEnum.Lambert,
             Roughness = 1.0f,
             SpecularMode = BaseMaterial3D.SpecularModeEnum.Disabled,
-            VertexColorUseAsAlbedo = true,
+
+            // Thin dry vegetation glows when the sun is behind it. Without backlight
+            // the cards go solid black whenever they are not facing the sun, and a
+            // field of scrub reads as a field of holes.
+            BacklightEnabled = true,
+            Backlight = new Color(0.34f, 0.31f, 0.20f),
+            AlbedoColor = new Color(1.05f, 1.02f, 0.92f),
         };
     }
 

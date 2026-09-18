@@ -29,6 +29,7 @@ public sealed partial class ScreenshotDirector : Node
         new("03_cockpit",        CameraMode.Cockpit,120f,  32f,  2.1f),
         new("04_low_level",      CameraMode.Chase,   35f,  38f,  3.4f),
         new("05_orbit",          CameraMode.Orbit,  140f,   0f,  0.0f),
+        new("07_close_orbit",    CameraMode.Orbit,   70f,   0f,  1.6f),
         new("06_high_cruise",    CameraMode.Chase,  420f,  50f,  5.1f),
     };
 

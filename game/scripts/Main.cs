@@ -106,7 +106,8 @@ public sealed partial class Main : Node3D
             BackgroundMode = Godot.Environment.BGMode.Sky,
             Sky = new Sky { SkyMaterial = sky },
             AmbientLightSource = Godot.Environment.AmbientSource.Sky,
-            AmbientLightSkyContribution = 0.85f,
+            AmbientLightSkyContribution = 1.0f,
+            AmbientLightEnergy = 1.35f,
             TonemapMode = Godot.Environment.ToneMapper.Aces,
             TonemapExposure = 1.05f,
             SsaoEnabled = QualityTier.Current >= QualityTier.Tier.Medium,
@@ -146,14 +147,16 @@ public sealed partial class Main : Node3D
         var sun = new DirectionalLight3D
         {
             Name = "Sun",
-            LightEnergy = 1.15f,
-            LightColor = new Color(1.0f, 0.96f, 0.88f),
+            LightEnergy = 1.45f,
+            LightColor = new Color(1.0f, 0.955f, 0.875f),
             ShadowEnabled = true,
             DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel4Splits,
             DirectionalShadowMaxDistance = QualityTier.Current >= QualityTier.Tier.High ? 700 : 300,
             ShadowBias = 0.04f,
         };
-        sun.RotationDegrees = new Vector3(-38, 128, 0);
+        // Mid-afternoon, sun over the shoulder of the default heading: enough elevation
+        // to light the ground, low enough to give terrain and airframes real form shadows.
+        sun.RotationDegrees = new Vector3(-46, 152, 0);
         AddChild(sun);
     }
 
@@ -190,66 +193,9 @@ public sealed partial class Main : Node3D
         };
         heli.AddChild(skidBar);
 
-        // --- Placeholder airframe geometry, built from primitives ---------------
-        var body = new Color(0.27f, 0.30f, 0.26f);
-        var dark = new Color(0.13f, 0.14f, 0.13f);
-
-        heli.AddChild(Box("Cabin", new Vector3(2.5f, 2.2f, 5.4f), new Vector3(0, 0.15f, -0.4f), body));
-        heli.AddChild(Box("Nose", new Vector3(2.0f, 1.5f, 1.8f), new Vector3(0, -0.15f, -3.3f), body));
-        heli.AddChild(Box("Boom", new Vector3(0.7f, 0.75f, 6.6f), new Vector3(0, 0.55f, 5.2f), body));
-        heli.AddChild(Box("Fin", new Vector3(0.18f, 1.7f, 1.1f), new Vector3(0, 1.4f, 8.2f), body));
-        heli.AddChild(Box("Stabiliser", new Vector3(3.0f, 0.14f, 0.85f), new Vector3(0, 0.55f, 6.4f), body));
-        heli.AddChild(Box("Mast", new Vector3(0.36f, 1.1f, 0.36f), new Vector3(0, 1.55f, 0), dark));
-        heli.AddChild(Box("SkidLeft", new Vector3(0.12f, 0.12f, 3.7f), new Vector3(-1.3f, -1.22f, 0), dark));
-        heli.AddChild(Box("SkidRight", new Vector3(0.12f, 0.12f, 3.7f), new Vector3(1.3f, -1.22f, 0), dark));
-        heli.AddChild(Box("StrutFwd", new Vector3(2.7f, 0.1f, 0.12f), new Vector3(0, -0.7f, -1.4f), dark));
-        heli.AddChild(Box("StrutAft", new Vector3(2.7f, 0.1f, 0.12f), new Vector3(0, -0.7f, 1.4f), dark));
-
-        // Main rotor: a hub node the controller rotates, carrying the blades. Named
-        // "MainRotor" because HelicopterController looks it up by name.
-        var rotor = new Node3D { Name = "MainRotor", Position = new Vector3(0, 2.2f, -0.05f) };
-        for (int i = 0; i < af.MainRotor.NumBlades; i++)
-        {
-            float a = Mathf.Tau * i / af.MainRotor.NumBlades;
-            var blade = Box($"Blade{i}", new Vector3((float)af.MainRotor.Chord, 0.10f, rotorR),
-                            new Vector3(0, 0, -rotorR * 0.5f), dark);
-            var pivot = new Node3D { Name = $"BladePivot{i}" };
-            pivot.Rotation = new Vector3(0, a, 0);
-            pivot.AddChild(blade);
-            rotor.AddChild(pivot);
-        }
-        // The blurred disc, shown instead of the blades once the rotor is up to speed.
-        var disc = new MeshInstance3D
-        {
-            Name = "RotorDisc",
-            Mesh = ProceduralProps.RotorDisc(rotorR, 0.10f, 64),
-            MaterialOverride = new StandardMaterial3D
-            {
-                AlbedoTexture = ProceduralProps.RotorDiscTexture(128, af.MainRotor.NumBlades),
-                Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-                CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-                NoDepthTest = false,
-                AlbedoColor = new Color(0.22f, 0.22f, 0.21f),
-            },
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-        };
-        rotor.AddChild(disc);
-        heli.AddChild(rotor);
-
-        var tail = new Node3D { Name = "TailRotor", Position = new Vector3(0.42f, 1.15f, 8.55f) };
-        for (int i = 0; i < af.TailRotor.NumBlades; i++)
-        {
-            float a = Mathf.Tau * i / af.TailRotor.NumBlades;
-            float tr = (float)af.TailRotor.Radius;
-            var blade = Box($"TBlade{i}", new Vector3(0.06f, tr, (float)af.TailRotor.Chord),
-                            new Vector3(0, tr * 0.5f, 0), dark);
-            var pivot = new Node3D { Name = $"TPivot{i}" };
-            pivot.Rotation = new Vector3(a, 0, 0);
-            pivot.AddChild(blade);
-            tail.AddChild(pivot);
-        }
-        heli.AddChild(tail);
+        // The airframe proper: a parametric loft rather than a pile of boxes.
+        // See AirframeBuilder for why it is built this way.
+        AirframeBuilder.Build(heli, af, AirframeBuilder.DefaultMaterials(new Color(0.24f, 0.27f, 0.22f)));
 
         return heli;
     }
