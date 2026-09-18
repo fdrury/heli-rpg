@@ -151,16 +151,41 @@ public sealed partial class Terrain : StaticBody3D
 
         st.GenerateNormals();
         st.GenerateTangents();
-
-        var mat = new StandardMaterial3D
-        {
-            AlbedoColor = new Color(0.30f, 0.32f, 0.25f),
-            Roughness = 0.95f,
-            Metallic = 0.0f,
-        };
-        st.SetMaterial(mat);
+        st.SetMaterial(BuildMaterial());
 
         return new MeshInstance3D { Mesh = st.Commit(), Name = "TerrainMesh" };
+    }
+
+    /// <summary>
+    /// Terrain material: four CC0 PBR sets blended by slope, altitude and noise, sampled
+    /// at two scales. See game/assets/terrain/terrain.gdshader for what it is doing and
+    /// why. Falls back to a flat material if the shader is missing, so a broken import
+    /// never costs a flight test.
+    /// </summary>
+    private static Material BuildMaterial()
+    {
+        var shader = GD.Load<Shader>("res://assets/terrain/terrain.gdshader");
+        if (shader is null)
+        {
+            GD.PushWarning("[terrain] shader missing, falling back to flat material");
+            return new StandardMaterial3D { AlbedoColor = new Color(0.30f, 0.32f, 0.25f), Roughness = 0.95f };
+        }
+
+        var mat = new ShaderMaterial { Shader = shader };
+        foreach (string name in new[] { "grass", "dirt", "rock", "gravel" })
+        {
+            Set(mat, $"{name}_col", $"res://assets/terrain/{name}_col.jpg");
+            Set(mat, $"{name}_nrm", $"res://assets/terrain/{name}_nrm.jpg");
+            Set(mat, $"{name}_rgh", $"res://assets/terrain/{name}_rgh.jpg");
+        }
+        return mat;
+    }
+
+    private static void Set(ShaderMaterial mat, string param, string path)
+    {
+        var tex = GD.Load<Texture2D>(path);
+        if (tex is null) { GD.PushWarning($"[terrain] missing texture {path}"); return; }
+        mat.SetShaderParameter(param, tex);
     }
 
     private static void AddTri(SurfaceTool st, Vector3 a, Vector3 b, Vector3 c, float uv)

@@ -56,11 +56,21 @@ public sealed partial class Main : Node3D
         args.AddRange(OS.GetCmdlineUserArgs());
         foreach (string arg in args)
         {
-            if (arg != "--selftest") continue;
-            GD.Print("[main] running the bridge self-test");
-            _hud.Visible = false;
-            AddChild(new GodotBridgeSelfTest(_heli) { Name = "SelfTest" });
-            break;
+            if (arg == "--selftest")
+            {
+                GD.Print("[main] running the bridge self-test");
+                _hud.Visible = false;
+                AddChild(new GodotBridgeSelfTest(_heli) { Name = "SelfTest" });
+                break;
+            }
+            if (arg == "--screenshot")
+            {
+                GD.Print("[main] running the screenshot pass");
+                _hud.Visible = false;
+                AddChild(new ScreenshotDirector(_heli, _camera, "res://../builds/screenshots")
+                { Name = "Screenshots" });
+                break;
+            }
         }
 
         GD.Print("[main] Rotorwash flight test ready");
@@ -72,12 +82,15 @@ public sealed partial class Main : Node3D
     {
         var sky = new ProceduralSkyMaterial
         {
-            SkyTopColor = new Color(0.30f, 0.42f, 0.56f),
-            SkyHorizonColor = new Color(0.66f, 0.65f, 0.58f),
-            GroundBottomColor = new Color(0.16f, 0.16f, 0.14f),
-            GroundHorizonColor = new Color(0.58f, 0.56f, 0.50f),
-            SunAngleMax = 22f,
-            SunCurve = 0.18f,
+            SkyTopColor = new Color(0.26f, 0.36f, 0.48f),
+            SkyHorizonColor = new Color(0.72f, 0.70f, 0.62f),
+            GroundBottomColor = new Color(0.14f, 0.14f, 0.12f),
+            GroundHorizonColor = new Color(0.56f, 0.53f, 0.46f),
+            SunAngleMax = 26f,
+            SunCurve = 0.14f,
+            // A dusty sky: the horizon is pale and warm, the zenith is a muted blue.
+            // Clear deep-blue skies read as holiday; this one reads as weather.
+            SkyEnergyMultiplier = 0.95f,
         };
 
         var env = new Godot.Environment
@@ -91,10 +104,18 @@ public sealed partial class Main : Node3D
             SsaoEnabled = QualityTier.Current >= QualityTier.Tier.Medium,
             GlowEnabled = QualityTier.Current >= QualityTier.Tier.Medium,
             FogEnabled = true,
-            FogLightColor = new Color(0.62f, 0.64f, 0.66f),
-            FogDensity = 0.0009f,
+            FogLightColor = new Color(0.66f, 0.65f, 0.60f),
+            FogDensity = 0.0011f,
             FogAerialPerspective = 0.7f,
             FogSkyAffect = 0.35f,
+
+            // Global grade. The world is drying out and coming apart, so the image is
+            // pulled off full saturation and warmed slightly. Applied here rather than in
+            // every material so one knob moves the whole look.
+            AdjustmentEnabled = true,
+            AdjustmentSaturation = 0.86f,
+            AdjustmentContrast = 1.06f,
+            AdjustmentBrightness = 1.0f,
         };
 
         // Realtime global illumination is the Ultra-tier feature. It is genuinely
