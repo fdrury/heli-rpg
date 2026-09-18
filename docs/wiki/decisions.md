@@ -342,3 +342,16 @@ which, and that knowledge is progression under D-005.
 **And it produced the trade the world needed anyway:** the easy country to fly and land in
 is the country with nowhere to hide. That is "cities, wilderness and everything in between"
 expressed as a mechanic rather than as scenery.
+
+### D-003c — Two benchmark cells remain unverified · 2026-09-18
+The source-verification pass on `world-scale.md` could not close two cells before its
+search budget ran out: **The Witcher 3** has no land-only area figure in the public record
+(the 136 km² everyone quotes traces to a 2014 engine slide of two square bounding boxes,
+mostly ocean in Skellige's case), and **RDR2**'s ubiquitous ~75 km² traces to a single
+pre-release Reddit post that measured PNG file size as a proxy for map-image area, anchored
+to a rectangle that includes water.
+
+**Nothing in D-003b depends on either.** The decisive figures were Elden Ring at 13.5 km²,
+Skyrim at 14.8 km² playable, and this project's own measured cruise speed. Recorded so that
+nobody - including me - later reasons from the Witcher or RDR2 numbers as though they were
+measured. They are not.
