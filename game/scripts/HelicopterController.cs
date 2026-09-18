@@ -1,3 +1,4 @@
+using System;
 using Godot;
 using Rotorwash.Sim;
 
@@ -78,6 +79,8 @@ public sealed partial class HelicopterController : RigidBody3D
     private Terrain? _terrain;
     private Node3D? _rotorVisual;
     private Node3D? _tailRotorVisual;
+    private MeshInstance3D? _rotorDisc;
+    private readonly System.Collections.Generic.List<Node3D> _bladePivots = new();
     private double _lastDt = 1.0 / 120.0;
 
     public override void _Ready()
@@ -101,6 +104,11 @@ public sealed partial class HelicopterController : RigidBody3D
 
         _rotorVisual = GetNodeOrNull<Node3D>("MainRotor");
         _tailRotorVisual = GetNodeOrNull<Node3D>("TailRotor");
+        _rotorDisc = _rotorVisual?.GetNodeOrNull<MeshInstance3D>("RotorDisc");
+        if (_rotorVisual is not null)
+            foreach (Node child in _rotorVisual.GetChildren())
+                if (child is Node3D pivot && child.Name.ToString().StartsWith("BladePivot"))
+                    _bladePivots.Add(pivot);
 
         GD.Print($"[heli] {airframe.Name}: {Sim.TotalMass:F0} kg, CG {Sim.CentreOfGravity}, " +
                  $"rotor {airframe.MainRotor.Radius:F2} m");
@@ -225,6 +233,19 @@ public sealed partial class HelicopterController : RigidBody3D
             float tailAngle = (float)(Sim.Rotor.Azimuth * Sim.Airframe.TailRotor.GearRatio);
             _tailRotorVisual.Rotation = new Vector3(tailAngle, 0, 0);
         }
+
+        // Above roughly 25% Nr the eye stops resolving individual blades and sees a disc.
+        // Below it, a stopped or slowly turning rotor is one of the strongest signals that
+        // something is badly wrong, so the blades stay visible.
+        float nr = (float)(Sim.RotorOmega / Math.Max(Sim.Airframe.MainRotor.NominalOmega, 1e-3));
+        float discVisibility = Mathf.Clamp((nr - 0.18f) / 0.30f, 0f, 1f);
+        if (_rotorDisc is not null)
+        {
+            _rotorDisc.Visible = discVisibility > 0.01f;
+            if (_rotorDisc.MaterialOverride is StandardMaterial3D m)
+                m.AlbedoColor = new Color(0.22f, 0.22f, 0.21f, discVisibility);
+        }
+        foreach (Node3D pivot in _bladePivots) pivot.Visible = discVisibility < 0.92f;
     }
 
     /// <summary>Height above the terrain directly below, metres.</summary>

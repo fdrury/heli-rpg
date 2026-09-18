@@ -29,6 +29,14 @@ public sealed partial class Main : Node3D
         _terrain = new Terrain { Name = "Terrain" };
         AddChild(_terrain);
 
+        AddChild(new Scatter
+        {
+            Name = "Scatter",
+            TerrainPath = "../Terrain",
+            Radius = QualityTier.Current >= QualityTier.Tier.High ? 1800f : 1200f,
+            ScrubDensity = QualityTier.Current >= QualityTier.Tier.Medium ? 0.020f : 0.010f,
+        });
+
         _heli = BuildHelicopter();
         AddChild(_heli);
 
@@ -210,6 +218,23 @@ public sealed partial class Main : Node3D
             pivot.AddChild(blade);
             rotor.AddChild(pivot);
         }
+        // The blurred disc, shown instead of the blades once the rotor is up to speed.
+        var disc = new MeshInstance3D
+        {
+            Name = "RotorDisc",
+            Mesh = ProceduralProps.RotorDisc(rotorR, 0.10f, 64),
+            MaterialOverride = new StandardMaterial3D
+            {
+                AlbedoTexture = ProceduralProps.RotorDiscTexture(128, af.MainRotor.NumBlades),
+                Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+                CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                NoDepthTest = false,
+                AlbedoColor = new Color(0.22f, 0.22f, 0.21f),
+            },
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+        rotor.AddChild(disc);
         heli.AddChild(rotor);
 
         var tail = new Node3D { Name = "TailRotor", Position = new Vector3(0.42f, 1.15f, 8.55f) };
