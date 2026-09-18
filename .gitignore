@@ -1,0 +1,28 @@
+# Godot
+.godot/
+game/.godot/
+*.translation
+export_presets.cfg
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# Tools (engine binaries are large; not vendored)
+tools/godot/
+tools/models/
+tools/whisper/
+
+# Builds
+builds/
+*.pck
+*.exe.zip
+
+# Assets staging (raw downloads before processing)
+assets_raw/
+
+# OS
+Thumbs.db
+desktop.ini
