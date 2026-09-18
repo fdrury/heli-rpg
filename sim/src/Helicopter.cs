@@ -80,6 +80,13 @@ public sealed class Helicopter
     /// <summary>Fuel remaining, kg.</summary>
     public double Fuel { get; set; }
 
+    /// <summary>
+    /// Component health. Every effect it has is a multiplier on something the flight model
+    /// already computes, so damage changes how the aircraft flies rather than applying a
+    /// penalty on top of it.
+    /// </summary>
+    public DamageState Damage { get; } = new();
+
     /// <summary>Last computed telemetry.</summary>
     public FlightTelemetry Telemetry;
 
@@ -256,7 +263,33 @@ public sealed class Helicopter
         var mr = Rotor.Update(vAirBody, omega, RotorOmega, collective, cyclicFwd, cyclicRight,
                               rho, soundSpeed, hubAgl, dt, _cachedCg);
 
+        // A damaged rotor loses a little thrust and gains a lot of vibration. The shake is
+        // the part the pilot notices, and it is what makes flying a hurt aircraft feel
+        // different rather than just perform worse.
+        double rotorFactor = Damage.RotorThrustFactor;
+        if (rotorFactor < 0.999)
+        {
+            mr.Force = mr.Force * rotorFactor;
+            mr.Thrust *= rotorFactor;
+            mr.ShaftTorque *= 0.92 + 0.08 * rotorFactor;
+        }
+        double imbalance = Damage.RotorImbalance;
+        if (imbalance > 1e-4)
+        {
+            double phase = Rotor.Azimuth;
+            double mag = Math.Abs(mr.Thrust) * imbalance * cfg.Radius * 0.35;
+            mr.Moment += new Vec3(Math.Cos(phase) * mag, Math.Sin(phase) * mag, 0);
+        }
+
         var tr = Tail.Update(vAirBody, omega, RotorOmega, tailPitch, rho, soundSpeed, dt, _cachedCg);
+        double tailFactor = Damage.TailRotorFactor;
+        if (tailFactor < 0.999)
+        {
+            tr.Force = tr.Force * tailFactor;
+            tr.Moment = tr.Moment * tailFactor;
+            tr.Thrust *= tailFactor;
+            tr.ShaftTorque *= tailFactor;
+        }
 
         // --- Drivetrain ------------------------------------------------------
         double tailTorqueAtMain = tr.ShaftTorque * tailCfg.GearRatio;
@@ -264,7 +297,8 @@ public sealed class Helicopter
         double loadTorque = mr.ShaftTorque + tailTorqueAtMain + losses;
 
         double densityRatio = rho / Atmosphere.SeaLevelDensity;
-        var pp = Engine.Update(RotorOmega, cfg.NominalOmega, loadTorque, densityRatio, dt);
+        var pp = Engine.Update(RotorOmega, cfg.NominalOmega, loadTorque, densityRatio, dt,
+                               Damage.EnginePowerFactor, Damage.TransmissionFactor);
 
         double brakeTorque = cmd.Brake * 4000.0 * Math.Sign(RotorOmega);
         double netTorque = pp.ShaftTorque - loadTorque - brakeTorque;
@@ -301,7 +335,7 @@ public sealed class Helicopter
 
         // Parasite drag, per axis, plus the download the rotor wake presses onto the
         // fuselage - a real and annoying few percent of thrust you never get back.
-        double q = 0.5 * rho;
+        double q = 0.5 * rho * Damage.DragFactor;
         Vec3 vb = vAirBody;
         forceBody += new Vec3(
             -q * af.DragArea.X * vb.X * Math.Abs(vb.X),
@@ -331,7 +365,7 @@ public sealed class Helicopter
         // --- Fuel ------------------------------------------------------------
         if (Fuel > 0)
         {
-            Fuel = Math.Max(0, Fuel - pp.FuelFlow * dt);
+            Fuel = Math.Max(0, Fuel - (pp.FuelFlow + Damage.FuelLeakRate) * dt);
             _massDirty = true;
             if (Fuel <= 0) Engine.FuelAvailable = false;
         }
@@ -369,7 +403,8 @@ public sealed class Helicopter
     /// <summary>Move the actual control positions toward the pilot demand at a finite rate.</summary>
     private void RateLimitControls(double dt)
     {
-        double maxStep = dt / Math.Max(ActuatorFullTravelTime, 1e-3);
+        // Failing hydraulics make the controls slow long before they fail completely.
+        double maxStep = dt / Math.Max(ActuatorFullTravelTime * Damage.ActuatorSlowdown, 1e-3);
         static double Move(double current, double target, double step)
         {
             double d = target - current;

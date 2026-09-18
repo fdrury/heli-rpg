@@ -97,8 +97,11 @@ public sealed class Powerplant
     /// <param name="nominalOmega">Governed rotor speed, rad/s.</param>
     /// <param name="loadTorque">Torque the rotors are currently demanding, N.m at the main shaft.</param>
     /// <param name="densityRatio">rho / rho_sea_level at the current altitude.</param>
+    /// <param name="powerFactor">Engine health, 0..1, scaling available power.</param>
+    /// <param name="torqueFactor">Transmission health, 0..1, scaling the torque limit.</param>
     public PowerplantOutput Update(double rotorOmega, double nominalOmega, double loadTorque,
-                                   double densityRatio, double dt)
+                                   double densityRatio, double dt,
+                                   double powerFactor = 1.0, double torqueFactor = 1.0)
     {
         var cfg = Config;
         var o = new PowerplantOutput();
@@ -119,7 +122,10 @@ public sealed class Powerplant
                 break;
         }
 
-        double powerAvailable = cfg.MaxContinuousPower * Math.Pow(Math.Max(densityRatio, 0.05), cfg.DensityPowerExponent);
+        double powerAvailable = cfg.MaxContinuousPower
+                                * Math.Pow(Math.Max(densityRatio, 0.05), cfg.DensityPowerExponent)
+                                * Math.Clamp(powerFactor, 0.0, 1.2);
+        double torqueLimit = cfg.TransmissionTorqueLimit * Math.Clamp(torqueFactor, 0.05, 1.2);
         o.PowerAvailable = powerAvailable;
 
         if (State != EngineState.Running && State != EngineState.Starting)
@@ -145,7 +151,7 @@ public sealed class Powerplant
         else
         {
             _governorIntegral += error * dt;
-            double maxTorque = cfg.TransmissionTorqueLimit;
+            double maxTorque = torqueLimit;
             _governorIntegral = Math.Clamp(_governorIntegral, -maxTorque / cfg.GovernorI, maxTorque / cfg.GovernorI);
 
             // Feed-forward on the measured load makes the governor behave like a real
@@ -154,7 +160,7 @@ public sealed class Powerplant
         }
 
         double torqueCeilingPower = powerAvailable / Math.Max(rotorOmega, 1.0);
-        double ceiling = Math.Min(torqueCeilingPower, cfg.TransmissionTorqueLimit);
+        double ceiling = Math.Min(torqueCeilingPower, torqueLimit);
         o.TorqueLimited = torqueCommand > ceiling;
         torqueCommand = Math.Clamp(torqueCommand, 0, ceiling);
 
@@ -176,7 +182,7 @@ public sealed class Powerplant
 
         o.ShaftTorque = torque;
         o.PowerDelivered = torque * rotorOmega;
-        o.TorquePercent = torque / Math.Max(cfg.TransmissionTorqueLimit, 1e-6);
+        o.TorquePercent = torque / Math.Max(torqueLimit, 1e-6);
         o.FuelFlow = cfg.Sfc * Math.Max(o.PowerDelivered, powerAvailable * 0.05);
         o.N1 = N1;
         return o;

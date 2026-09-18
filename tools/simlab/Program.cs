@@ -51,6 +51,10 @@ public static class Program
         Run("autorotation", Scenarios.Autorotation);
         Run("vrs", Scenarios.VortexRingState);
         Run("ceiling", Scenarios.ServiceCeiling);
+        Run("landinggeom", LandingTests.Geometry);
+        Run("touchdown", LandingTests.Touchdowns);
+        Run("brownout", LandingTests.Brownout);
+        Run("damage", LandingTests.DamageEffects);
         Run("perf", Scenarios.Performance);
 
         Console.WriteLine();
