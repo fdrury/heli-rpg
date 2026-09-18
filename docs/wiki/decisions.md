@@ -130,3 +130,97 @@ Fred suggested Hugh as the main character's name. Better: **Hugh is the aircraft
 - Somebody, at some point, painted the name on the nose. That person is a hook.
 - "Hugh is not going to like this" is a line the game can earn a hundred times over, and
   it is funnier and sadder than any amount of exposition about how attached you are to it.
+
+---
+
+## Revisions from the benchmark round · 2026-09-18
+
+Three research passes compared this design against the genre. Full write-ups in
+`docs/wiki/benchmarks/`. Each found something real; the changes are recorded below rather
+than quietly folded in, because the original decisions are still worth arguing with.
+
+### D-005a — Progression needs a cadence and a screen · *supersedes part of D-005*
+**Finding:** gear-and-knowledge progression is well precedented (S.T.A.L.K.E.R., Subnautica,
+Death Stranding, Elite, Outer Wilds), but every game that makes it work pairs its rare
+region-opening unlocks with **a dense substrate of small rewards every few minutes** and
+**one screen that shows you are further along than you were**. D-005 had the rare unlocks
+and neither of the other two. Scored 5/10 on pacing — the risk is not hour 30, it is that
+hours 2-8 are inert.
+
+**Changes:**
+1. **Build the kneeboard.** One screen: aircraft status *with empty bays shown*, chart
+   coverage, frequencies, contacts, known threat sites, open threads. It stores **facts
+   only, never inferences** — the game does the bookkeeping, the player does the thinking.
+2. **Four-layer rule.** Nothing ships as an acquisition unless it has all four: a visible
+   change on the aircraft or the instruments, a printed numeric delta, a procedural change
+   in how something is done, and somewhere to use it on this sortie.
+3. **Instruments are items.** The HUD physically grows as boxes are installed, so the
+   interface itself is a progress bar.
+4. **The RWR logs every emitter that paints you.** The sortie that nearly killed you hands
+   you the threat's position and signature. The game pays you for being outmatched, and the
+   bad sortie stops being a dead loss. This is the cheapest good idea in the whole report.
+5. **Threat envelopes are graded.** A hit takes a system and leaves an autorotation; it
+   does not delete the aircraft. Consistent with D-007. Total unearned punishment reads as
+   irritation, not as a gate.
+
+### D-003a — World scale confirmed, fuel-as-range-gate killed · *supersedes part of D-007*
+**Finding:** 16.384 km square (268 km²) is defensible, but the brief was wrong about the
+aircraft. The benchmark ran this project's own test bench: the Workhorse cruises at
+**100-116 kt**, not 60. Edge to edge is **4 min 49 s** — almost exactly the measured time to
+cross GTA V, a world everyone describes as feeling small from the air. The helicopter does
+not create a density problem (moving fast sweeps more ground, so you encounter *more*); it
+creates a **duration** problem.
+
+**Changes:**
+1. **Target ~120 named POIs (~0.45/km²)**: about 45 hand-authored, about 75 assembled from
+   kits, over a few thousand unnamed procedural features whose only job is to make the world
+   read as inhabited from 300 m. A Skyrim-like 9 POIs/km² would need ~2,400 locations here,
+   which is not a solo project.
+2. **Fuel is not a range constraint and must stop pretending to be.** One tank crosses the
+   map diagonal about 34 times. Re-framed as an **economy and load** system: fuel costs
+   money and weight, and weight costs hover ceiling, climb rate and landing margin.
+3. **Landing is the expensive act, not flying.** This is the real traversal cost, it is
+   already earned by the flight model, and it is where the game should charge the player.
+4. **Route inflation via threat envelopes** (D-010) is load-bearing, not decoration: going
+   around is what makes 23 km feel like a journey.
+
+### D-006a — Local SLM: build it differently · *supersedes part of D-006*
+**Finding:** the latency-cover trick is sound and is validated prior art, not a gamble —
+*Whispers from the Star* wrote the delay into the fiction as interstellar comms lag; PUBG's
+Ally covers an LLM with a behaviour tree; inZOI shipped a 0.5B on-device model commercially.
+Every project that did *not* mask latency was criticised for the pause. But three things in
+D-006 as written are wrong:
+
+1. **"Streams the coda" and "fails validation" are mutually exclusive** — you cannot
+   un-display text. Fixed by **sentence-granular commit**: buffer, validate at each sentence
+   terminator, then release. Budget moves from time-to-first-token to time-to-last-token.
+2. **The coda must be an observation, never a reply.** If the player's input is a menu
+   choice, a frontier model can bake every possible coda offline and the local model earns
+   nothing. It justifies itself only against *unbounded state*: fuel remaining, what is
+   bolted to Hugh, how long since you were last here, what you are carrying.
+   **The baked line answers; the coda notices.** This reframe kills tonal mismatch, state
+   contradiction and quest-invention by construction, and drops the task into 1.7B's weight class.
+3. **VRAM is the risk, not latency** — and it does not crash, it silently pages over PCIe
+   and can evict *the game's* textures, producing hitches the player blames on the engine.
+
+**Technical decisions:**
+| | Choice | Why |
+|---|---|---|
+| Model | Qwen3-1.7B Q4_K_M (1.11 GB, Apache-2.0) | Redistributable. Llama 3.2 is disqualified by licence, not quality |
+| Backend | **Vulkan**, not CUDA | On Pascal, Vulkan *beats* CUDA at token generation (67.8 vs 62.5 t/s) and costs 41 MB instead of ~1.2 GB |
+| Runtime | Bundled `llama-server.exe` subprocess, localhost HTTP, held in a Windows **Job Object** | Process isolation *is* the graceful degradation, implemented by the OS for free. In-process (LLamaSharp) means a native abort takes Godot with it |
+| Guardrails | GBNF grammar + stop sequences + length cap + sentence validation | Only llama-server exposes GBNF *and* JSON schema |
+
+Measured budget on a 1080: **~0.52 s** for a 40-token coda against 3-6 s of cover — a 6-10x
+margin. The asterisk: short baked lines ("Yeah?") give only 0.6-1.5 s of cover, so a coda is
+requested **only when the line's estimated delivery time is at least 1.5x measured p95
+latency**. Hard abandon at 4 s.
+
+**Also noted:** Steam has required disclosure of runtime-generated AI content since
+2026-01-16. Not a blocker for a project that is not being sold, but recorded because it
+changes the calculus if that ever changes.
+
+**And the finding that matters most for the writing:** in both the local-model research and
+the baked-corpus research, independently, *the perceived magic is memory, not prose*. PUBG
+playtesters singled out the Ally remembering a name and a weapon preference. Callbacks buy
+more than variety does. Build the memory, then the words.

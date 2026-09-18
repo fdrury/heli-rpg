@@ -1,0 +1,91 @@
+{{short description|Second expansion pack for The Witcher 3: Wild Hunt}}
+{{Use dmy dates|date=June 2016}}
+{{Infobox video game
+| title = The Witcher 3: Wild Hunt – Blood and Wine
+| image = Blood and wine art.jpg
+| developer = [[CD Projekt Red]]
+| publisher = [[CD Projekt]]
+| director = Konrad Tomaszkiewicz
+| programmer = Grzegorz Mocarski
+| writer = Marcin Blacha
+| composer = {{Unbulleted list|[[Marcin Przybyłowicz]]|[[Mikolai Stroinski]]|Piotr Musiał}}
+| series = ''[[The Witcher (video game series)|The Witcher]]''
+| engine = [[REDengine 3]]
+| platforms = {{ubl|[[PlayStation 4]]|[[Windows]]|[[Xbox One]]|[[Nintendo Switch]]|[[PlayStation 5]]|[[Xbox Series X/S]]|[[Nintendo Switch 2]]}}
+| released = {{ubl|'''PS4''', '''Windows''', '''Xbox One'''|31 May 2016|'''Nintendo Switch'''|15 October 2019|'''PS5''', '''Xbox Series X/S'''|14 December 2022}}
+| genre = [[Action role-playing]]
+| modes = [[Single-player]]
+}}
+
+'''''The Witcher 3: Wild Hunt – Blood and Wine''''' ({{langx|pl|Wiedźmin 3: Dziki Gon – Krew i wino}}) is the second [[expansion pack]] for the 2015 video game ''[[The Witcher 3: Wild Hunt]]'', following the first expansion, ''[[The Witcher 3: Wild Hunt – Hearts of Stone|Hearts of Stone]]''. Developed by [[CD Projekt Red]], the expansion follows [[Geralt of Rivia]] as he travels to Toussaint, a [[duchy]] untouched by the war taking place in the base game, as he hopes to track down a mysterious beast terrorizing the region.
+
+''Blood and Wine'' was released for [[PlayStation 4]], [[Windows]], and [[Xbox One]] on 31 May 2016, and later released for the [[Nintendo Switch]] on 15 October 2019, with [[PlayStation 5]] and [[Xbox Series X/S]] versions released on 14 December 2022. The expansion received widespread acclaim from critics, winning a number of awards. Many consider it to be one of the best downloadable content packs of all time.
+
+== Plot ==
+<!--Per [[WP:FILMPLOT]], plot summaries should be 400~700 words. As of March 11th, 2026, the word count is 607.-->
+Geralt accepts a contract from [[Duchess]] Anna Henrietta of Toussaint, tasking him with slaying a mysterious monster that killed two of the [[duchy]]'s knights. Arriving in the region, he learns there has been a third victim, with rumors claiming the knights were ritually murdered for violating their oaths. Realizing one of the knights who escorted him to Toussaint is the next target, Geralt rushes to his side and catches the culprit red-handed: Dettlaff van der Eretein, a [[vampire]]. However, their fight is interrupted by another vampire: Geralt's supposedly deceased friend [[Regis (The Witcher)|Regis]], who convinces Dettlaff to leave. 
+
+Regis explains to Geralt that Dettlaff revived him following his death by giving him his own blood, and he doubts that he is committing these murders willingly. Working together, Geralt and Regis locate Dettlaff's hideout and discover that someone abducted his human ex-lover, Rhenawedd, to force him to murder the knights. With the blackmailer having stolen ducal family possessions as his only lead, Geralt investigates with Henrietta, who fears that her long-lost sister Syanna, who was exiled for supposedly being afflicted by a fauxy curse, is somehow involved.
+
+Locating the blackmailer's headquarters, Geralt, Regis, Dettlaff, and the duchy's knights stage an assault. However, upon confronting Rhenawedd, it is revealed that she and Syanna are the same person; she faked her own kidnapping and orchestrated the murders as revenge against the victims, who abused her whilst escorting her out of the duchy during her exile. Betrayed, Dettlaff snaps and attacks Toussaint's capital with a horde of vampires lest Syanna surrender herself to him. In turn, Henrietta confines Syanna to protect her and orders Geralt to kill Dettlaff. 
+
+To find Dettlaff, Geralt has two choices: give in to his demand by freeing Syanna, or find the Unseen Elder, the head of Toussaint's vampires, and have him force Dettlaff into an audience. From here, three endings are available:
+* If Geralt frees Syanna, Dettlaff will immediately kill her upon confronting him. The witcher can then either fight Dettlaff or let him go. Regardless, Geralt is arrested for ducicide, but his friend [[Dandelion (The Witcher)|Dandelion]] convinces Henrietta to release him. Afterward, Geralt can finish his investigation into the murders and uncover that Henrietta was Syanna's last target, revenge for abandoning her, leaving the duchess devastated.
+* If Geralt also retrieved Syanna's protective ribbon, it will teleport her away when Dettlaff attempts to kill her. Enraged, the vampire then attacks the witcher, forcing Regis to kill him. Afterward, if Geralt uncovers that Henrietta was the last murder target, he can convince Syanna to forgive her, resulting in the sisters reconciling if successful.
+* If Geralt goes to the Unseen Elder, he convinces him to summon Dettlaff, after which he fights and slays him. Afterward, regardless of whether Geralt finishes his investigation, Syanna will kill Henrietta and subsequently be killed by guards herself, leaving Toussaint in mourning.
+
+Either way, if Dettlaff was killed, Regis is forced to leave Toussaint to avoid persecution by other vampires. Afterward, depending on his choices in [[The Witcher 3: Wild Hunt|the base game]], Geralt can return to the vineyard estate that he obtained as part of his reward to find a surprise visitor: 
+* If Geralt romanced either [[Yennefer of Vengerberg|Yennefer]] or [[Triss Merigold|Triss]], she will move in with him.
+* If Geralt romanced no one and [[Ciri]] survived, she will visit him. 
+* If Geralt either romanced no one and Ciri did not survive, or if the player did a standalone expansion playthrough, Dandelion will drop by.
+
+== Release ==
+On 7 April 2015, [[CD Projekt]] announced two [[expansion packs]] for ''[[The Witcher 3: Wild Hunt]]''—the first expansion being ''[[The Witcher 3: Wild Hunt – Hearts of Stone|Hearts of Stone]]'' and the second being ''Blood and Wine''.<ref name="ign_expansion_announce" /> ''Blood and Wine'' was released on 31 May 2016.<ref name="ign_release_date" /> It was later released alongside ''[[The Witcher 3: Wild Hunt – Hearts of Stone|Hearts of Stone]]'' in a complete edition for the [[Nintendo Switch]] on 15 October 2019. A third expansion, ''[[The Witcher 3: Wild Hunt – Songs of the Past|Songs of the Past]]'', is scheduled to release in 2027.<ref>{{cite web|last=LeBlanc|first=Wesley|date=May 27, 2026|title=The Witcher 3: Songs Of The Past Is A New Expansion Starring Geralt And It Launches Next Year|url=https://gameinformer.com/2026/05/27/the-witcher-3-songs-of-the-past-is-a-new-expansion-starring-geralt-and-it-launches-next|website=[[Game Informer]]|access-date=June 1, 2026}}</ref>
+
+== Reception ==
+{{Video game reviews
+| MC = (PC) 92/100<ref name="metacritic_pc" /><br />(PS4) 91/100<ref name="metacritic_ps4" /><br />(XBO) 94/100<ref name="metacritic_xbo" />
+| award1Pub  = [[The Game Awards 2016]]
+| award1     = Best Role Playing Game<ref name="TGAs">{{Cite news |url=http://www.polygon.com/2016/12/1/13784410/the-game-awards-winners |title=The Game Awards: Here's the full winners list |last=Stark |first=Chelsea |date=December 1, 2016 |access-date=December 1, 2016}}</ref>
+| award2Pub  = 2017 National Academy of Video Game Trade Reviewers
+| award2     = Art Direction, Period Influence<ref>{{cite web|title=NAVGTR Awards (2016)|url=http://navgtr.org/winners/2016-awards/|website=National Academy of Video Game Trade Reviewers}}</ref>
+}}
+''Blood and Wine'' received "universal acclaim" from critics, according to review aggregator website [[Metacritic]].<ref name="metacritic_pc" /><ref name="metacritic_ps4" /><ref name="metacritic_xbo" /> Many reviewers praised the way CD Projekt Red ended the storyline of the character [[Geralt of Rivia]] and the size of the expansion, with some saying it could be a new project.<ref name="telegraphwhite">{{cite news|newspaper=[[The Daily Telegraph#Website|The Daily Telegraph]]|publisher=[[Telegraph Media Group]]|url=https://www.telegraph.co.uk/gaming/what-to-play/the-witcher-3-blood-and-wine-review/|title=The Witcher 3: Blood and Wine is a gorgeous, generous and remarkable expansion – review|first=Sam|last=White|date=8 June 2016|access-date=17 June 2016}}</ref><ref name="destructoidcarter">{{cite web|url=https://www.destructoid.com/review-the-witcher-3-wild-hunt-blood-and-wine-362253.phtml|title=Review: The Witcher 3: Wild Hunt – Blood and Wine|first=Chris|last=Carter|date=31 May 2016|access-date=17 June 2016|website=[[Destructoid]]|archive-date=16 August 2016|archive-url=https://web.archive.org/web/20160816191444/https://www.destructoid.com/review-the-witcher-3-wild-hunt-blood-and-wine-362253.phtml|url-status=dead}}</ref> In a ''[[PC Gamer]]'' review by Tom Senior, he praised the developers for making such an in-depth expansion, and if they kept getting released, he'd still be playing ''The Witcher'' in 2020. Senior commended the farewell to the series.<ref name="pcgamertomsenior">{{cite web|first=Tom|last=Senior|website=[[PC Gamer]]|publisher=[[Future plc]]|url=http://www.pcgamer.com/the-witcher-3-blood-and-wine-review/|access-date=17 June 2016|date=25 May 2016|title=The Witcher 3: Blood and Wine review}}</ref> ''[[The Escapist (magazine)|The Escapist]]'' writer Steven Bogos stated it was a good expansion overall, but was not the adventurous "save the world" storyline like previous ''Witcher'' titles.<ref name="escapistbogos">{{cite web|url=http://www.escapistmagazine.com/articles/view/video-games/editorials/reviews/17081-The-Witcher-3-Blood-And-Wine-Review#&gid=gallery_6260&pid=1|title=The Witcher 3 – Blood And Wine Review – Geralt's Last Adventure|website=[[The Escapist (magazine)|The Escapist]]|publisher=[[Defy Media]]|first=Steven|last=Bogos|access-date=17 June 2016|date=3 June 2016|archive-date=23 September 2016|archive-url=https://web.archive.org/web/20160923083955/http://www.escapistmagazine.com/articles/view/video-games/editorials/reviews/17081-The-Witcher-3-Blood-And-Wine-Review#&gid=gallery_6260&pid=1|url-status=dead}}</ref>
+
+Richard Cobbett for ''[[Rock, Paper, Shotgun]]'' wrote that the game was not CD Projekt Red's best work, saying it had a good story but not as good as ''[[The Witcher 3: Hearts of Stone|Hearts of Stone]]'''s.<ref name="rpscobbett">{{cite news|url=https://www.rockpapershotgun.com/2016/05/25/the-witcher-3-blood-and-wine-review/|title=Wot I Think: The Witcher 3: Blood And Wine|first=Richard|last=Cobbett|date=25 May 2016|access-date=17 June 2016|website=[[Rock Paper Shotgun]]}}</ref> In contrast, Chris Carter for ''[[Destructoid]]'' believed ''Blood and Wine'' was better than ''Hearts of Stone'' due to the latter feeling like a "polished, elongated quest". He said ''Blood and Wine'' was expansive enough that it could be considered a new project.<ref name="destructoidcarter" /> "''Blood and Wine'' is sometimes as thematically dark as its predecessors", Kevin VanOrd said in a ''[[GameSpot]]'' review, although when compared to other aspects of ''The Witcher 3'', it was less grim.<ref>{{cite web|last1=VanOrd|first1=Kevin|title=The Witcher 3: Wild Hunt – Blood and Wine Review |url=http://www.gamespot.com/reviews/the-witcher-3-wild-hunt-blood-and-wine-review/1900-6416443/|website=GameSpot|access-date=27 May 2016}}</ref> Leif Johnson for ''[[IGN]]'' had initial doubts due to the slow start but started to "love it" within the first few hours of gameplay.<ref name="ignjohnson">{{cite web|url=http://ign.com/articles/2016/05/25/the-witcher-3-wild-hunt-blood-and-wine-review|title=The Witcher 3: Wild Hunt – Blood and Wine Review|first=Leif|last=Johnson|date=25 May 2016|access-date=17 June 2016|publisher=[[IGN]]}}</ref> ''[[Shacknews]]'' writer Josh Hawkins noted he experienced a few problems and bugs in the expansion, but believed it to be a good addition to the series.<ref name="shacknewshawkins">{{cite web|url=http://www.shacknews.com/article/94838/the-witcher-3-blood-and-wine-review----the-land-of-love-and-wine-flows-with-blood|title=The Witcher 3: Blood and Wine Review – The Land of Love and Wine Flows With Blood|publisher=[[Shacknews]]|first=Josh|last=Hawkins|date=25 May 2016|access-date=17 June 2016}}</ref>
+
+== References ==
+{{Reflist|30em|refs=
+
+<ref name="ign_expansion_announce">{{cite web | url=http://uk.ign.com/articles/2015/04/07/2-massive-expansions-announced-for-the-witcher-3-wild-hunt | title=2 "Massive" Expansions Announced for The Witcher 3: Wild Hunt | work=[[IGN]] | publisher=[[Ziff Davis]] | first=Daniel | last=Krupa | date=7 April 2015 | access-date=15 June 2016}}</ref>
+
+<ref name="ign_release_date">{{cite web | url=http://uk.ign.com/articles/2016/05/10/the-witcher-3-blood-and-wine-dlc-might-have-an-official-release-date | title=Update: The Witcher 3: Blood and Wine DLC Gets an Official Release Date | work=[[IGN]] | publisher=[[Ziff Davis]] | first=Joe | last=Skrebels | date=10 May 2016 | access-date=15 June 2016}}</ref>
+
+<ref name="metacritic_pc">{{cite web | url=https://www.metacritic.com/game/the-witcher-3-wild-hunt-blood-and-wine/critic-reviews/?platform=pc | title=The Witcher 3: Wild Hunt – Blood and Wine for PC Reviews | work=[[Metacritic]] | publisher=[[CBS Interactive]] | access-date=20 December 2016}}</ref>
+
+<ref name="metacritic_ps4">{{cite web | url=https://www.metacritic.com/game/the-witcher-3-wild-hunt-blood-and-wine/critic-reviews/?platform=playstation-4 | title=The Witcher 3: Wild Hunt – Blood and Wine for PlayStation 4 Reviews | work=[[Metacritic]] | publisher=[[CBS Interactive]] | access-date=20 December 2016}}</ref>
+
+<ref name="metacritic_xbo">{{cite web | url=https://www.metacritic.com/game/the-witcher-3-wild-hunt-blood-and-wine/critic-reviews/?platform=xbox-one | title=The Witcher 3: Wild Hunt – Blood and Wine for Xbox One Reviews | work=[[Metacritic]] | publisher=[[CBS Interactive]] | access-date=20 December 2016}}</ref>
+
+}}
+
+== External links ==
+* {{Official website|https://thewitcher.com/en/witcher3}}
+
+{{CD Projekt}}
+{{Witcher series}}
+
+{{DEFAULTSORT:Witcher 3: Wild Hunt - Blood and Wine, The}}
+[[Category:2016 video games]]
+[[Category:Action role-playing video games]]
+[[Category:CD Projekt games]]
+[[Category:Open-world video games]]
+[[Category:PlayStation 4 games]]
+[[Category:Single-player video games]]
+[[Category:Video game expansion packs]]
+[[Category:Video games developed in Poland]]
+[[Category:Video games scored by Marcin Przybyłowicz]]
+[[Category:Windows games]]
+[[Category:The Witcher (video game series)]]
+[[Category:The Witcher 3: Wild Hunt]]
+[[Category:Xbox One games]]
