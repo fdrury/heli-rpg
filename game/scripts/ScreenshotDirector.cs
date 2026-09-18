@@ -30,6 +30,8 @@ public sealed partial class ScreenshotDirector : Node
         new("04_low_level",      CameraMode.Chase,   35f,  38f,  3.4f),
         new("05_orbit",          CameraMode.Orbit,  140f,   0f,  0.0f),
         new("07_close_orbit",    CameraMode.Orbit,   70f,   0f,  1.6f),
+        new("08_brownout",       CameraMode.Orbit,    3.5f, 0f,  2.7f),
+        new("09_brownout_cockpit", CameraMode.Cockpit, 3.5f, 0f, 2.7f),
         new("06_high_cruise",    CameraMode.Chase,  420f,  50f,  5.1f),
     };
 
@@ -89,7 +91,8 @@ public sealed partial class ScreenshotDirector : Node
         _heli.OverrideControls = _ap.Update(_heli.Sim, demand, delta);
 
         // Long enough for the autopilot to settle and the camera lag to catch up.
-        if (_time > 16.0 && !_capturing)
+        double settle = shot.Altitude < 12f ? 26.0 : 16.0;
+        if (_time > settle && !_capturing)
         {
             _capturing = true;
             CallDeferred(nameof(Capture));

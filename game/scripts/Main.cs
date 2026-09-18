@@ -16,6 +16,8 @@ public sealed partial class Main : Node3D
     private ChaseCamera _camera = null!;
     private TerrainStreamer _terrain = null!;
     private PropScatter _scatter = null!;
+    private LandingController _landing = null!;
+    private RotorwashDust _dust = null!;
     private FlightHud _hud = null!;
     private Label _debugLabel = null!;
     private bool _showDebug;
@@ -55,9 +57,26 @@ public sealed partial class Main : Node3D
         _camera = new ChaseCamera { Name = "Camera", TargetPath = _heli.GetPath() };
         AddChild(_camera);
 
+        _landing = new LandingController { Name = "Landing", HelicopterPath = _heli.GetPath() };
+        AddChild(_landing);
+
+        _dust = new RotorwashDust
+        {
+            Name = "Rotorwash",
+            HelicopterPath = _heli.GetPath(),
+            LandingControllerPath = _landing.GetPath(),
+        };
+        AddChild(_dust);
+
         var layer = new CanvasLayer { Name = "Hud" };
         AddChild(layer);
-        _hud = new FlightHud { Name = "FlightHud", HelicopterPath = _heli.GetPath() };
+        _dust.AttachHaze(layer);
+        _hud = new FlightHud
+        {
+            Name = "FlightHud",
+            HelicopterPath = _heli.GetPath(),
+            LandingControllerPath = _landing.GetPath(),
+        };
         layer.AddChild(_hud);
 
         _debugLabel = new Label
@@ -92,6 +111,14 @@ public sealed partial class Main : Node3D
                 break;
             }
         }
+
+        _landing.Touchdown += r =>
+            GD.Print($"[landing] {r.Summary} - {r.VerticalSpeed:F2} m/s, {r.GroundSpeed:F1} m/s ground, " +
+                     $"{r.RollDegrees:F1} deg bank on a {r.SlopeDegrees:F1} deg slope" +
+                     (r.StructuralDamage > 0.01 ? $"  [damage {r.StructuralDamage:P0}]" : ""));
+        _landing.RotorStrike += what => GD.PrintErr($"[landing] ROTOR STRIKE: {what}");
+        _heli.Sim.Damage.Damaged += e =>
+            GD.Print($"[damage] {e.Component} -{e.Amount:P0} ({e.Cause}) {e.Note}");
 
         GD.Print("[main] Rotorwash flight test ready");
     }

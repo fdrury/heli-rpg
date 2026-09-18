@@ -224,3 +224,51 @@ changes the calculus if that ever changes.
 the baked-corpus research, independently, *the perceived magic is memory, not prose*. PUBG
 playtesters singled out the Ally remembering a name and a weapon preference. Callbacks buy
 more than variety does. Build the memory, then the words.
+
+### D-003b — Content envelope shrinks to 13 km; threat envelopes promoted · 2026-09-18
+The world-scale pass finished with harder numbers than its interim verdict, and they
+change the plan more than D-003a did.
+
+**The comparison set I was reasoning from was fiction.** Re-measured, with sources:
+*Elden Ring* is **13.5 km²**, not the 79 that circulates (which traces to a Reddit user
+estimating in horse-lengths). *Skyrim* is **14.8 km² playable** — only 38.7% of its
+worldspace is reachable. *Fallout 4* is 10.2 km²; *Fallout 3* is 8.6 (the ubiquitous
+"14 km²" is Skyrim's number transposed). **No acclaimed open world in the set exceeds
+about 50 km².** Our 268 km² grid is **20x Elden Ring**, for one developer.
+
+**The decisive metric is content-hours per km², not POIs per km².** Elden Ring 4.45,
+Skyrim 2.29, GTA V 0.67, Just Cause 3 **0.067**. The plan as written landed at **0.19**,
+and its POI density was within 10% of Just Cause 3's — which is the genre's canonical
+emptiness failure. Proposing those numbers needs a better argument than "a helicopter
+makes emptiness cheaper."
+
+**Decisions:**
+1. **Keep the 16.384 km terrain grid** — terrain is a pure function and costs nothing,
+   and a horizon out to 8 km is most of what makes this read as a country rather than a
+   level. **Shrink the CONTENT ENVELOPE to a 13.0 km square (169 km², 63%)**, bounded by
+   water, by terrain above the aircraft's measured 3,000 m hover ceiling, and by a
+   contamination band. Skyrim fills 38.7% of its own worldspace; 63% is generous.
+2. **124 named POIs (0.73/km²)**: 11 hand-authored anchors, 45 hand-built sites,
+   68 kit-assembled, over ~2,500 unnamed procedural features.
+3. **Threat envelopes (D-010) move to priority two.** Effective world size is physical
+   size x (flown path / straight-line path). A 6 km direct leg that becomes an 18 km
+   masked dogleg is a **3x multiplier on the entire map, bought with a data file**.
+   D-010 is not a progression system with a scale side effect; it *is* the world-scale
+   system.
+4. **Altitude-banded authoring, as a rule.** Every place must read differently at 500 m
+   (region identity, silhouette, linear features), 150 m (occupied? worth landing?) and
+   15 m (slope, wires, clearance). The same terrain then pays three times. Each threat
+   class gets its own altitude band, which makes the threat map an altitude map — and
+   with a 3,000 m ceiling there is no "climb above it" escape.
+5. **A helicopter game can afford a city a ground game cannot** — from 200 m a ruined
+   city is a *pattern*, which is what procedural generation is good at — **but it cannot
+   afford a forest floor.** Skew the budget accordingly. Cap the dense city core at ~8 km².
+
+**The number that convinced me:** a sweep model calibrated on Skyrim's two independently
+measured figures predicts one point of interest every **48 seconds** of travel. CD Projekt
+Red have independently stated a "rule of 40 seconds." Two studios, no shared method, the
+same constant.
+
+**Scope warning, recorded honestly:** the full eight-region plan is roughly **3,800 hours
+of world content alone**. That is years of solo evenings before any other system exists.
+The 124-POI target is the version that can actually be finished.

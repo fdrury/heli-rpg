@@ -208,24 +208,26 @@ public static class ProceduralProps
         img.Fill(new Color(0, 0, 0, 0));
         var rng = new RandomNumberGenerator { Seed = (ulong)seed };
 
-        for (int b = 0; b < 52; b++)
+        for (int b = 0; b < 78; b++)
         {
             float x0 = rng.RandfRange(0.08f, 0.92f) * size;
             float lean = rng.RandfRange(-0.32f, 0.32f) * size;
             float h = rng.RandfRange(0.45f, 0.97f) * size;
-            float thickness = rng.RandfRange(1.8f, 3.8f);
+            float thickness = rng.RandfRange(1.0f, 2.2f);
 
             // Straw and olive, and bright enough to sit in the same tonal range as the
             // terrain. Dark blades read as holes in the ground from the air, which is
             // exactly the failure the first version had.
+            // Dry grass, not straw-gold. The first version was bright enough to read as
+            // wheat from the air, which is the wrong crop and the wrong century.
             var baseCol = new Color(
-                rng.RandfRange(0.42f, 0.54f),
-                rng.RandfRange(0.42f, 0.52f),
-                rng.RandfRange(0.22f, 0.30f));
+                rng.RandfRange(0.30f, 0.39f),
+                rng.RandfRange(0.30f, 0.37f),
+                rng.RandfRange(0.19f, 0.25f));
             var tipCol = new Color(
-                rng.RandfRange(0.66f, 0.80f),
-                rng.RandfRange(0.62f, 0.74f),
-                rng.RandfRange(0.40f, 0.52f));
+                rng.RandfRange(0.46f, 0.56f),
+                rng.RandfRange(0.44f, 0.52f),
+                rng.RandfRange(0.31f, 0.38f));
 
             int steps = (int)h;
             for (int s2 = 0; s2 < steps; s2++)

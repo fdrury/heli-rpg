@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 using Rotorwash.Sim;
 
@@ -18,8 +19,10 @@ namespace Rotorwash;
 public sealed partial class FlightHud : Control
 {
     [Export] public NodePath HelicopterPath { get; set; } = "";
+    [Export] public NodePath LandingControllerPath { get; set; } = "";
 
     private HelicopterController? _heli;
+    private LandingController? _landing;
     private Font _font = null!;
     private double _warnBlink;
 
@@ -32,6 +35,7 @@ public sealed partial class FlightHud : Control
     public override void _Ready()
     {
         _heli = GetNodeOrNull<HelicopterController>(HelicopterPath);
+        _landing = GetNodeOrNull<LandingController>(LandingControllerPath);
         _font = ThemeDB.FallbackFont;
         MouseFilter = MouseFilterEnum.Ignore;
         SetAnchorsPreset(LayoutPreset.FullRect);
@@ -54,6 +58,8 @@ public sealed partial class FlightHud : Control
         DrawLeftPanel(new Vector2(28, size.Y * 0.30f), t, sim);
         DrawRightPanel(new Vector2(size.X - 232, size.Y * 0.30f), t, sim);
         DrawControlPositions(new Vector2(size.X - 190, size.Y - 190), sim);
+        DrawLandingPanel(new Vector2(size.X * 0.5f - 150, 26), t);
+        DrawDamagePanel(new Vector2(28, size.Y * 0.30f + 210), sim);
         DrawWarnings(new Vector2(size.X * 0.5f, size.Y - 122), t);
         DrawFooter(size);
     }
@@ -190,6 +196,87 @@ public sealed partial class FlightHud : Control
         float px = ped.Position.X + ped.Size.X * 0.5f * (1 + (float)a.Pedal);
         DrawRect(new Rect2(px - 2, ped.Position.Y, 4, ped.Size.Y), Bright);
         Label(origin + new Vector2(6, 140), "PEDAL", Dim, 10);
+    }
+
+    // ------------------------------------------------------- landing assessment
+
+    /// <summary>
+    /// Shown while there is still time to go around. Everything here is a fact the pilot
+    /// could work out by looking, presented so they do not have to: slope, roughness,
+    /// rotor clearance and what the ground is made of.
+    /// </summary>
+    private void DrawLandingPanel(Vector2 origin, FlightTelemetry t)
+    {
+        if (_landing is null || _heli is null) return;
+        var site = _landing.Site;
+        double rotorR = _heli.Sim.Airframe.MainRotor.Radius;
+
+        // Only when low enough for it to be a live question.
+        if (t.HeightAgl > 70 || t.HeightAgl < -5) return;
+
+        double q = site.Quality(12.0, rotorR);
+        string verdict = site.Verdict(12.0, rotorR).ToUpperInvariant();
+        Color c = q > 0.75 ? Bright : q > 0.45 ? Warn : Danger;
+
+        DrawRect(new Rect2(origin, new Vector2(300, 92)), Panel);
+        DrawRect(new Rect2(origin, new Vector2(300, 92)), c * new Color(1, 1, 1, 0.5f), false, 1.2f);
+
+        Label(origin + new Vector2(12, 18), "LANDING SITE", Dim, 11);
+        DrawString(_font, origin + new Vector2(12, 42), verdict, HorizontalAlignment.Left, -1, 19, c);
+
+        Label(origin + new Vector2(12, 62), $"slope {site.SlopeDegrees,4:F0} deg", Dim, 12);
+        Label(origin + new Vector2(112, 62), $"rough {site.RoughnessMetres,4:F2} m", Dim, 12);
+        Label(origin + new Vector2(212, 62), site.Surface.ToString().ToLowerInvariant(), Dim, 12);
+
+        double clearFactor = Math.Clamp(site.ClearanceRadius / (rotorR * 2.0), 0, 1);
+        Label(origin + new Vector2(12, 80), "rotor clearance", Dim, 11);
+        Bar(origin + new Vector2(112, 72), 176, (float)clearFactor,
+            site.ClearanceRadius < rotorR * 1.15 ? Danger : Bright);
+
+        // Brownout is the thing that will actually catch you out, so it gets its own line.
+        if (_landing.Brownout > 0.05f)
+        {
+            var r = new Rect2(origin + new Vector2(0, 98), new Vector2(300, 26));
+            DrawRect(r, Panel);
+            Color bc = _landing.Brownout > 0.55f ? Danger : Warn;
+            DrawRect(r, bc * new Color(1, 1, 1, 0.4f), false, 1.1f);
+            Label(origin + new Vector2(12, 116), "BROWNOUT", bc, 12);
+            Bar(origin + new Vector2(96, 108), 190, _landing.Brownout, bc);
+        }
+
+        // Recent touchdown verdict.
+        if (_landing.LastTouchdownTime > 0 && _warnBlink - _landing.LastTouchdownTime < 6)
+        {
+            var r = _landing.LastTouchdown;
+            Color tc = r.StructuralDamage > 0.3 ? Danger : r.StructuralDamage > 0.02 ? Warn : Bright;
+            DrawString(_font, origin + new Vector2(12, 150), r.Summary.ToUpperInvariant(),
+                       HorizontalAlignment.Left, -1, 15, tc);
+        }
+    }
+
+    /// <summary>Component health, shown only for what is actually wrong.</summary>
+    private void DrawDamagePanel(Vector2 origin, Helicopter sim)
+    {
+        var rows = new List<(Component c, double h)>();
+        foreach (Component c in Enum.GetValues<Component>())
+        {
+            double h = sim.Damage.Health(c);
+            if (h < 0.995) rows.Add((c, h));
+        }
+        if (rows.Count == 0) return;
+        rows.Sort((a, b) => a.h.CompareTo(b.h));
+
+        DrawRect(new Rect2(origin - new Vector2(10, 20), new Vector2(196, 24 + rows.Count * 18)), Panel);
+        Label(origin, "AIRCRAFT", Dim, 11);
+
+        float y = origin.Y + 18;
+        foreach (var (c, h) in rows)
+        {
+            Color col = h < 0.35 ? Danger : h < 0.7 ? Warn : Bright;
+            Label(new Vector2(origin.X, y + 10), c.ToString(), col, 12);
+            Bar(new Vector2(origin.X + 104, y + 4), 72, (float)h, col);
+            y += 18;
+        }
     }
 
     // ------------------------------------------------------------- warnings

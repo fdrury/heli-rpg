@@ -7,24 +7,33 @@ current code in `game/` and `sim/`.*
 
 ## Bottom line
 
-**The map is already the right size — 16.384 km square is fine — but almost every other number
-in the plan is wrong, and the biggest error is not the map, it is the aircraft.** The brief
-assumes ~60 kt / 110 km/h; the Huey in `sim/` cruises at 100–116 kt with power to spare
-(measured, below), which halves every crossing time: edge-to-edge is **4 min 49 s**, not nine.
-That is almost exactly the measured time to fly across *GTA V* (4 min 48 s), a world universally
-described as feeling small from the air. Second: the helicopter does **not** create a density
-problem — moving fast makes you sweep more ground per second, so you *encounter* more, not less.
-It creates a **duration** problem: you consume the world faster and can see all of it in the
-first session. Third: 268 km² is 3.4× *Elden Ring*'s measured area for one developer, and terrain
-is the cheap part — at a *Skyrim*-like density of ~9 POIs/km² this map would need ~2,400 authored
-locations, which is roughly 150 person-years at Bethesda's own observed rate. The defensible
-target is **16.4 km square, ~120 named POIs (≈0.45/km²), of which ~45 are hand-authored and ~75
-are kit-assembled**, sitting on top of a few thousand unnamed procedural features that exist
-purely to make the world read as inhabited from 300 m. The three things that actually buy felt
-size are route inflation via threat envelopes (D-010 is the right spine and is load-bearing),
-altitude-banded legibility, and making *landing*, not flying, the expensive act. Fuel (D-007)
-cannot be a range constraint at this scale — one tank covers the map diagonal ~34 times — so it
-must be honestly re-framed as an economy and load system, not a traversal gate.
+**The world is roughly 60% too big, the aircraft is twice as fast as the plan assumes, and almost
+every open-world area figure the plan was reasoning from is wrong by a factor of three to six.**
+Start with the aircraft: the brief assumes ~60 kt / 110 km/h, but the Huey in `sim/` cruises at
+100–116 kt with power to spare (measured below), halving every crossing time — edge-to-edge is
+**4 min 49 s**, not nine, which is the measured time to fly across *GTA V*. Then the comparison
+set, re-measured: *Elden Ring* is **13.5 km²**, not 79; *Skyrim* is **14.82 km²** playable, not
+38.3; *Fallout 4* is **10.16 km²**; *Death Stranding* is **21 km²**; *GTA V*'s land is 48 km².
+**No acclaimed open world in the set exceeds ~50 km², and most are under 25.** Our 268 km² grid is
+**20× Elden Ring** — for one developer. The decisive number is not POIs per km² but **content-hours
+per km²**, where *Elden Ring* scores 4.45, *GTA V* 0.67 and *Just Cause 3* — the genre's canonical
+failure — 0.067; the plan as written lands at **0.19**, and its POI density of 0.46/km² is
+near-identical to *Just Cause 3*'s 0.42. The recommendation is therefore to **keep the 16.384 km
+terrain grid** (terrain is a pure function and costs nothing, and the horizon is worth having) but
+**shrink the content envelope to a 13.0 km square — 169 km² — ringed by water, terrain above the
+measured 3,000 m hover ceiling, and a contamination band**, holding **124 named POIs (0.73/km²)**:
+11 deep hand-authored anchors, 45 hand-built sites, 68 kit-assembled POIs, over ~2,500 unnamed
+procedural features that make the world read as inhabited from 300 m. That is ~0.31 content-hours
+per km², which is speed-normalised parity with *GTA V*. Note that *Skyrim* fills only **38.7%** of
+its own worldspace, so a 63% envelope is generous, not timid. The helicopter does **not** create a
+density problem — moving fast makes you sweep more ground per second, so you encounter *more*, not
+less; it creates a **duration** problem, which is solved by gating and by depth, not by more
+markers. The three things that buy felt size are route inflation via threat envelopes (D-010 is the
+right spine, it is load-bearing, and it should be built second rather than seventh), altitude-banded
+legibility, and making *landing* rather than flying the expensive act. Two honesty notes: fuel
+(D-007) cannot be a range constraint — one tank covers the map diagonal ~34 times — so it must be
+re-framed as an economy and load system; and the full eight-region plan is **~3,800 hours of world
+content alone**, which is four to six years of solo evenings before any other system is built.
 
 ---
 
@@ -103,6 +112,245 @@ the player will ever be navigating by fuel state over 6 km.
 
 ---
 
+## 1. The comparison set
+
+### 1.1 Read this first — nearly every published figure is wrong, and wrong in one direction
+
+Open-world area figures are among the least reliable numbers in games writing, and this research
+found the situation far worse than expected. **Where a game has both a marketing/folk figure and a
+rigorous measurement, the real playable area is consistently 17–30% of the quoted one.**
+
+| Game | Commonly quoted | Actually measured | Real fraction |
+|---|---|---|---|
+| Elden Ring | 79 km² | **13.5 km²** | **17%** |
+| S.T.A.L.K.E.R.: SoC | 30 km² (dev claim) | **~9.2 km²** | **~30%** |
+| Just Cause 3 | 1,000 km² (dev claim) | ~274 km² land (est.) | ~26% |
+| Death Stranding | 595 km² | **~21 km²** | **3.5%** |
+| Skyrim | 38.3 km² | **14.82 km²** playable | **38.7%** |
+| Fallout 3 | "~14 km²" | **8.56 km²** | 61% — and the 14 is a myth |
+
+Four compounding failure modes produce this:
+
+1. **Terrain allocated ≠ terrain reachable.** *Skyrim*'s worldspace is a 119 × 94 cell rectangle —
+   38.3 km², the figure everyone quotes — but only **4,326 of 11,186 cells are reachable (38.7%)**.
+2. **Water and unwalkable cliff counted as world.** *Elden Ring*'s famous 79 km² measures the whole
+   map bitmap, most of which is sea.
+3. **Marketing claims are not measurements**, and several are design targets from years before
+   release. GSC's "18 levels, more than 30 km²" for *STALKER* traces to a 2004 preview; no shipped
+   level is even 2 km across.
+4. **"Number of locations" is undefined.** Marked icons, named cells, quest markers and wiki article
+   counts differ by up to **6×** for the same game.
+
+Three specific findings worth recording permanently, because they will keep resurfacing:
+
+> **Elden Ring's "79 km²" is the weakest famous number in games journalism.** Its author described
+> the method himself: *"my edible hit harder than expected so I calculated the size of the entire
+> map, used the size of my horse and a bridge to estimate lengths."* Two independent rigorous
+> analyses — one by YouTuber Addypalooza using map-editor scale calibration and traced navigable
+> boundaries, one Japanese analysis starting from 88 km² and cutting away unreachable ocean and
+> terrain — **converge on ~13.5 km² of walkable surface** (~15 km² including interiors, ~20.5 km²
+> with *Shadow of the Erdtree*). That convergence of two unrelated methods is the single strongest
+> result in this benchmark.
+> ([PC Gamer via inkl](https://www.inkl.com/news/elden-ring-geographer-tests-rigorous-calculation-against-weed-fueled-horse-math-to-determine-the-exact-size-of-the-lands-between) ·
+> [NeverAwakeMan analysis](https://note.com/neverawakeman/n/n5725ff38d5bc?hl=en) ·
+> [the 79 km² claim](https://screenrant.com/elden-ring-open-world-map-how-big/))
+
+> **The widely-cited "~14 km²" for Fallout 3 is a myth.** No source asserting it could be found.
+> Its likely origin is transposition — **14.82 km² is Skyrim's** playable figure, from the same
+> modder post that measures Fallout 3. Fallout 3's actual playable area is **8.56 km²**.
+
+> **Discard the entire listicle family of map-size articles.** TheGamer's *"Every Fallout Game,
+> Ranked By Total Map Size"* prints "8,462 sq mi" for Fallout 3 — the same digits that appear
+> elsewhere as **8.462 km²**. It took km² values, relabelled them square miles, and dropped the
+> decimal: a ~2.6-million-fold error. Its numbers are in any case real-world geographic footprints
+> of the depicted region, not game area.
+> ([TheGamer](https://www.thegamer.com/every-fallout-map-size/) ·
+> [the km² original](https://steamcommunity.com/app/22380/discussions/0/2561864094348475078))
+
+Confidence flags per §0: **[M]** measured here · **[V]** verified against a fetched source ·
+**[D]** disputed · **[U]** unverified.
+
+### 1.2 The master table
+
+Hours are HowLongToBeat values **pulled 2026-09-18** — HLTB figures drift materially, so they are
+date-stamped. Where a game has no credible measured area, that is stated rather than guessed.
+
+| Game | **Playable km²** | POIs / named locations | **POIs per km²** | Main story h | **Content h per km²** | Dominant traversal |
+|---|---|---|---|---|---|---|
+| **S.T.A.L.K.E.R.: SoC** | **~9.2** [V] *(bounding boxes; true walkable lower)* | 18 separately-loaded levels; 217–321 stashes; 27 artifacts | — | **15.1** | **1.64** | Walk ~2 m/s. **Not a seamless world** |
+| **Fallout 3** | **8.56** [V] | **163** marked (224 w/ DLC) | **19.0** | no HLTB figure found | — | Walk + map fast travel |
+| **Fallout: New Vegas** | **8.2–10.0** [D] *(dev bounding box, not a measurement)* | **190** marked (343 w/ DLC; 730 "named", 91 unvisitable) | **~21** | ~30 [U] | ~3.3 | Walk + fast travel |
+| **Fallout 4** | **10.16** [V] *(2,965 navmesh cells — best-evidenced in the set)* | **~248** marked | **24.4** | 33 | 3.25 | Walk, fast travel, **Vertibird** |
+| **Elden Ring** | **13.5** [V] surface · ~15 w/ interiors · ~20.5 w/ DLC | **~308** Sites of Grace (414 w/ DLC); **135** dungeon entrances | **22.8** grace / **10.0** dungeons | **60.1** | **4.45** — highest in the set | Torrent, fast; grace fast-travel |
+| **Skyrim** | **14.82** [V] playable · 38.3 rectangle [D] | **341** map markers; 197 clearable dungeons | **23.0** | 34 | 2.29 | Walk/horse; **49 m 12 s to run across** [V] |
+| **Death Stranding** | **~21** [V] (E 2.5 + C 18 + W 0.5) | **38** connectable network nodes; 6 Knot Cities | **1.81** | **40.5** | **1.93** | **Walking, deliberately slow ~2 m/s** |
+| **Horizon Zero Dawn** | **no credible figure found** — Guerrilla deliberately withholds it | 22 main + ~22 side + ~14 errands; 5 Tallnecks, 4 Cauldrons, 6 camps, 11 corrupted zones, 60 collectibles | — | 22.5 | — | Run/mount |
+| **Mad Max (2015)** | **no credible figure found** | 4 strongholds; 30 minefields; 6 Top Dog camps; rest unpublished | — | 20.1 | — | Car; **13 m 05 s to drive across** [V] |
+| **GTA V** | **48.15 land** [D — method unpublished] · 75.84 total incl. water | 40 LS districts + 3 Blaine towns; 245 collectible locations | **~5.9** | 32.1 | **0.67** | Car ~30 m/s; **4 m 48 s to fly across** [V] |
+| **The Witcher 3** | **136 disputed** [D] — a *pre-release fan estimate*, not a measurement | **1,074** markers; 228 signposts; **521 "?" POIs** | ~7.9 *if* 136 holds | 50–52 | 0.37 | Walk/horse/boat |
+| **RDR2** | **no credible figure found** — the ubiquitous 75 km² traces to no methodology | 50 journal POIs; 67 landmarks + 64 shacks (MapGenie) | — | 50 | — | Horse; **~16 min corner to corner** [V] |
+| **Just Cause 3** | **~274 land [U]** of 1,048 total — a single unsourced wiki edit | **~114** liberatable settlements (79 bases + 35 towns); 227 collectibles | **0.42** | 18.3 | **0.067** | Wingsuit/grapple, unlimited |
+| **MSFS 2020** | Earth | ~37,000 airports; **~30 hand-crafted at launch** | 0.00007 | unbounded | — | Aircraft 150–900 km/h |
+| **ROTORWASH — current plan** | **268.4 grid** [M] | 124 recommended | 0.46 | ~50 target | **0.19** | **Helicopter ~57 m/s** |
+| **ROTORWASH — recommended** | **~169 content envelope** [M] (§3.1) | **124** | **0.73** | ~50 target | **0.31** | 3 m 49 s across the envelope |
+
+Sources for the measured figures: Bethesda games via cell math — **1 cell = 4,096 units = 58.52 m
+= 3,425 m²** ([GECK wiki Units](https://geckwiki.com/index.php/Units) ·
+[fallout.wiki Creation Kit/Cell](https://fallout.wiki/wiki/Resource:Creation_Kit/Cell) ·
+[archived cell-count analysis](https://web.archive.org/web/20180614074653id_/http://www.gamesas.com/fallout-map-size-anolysis-t393192.html) ·
+[FO4Edit navmesh filter](https://steamcommunity.com/app/377160/discussions/0/350543319567332507/)).
+Elden Ring per the two analyses above. STALKER derived from `bound_rect` values in the shipped
+`game_maps_single.ltx`, byte-identical across two independent repositories
+([OpenXRay](https://github.com/OpenXRay/xray/blob/d7b23596a70374d8a7ffda0e98852f93ce985182/trunk/resources/config/game_maps_single.ltx) ·
+[ixray](https://github.com/ixray-team/ixray-1.0-stsoc/blob/a11547a2e4e6426b77ebe4ee19550ab1cab7fdef/src/resources/config/game_maps_single.ltx)).
+Death Stranding per [Beyond Satire](https://www.beyondsatire.com/investigations/death-stranding-map-size/),
+which is the only figure in the set with a fully published methodology (Odradek distance readout
+as a calibrated baseline, then traced area). GTA V via
+[KeWiS's land/water split](https://ipsnews.net/business/2020/07/25/gta-ranking-the-maps-in-order-of-size/).
+Location counts: [FO3](https://fallout.fandom.com/wiki/Fallout_3_locations) ·
+[FNV](https://fallout.fandom.com/wiki/Fallout:_New_Vegas_locations) ·
+[Skyrim map markers](https://elderscrolls.fandom.com/wiki/Map_(Skyrim)/Locations) ·
+[Elden Ring grace sites](https://game-checklists.com/elden-ring/all-sites-of-grace/) ·
+[Elden Ring dungeons](https://lootmap.gg/elden-ring/guides/dungeons-caves-and-catacombs/) ·
+[JC3 military bases](https://justcause.fandom.com/wiki/Military_bases_in_Medici) ·
+[JC3 towns](https://justcause.fandom.com/wiki/Towns_in_Medici) ·
+[Death Stranding nodes](https://mapgenie.io/death-stranding/maps/world) ·
+[Witcher 3 markers](https://mapgenie.io/witcher-3) ·
+[MSFS hand-crafted airports](https://flight.wiki.gg/wiki/Microsoft_Flight_Simulator_(2020)/List_of_hand-crafted_airports).
+HLTB: [Elden Ring](https://howlongtobeat.com/game/68151) ·
+[GTA V](https://howlongtobeat.com/game/4064) · [SoC](https://howlongtobeat.com/game/8038) ·
+[JC3](https://howlongtobeat.com/game/26404) · [Death Stranding](https://howlongtobeat.com/game/38061) ·
+[Mad Max](https://howlongtobeat.com/game/17610) · [HZD](https://howlongtobeat.com/game/26784).
+
+**Caveats that matter.** GTA V's 48.15 km² land figure is stable across three independent secondary
+sources but its methodology was never published and the primary forum thread is inaccessible —
+treat it as the best available, not as measured. *Just Cause 3*'s 274 km² land figure is a **single
+unsourced wiki edit** whose only credibility is that its total lands within 1% of the developer
+claim; do not present it as measured. *Witcher 3*'s 136 km² is explicitly a pre-release NeoGAF
+estimate ([GamingBolt, Apr 2015](https://gamingbolt.com/witcher-3-map-size-compared-to-gta5-skyrim-far-cry-4-new-screens-show-different-visual-settings)),
+covering Novigrad + Velen + Skellige with **no land-only Skellige figure obtainable**, so the
+"Velen+Novigrad only vs all regions" dispute remains **unresolved**. The Bethesda unit conversion
+itself is contested by ±21% (the GECK documents 9/16 inch per unit; an in-game yardstick prop
+implies 1/2 inch) — the GECK value is used here. *Fallout 4* is **not** bigger than *Skyrim*,
+contrary to the common claim: it is ~70% of Skyrim's playable area.
+
+### 1.3 What the data actually shows
+
+**Finding 1 — no acclaimed open world in this set exceeds ~50 km² of measured playable space, and
+most are under 25 km².**
+
+> Fallout 3 **8.56** · STALKER **~9.2** · Fallout 4 **10.16** · Elden Ring **13.5** ·
+> Skyrim **14.82** · Death Stranding **~21** · GTA V land **48.15**
+
+**Rotorwash's 268 km² grid is 20× Elden Ring, 18× Skyrim, 26× Fallout 4 and 5.6× GTA V's land
+area — proposed by one developer.** This is the most important correction in this document after
+the cruise speed, and it is considerably more alarming than the figures the brief was working from.
+
+**Finding 2 — POI density in walking games clusters tightly at ~19–24 per km².**
+
+| Game | POIs/km² |
+|---|---|
+| Fallout 3 | 19.0 |
+| Fallout: New Vegas | ~21 |
+| Elden Ring (grace sites) | 22.8 |
+| Skyrim | 23.0 |
+| Fallout 4 | 24.4 |
+
+Five games, three studios, fourteen years, and a spread of 28%. That is a genuine design constant
+for foot-speed worlds. At *Skyrim*'s density our 268 km² grid would need **6,173 POIs**.
+
+**Finding 3 — the §2.1 sweep model reproduces that constant from first principles, which is the
+strongest evidence in this document that the recommendation in §3 is the right order of magnitude.**
+
+Take the two independently measured *Skyrim* figures — **23.0 POIs/km²** and **49 m 12 s to run
+corner to corner** across a worldspace rectangle of 6.95 × 5.50 km (diagonal 8.86 km):
+
+- Average speed on that run: 8,860 m ÷ 2,952 s = **3.0 m/s**
+- Identification corridor on foot, given Skyrim's draw distance and fog: call it **300 m**
+- Swept area: 3.0 × 300 = 900 m²/s
+- Encounter rate: 0.0009 km²/s × 23.0 POIs/km² = **one point of interest every 48 seconds**
+
+Forty-eight seconds — against CD Projekt Red's independently stated **"rule of 40 seconds"** for
+*The Witcher 3* ([Jaber, Uppsala University](https://uu.diva-portal.org/smash/get/diva2:1569059/FULLTEXT01.pdf)).
+Two studios, different genres, different decades, no shared methodology, same answer. **The 40–50
+second encounter interval is a real constant of the genre, and the sweep model recovers it.**
+
+Run the model forwards for a helicopter — 57 m/s, a 1.0–1.5 km identification corridor from the
+air — and a 48-second interval needs **0.29–0.44 POIs/km²**. Against Skyrim's 23.0. The ~50× gap is
+*exactly* what the ~19× speed ratio and ~4× corridor ratio predict. **A helicopter world at
+0.4–0.7 POIs/km² will feel as busy in transit as Skyrim does on foot.**
+
+**Finding 4 — but POI spacing is the wrong thing to worry about. Content-hours per km² is where
+worlds actually fail.**
+
+| Game | Content h/km² | Reception |
+|---|---|---|
+| Elden Ring | **4.45** | Generational |
+| Fallout 4 / New Vegas | ~3.3 | Strong |
+| Skyrim | 2.29 | Generational |
+| Death Stranding | 1.93 | Divisive but respected |
+| S.T.A.L.K.E.R.: SoC | 1.64 | Cult classic |
+| GTA V | 0.67 | Generational |
+| The Witcher 3 (if 136 km²) | 0.37 | Generational |
+| **Just Cause 3** | **0.067** | **"Feels like a chore to be completed"** |
+
+*Elden Ring* packs roughly **66× more main-story time per km²** than *Just Cause 3*.
+
+And here is the uncomfortable part, stated plainly rather than buried: **the current plan —
+268 km², ~50 hours — lands at 0.19 h/km², which is nearer Just Cause 3 than GTA V.** Worse, the
+plan's POI density of 0.46/km² is almost identical to *Just Cause 3*'s **0.42 settlements/km².
+That is not a coincidence to wave away; it is the single strongest objection to the plan as
+written, and §3.1 changes the recommendation because of it.
+
+Two things separate us from that fate if we act on them. First, *Just Cause 3*'s failure was
+**repetition, not spacing** — *"Liberating your 50th location from enemy control feels much the
+same as liberating your first"*
+([GamesRadar, 3/5](https://www.gamesradar.com/just-cause-3-review/)). Second, and more usefully,
+content-hours per km² is only comparable between games at comparable traversal speed. Normalising
+*GTA V*'s 0.67 h/km² by our 1.9× speed advantage gives a like-for-like target of **~0.35 h/km²** —
+which is reachable, but only on a smaller content envelope. That single calculation is what drives
+the revised recommendation in §3.1.
+
+**Finding 5 — two studios independently concluded the world should be smaller, and said so.**
+
+- **Guerrilla scaled Horizon Zero Dawn's world down during development** *"after they realised they
+  could not fill the entire map with content"*
+  ([Wikipedia](https://en.wikipedia.org/wiki/Horizon_Zero_Dawn)). Their art director refuses to
+  publish a size at all: *"We never say that, because it will destroy the illusion. If people knew
+  how big it really was, they'd be disappointed"* — and the world is a roughly **10× vertical
+  miniature**: *"If a mountain is 3000 m high we make it 300 m. So it works, and you can go through
+  it rapidly, but it feels big"*
+  ([GamingBolt](https://gamingbolt.com/horizon-zero-dawn-heres-why-guerrilla-didnt-revealed-the-actual-map-size-it-will-destroy-the-illusion)).
+- **Avalanche, on Mad Max:** *"the game world is scaled according to gameplay density and
+  frequency; the development team emphasized creating a world with choices and distractions,
+  rather than focusing on size"* ([Wikipedia](https://en.wikipedia.org/wiki/Mad_Max_(2015_video_game))).
+  The same studio's *Just Cause 3* director had already said the map was staying the same size
+  because *"this time keep it more on density"*
+  ([archived Inquisitr](https://web.archive.org/web/20211013010927/https://www.inquisitr.com/1847980/just-cause-3-director-discusses-the-map-size-of-the-games-new-setting/))
+  — and shipped the least dense world in the comparison set anyway. Intent is not enough.
+
+**Finding 6 — Death Stranding proves traversal time, not area, is what players perceive as size.**
+Its measured ~21 km² is smaller than most AAA open worlds, yet walking across its Central region
+takes **1 h 37 m** — 7.5× *Mad Max*'s 13-minute drive across a map several times larger
+([DS walk](https://howbigisthemap.com/death-stranding-walk-across-the-map-map-2/) ·
+[Mad Max drive](https://howbigisthemap.com/mad-max-drive-across-map/)). **Its reputation as a huge
+world is entirely an artifact of friction.** For a design benchmark, traversal time is a more
+honest axis than km² — and for a game whose traversal is a 200 km/h aircraft, it is the *only*
+honest axis.
+
+**Finding 7 — nobody has solved this at our point on the curve.**
+POI density tracks traversal speed inversely and almost perfectly: walking 19–24/km²; riding and
+driving 0.4–8/km²; wingsuit and aircraft 0.4/km² and below. There is no shipped example of a
+*roleplaying* game whose *default* traversal is a 200 km/h aircraft. *Fallout 4*'s Vertibird is the
+closest and it is a taxi, not the world's organising principle. Genuinely novel design space — the
+exciting part, and also no template and no safety net.
+
+**Finding 8 — the best-regarded worlds are not the biggest.** *Elden Ring* (13.5 km²) and *Skyrim*
+(14.82 km²) are the two most-played open worlds of their respective generations. *Just Cause 3*
+(~274 km²) is the least well regarded in the set. Size never was the variable.
+
+---
+
 ## 2. The central problem, analysed properly
 
 ### 2.1 It is not the problem the brief thinks it is
@@ -114,12 +362,18 @@ Model the encounter rate directly. A player at speed `v` with an identification 
 `w` (how far to either side you can recognise a place as *worth going to*, not merely see it)
 sweeps `v·w` of ground per second. Time between POIs is `1 / (v·w·ρ)` for POI density `ρ`.
 
+Counts in brackets are for the **169 km² content envelope** recommended in §3.1.
+
 | Speed | Corridor | One POI every 40 s needs | …every 60 s | …every 120 s |
 |---|---|---|---|---|
-| 58 kt | 1.0 km | 0.84/km² (225 on our map) | 0.56/km² (150) | 0.28/km² (75) |
-| 58 kt | 1.5 km | 0.56/km² (150) | 0.37/km² (100) | 0.19/km² (50) |
-| 110 kt | 1.0 km | **0.44/km² (119)** | 0.30/km² (79) | 0.15/km² (40) |
-| 110 kt | 1.5 km | **0.30/km² (79)** | 0.20/km² (53) | 0.10/km² (26) |
+| 58 kt | 1.0 km | 0.84/km² (142 POIs) | 0.56/km² (94) | 0.28/km² (47) |
+| 58 kt | 1.5 km | 0.56/km² (94) | 0.37/km² (63) | 0.19/km² (31) |
+| 110 kt | 1.0 km | **0.44/km² (75)** | 0.30/km² (50) | 0.15/km² (25) |
+| 110 kt | 1.5 km | **0.30/km² (50)** | 0.20/km² (33) | 0.10/km² (17) |
+
+The recommendation of **124 POIs (0.73/km²)** sits comfortably above every cell in this table,
+which is deliberate: POIs will not be uniformly distributed, several regions are intentionally
+sparse, and encounter-rate is the *floor* on density, not the target.
 
 Flying *faster* lowers the density you need, because you cover more area per unit time. And
 flying *higher* widens the corridor, lowering it further. The helicopter is, in raw
@@ -222,52 +476,90 @@ anything.
 
 ## 3. Recommendation — world dimensions and POI count
 
-### 3.1 Is 16 × 16 km right?
+### 3.1 Is 16 × 16 km right? — **keep the terrain, shrink the content envelope to ~13 km**
 
-**Keep 16.384 km. Do not grow it. Do not shrink it yet.** The reasoning cuts both ways and it is
-worth being explicit about both sides.
+This is the recommendation the §1 data changed. The first draft of this section said "keep
+16.384 km, plan for 65% of it to be empty". The measured figures do not support that, and the
+reason is Finding 4: **at 268 km² and ~50 hours of content the plan sits at 0.19 content-hours per
+km², which is nearer *Just Cause 3* (0.067) than *GTA V* (0.67)** — and its POI density of
+0.46/km² is almost identical to *Just Cause 3*'s 0.42 settlements/km². Proposing the same numbers
+as the genre's canonical failure case and expecting a different outcome requires an argument, and
+"emptiness is cheap when traversal is fast" is only half of one.
 
-**It is too big by conventional density standards.** 268 km² is roughly 3.4× *Elden Ring*, 3.5×
-*GTA V*, 1.9× *The Witcher 3*'s land area and 7× *Skyrim* — built by one person. At *Skyrim*'s
-observed ~9 POIs/km² it would need ~2,400 authored locations; at *Elden Ring*'s it would need
-~1,600. Both are an order of magnitude beyond anything one person can author (§3.4).
+**The recommendation, therefore:**
 
-**It is not too big by traversal standards, and shrinking it would hurt.** At realistic cruise the
-map is 4 m 49 s edge to edge — the same as flying across *GTA V*, which is the low end of
-acceptable. Going to 12 km would put edge-to-edge at 3 m 32 s and quarter-map legs under a
-minute, at which point the world stops reading as a country and starts reading as a level.
+> **Keep the 16.384 km terrain grid. Reduce the *content envelope* to a ~13.0 km square
+> (≈169 km², 63% of the grid) by ringing it with ~1.7 km of water, high ground and exclusion.
+> Put all 124 POIs inside that envelope.**
 
-**The thing that resolves the contradiction is that emptiness is cheap when traversal is fast.**
-This is the one genuine gift the premise gives us. Five kilometres of nothing is a fifty-minute
-walk and a ninety-second flight. A helicopter is the only traversal mode in games that makes
-large deliberately-empty country an *asset* — legible, navigable, atmospheric, thematically
-correct for a collapsed world — rather than a tax on the player's patience. *Death Stranding*
-spent enormous effort making empty terrain interesting because you had to walk it. We do not have
-to, and we should not pretend we do.
+Why this is the right shape rather than either extreme:
 
-So: **plan for ~35% of the map to carry content and ~65% to be honest, beautiful, empty ground.**
+**Why not simply shrink `WorldHalfExtent`.** Terrain is genuinely free — it is a pure function
+(`WorldHeight.cs`) and the streamer already handles it. Keeping the full grid costs nothing and
+buys a real horizon: from 500 m over the envelope's edge you see terrain running out to 8 km, which
+is most of what "this is a country, not a level" is made of. Cutting the grid throws that away for
+no saving.
+
+**Why the envelope must nonetheless be smaller than the grid.** Content-hours per km² is the metric
+on which worlds actually fail (Finding 4), and it is only comparable across games at comparable
+traversal speed. Normalising *GTA V*'s 0.67 h/km² by our 1.9× speed advantage gives a like-for-like
+target of **~0.35 h/km²**. Fifty hours of content at 0.35 h/km² buys **143 km²**. Fifty-three hours
+buys 151 km². A 13.0 km envelope at 169 km² and ~0.31 h/km² is a *slightly* generous rounding of
+that, and it is the largest number this data supports.
+
+**Why ~13 km specifically, and not 10 or 16.** Three constraints bracket it:
+
+| Constraint | Implies |
+|---|---|
+| Content-hours per km² ≥ ~0.3 (Finding 4, speed-normalised against GTA V) | **≤ ~170 km² → ≤ 13.0 km** |
+| Edge-to-edge transit long enough to read as a country, not a level (≥ ~3.5 min at cruise) | **≥ ~12 km** |
+| POI density in the 0.4–0.7/km² band the sweep model predicts (Finding 3) | 124 POIs → **12–17 km** |
+| Authoring cost (§3.4) | smaller is always better |
+
+13.0 km satisfies all four; 16.4 km fails the first.
+
+**Bounding the envelope diegetically, using physics we already have.** This is where the measured
+hover ceiling earns its place. The border ring should be built from three things, none of which is
+an invisible wall:
+
+1. **Water** on the south and west — a coast and an estuary. Absolute, obvious, and free.
+2. **Terrain above 3,000 m** on the north — the aircraft's *measured* OGE hover ceiling. A ridge
+   the Huey physically cannot climb over is a border made of aerodynamics rather than fiat, and it
+   is exactly the kind of constraint this project should prefer.
+3. **A permanent threat or contamination band** on the east, which the fiction already supports.
+
+This is not a compromise; it is what *Skyrim* does. Bethesda allocated 38.3 km² of worldspace and
+made 14.82 km² reachable — **38.7%**. Our 63% is considerably more generous than the most
+successful open world of its generation.
+
+**What is still true from the first draft:** emptiness *is* cheaper when traversal is fast, and the
+helicopter is the only traversal mode that makes large empty country an asset rather than a tax on
+patience. That argument survives — it is why ~169 km² with 124 POIs is defensible where the same
+numbers on foot would be absurd. It just does not stretch to 268 km².
 
 **Fallback rule if authoring slips.** Do not thin the density to cover the same area. If the POI
-count looks like landing below ~80, pull the *playable envelope* in with a soft boundary (weather,
-a fuel-range excuse, a no-go threat band) to 12–13 km and keep the density. A smaller dense world
-beats a large thin one every time, and the terrain function makes this a one-constant change
-(`WorldHeight.WorldHalfExtent`).
+count looks like landing below ~80, pull the envelope in further — to 10.5–11 km — and keep the
+density. A smaller dense world beats a large thin one every time, and every game in §1 agrees.
 
 ### 3.2 Minimum POI density that avoids "wide as an ocean"
 
-Two separate densities matter, and conflating them is the usual mistake.
+Two separate densities matter, and conflating them is the usual mistake. Densities below are
+against the **169 km² content envelope**, not the 268 km² grid.
 
-| Layer | What it is | Target density | Count on our map | Why |
+| Layer | What it is | Target density | Count in the envelope | Why |
 |---|---|---|---|---|
-| **Named POIs** | Map-markable places worth flying to and landing at | **0.40–0.50/km²** | **110–135** | From §2.1: at 110 kt with a 1.0–1.5 km identification corridor, this gives a point of interest every ~40–60 s of transit |
-| **Absolute floor** | — | 0.25/km² | 67 | Below this the transit band goes quiet and the map reads as terrain with things on it |
-| **Unnamed human features** | Wrecks, roadblocks, pylon runs, silos, blown bridges, sheds, fence lines, burnt copses | **8–15/km²** | **2,100–4,000** | This is what makes the world read as *inhabited* from 300 m. It is free (scatter rules) and it matters more than POI count for atmosphere |
+| **Named POIs** | Map-markable places worth flying to and landing at | **0.65–0.80/km²** | **110–135** | Comfortably above the 0.29–0.44/km² the sweep model requires for a 48-second encounter interval (Finding 3), with headroom for deliberately sparse regions |
+| **Absolute floor** | — | 0.45/km² | 76 | Below this the transit band goes quiet and the map reads as terrain with things on it |
+| **Content-hours** | Playable time per km² of envelope | **≥ 0.30 h/km²** | ≥ 51 h | The metric worlds actually fail on (Finding 4). Speed-normalised parity with *GTA V* |
+| **Unnamed human features** | Wrecks, roadblocks, pylon runs, silos, blown bridges, sheds, fence lines, burnt copses | **10–18/km²** | **1,700–3,000** | What makes the world read as *inhabited* from 300 m. Free (scatter rules), and it matters more for atmosphere than POI count does |
 
-**Recommendation: 124 named POIs (0.46/km²) and ~3,000 unnamed procedural features (11/km²).**
+**Recommendation: 124 named POIs (0.73/km²) and ~2,500 unnamed procedural features (≈15/km²),
+inside a 169 km² envelope, delivering ≥50 hours (≥0.30 h/km²).**
 
-Note the asymmetry the brief did not anticipate: we need roughly **one twentieth** of *Skyrim*'s
-POI density, and about **ten times** its density of unnamed environmental texture. That is the
-correct shape for a game viewed from 300 m at 200 km/h.
+Note the asymmetry the brief did not anticipate: we need roughly **one thirtieth** of *Skyrim*'s
+POI density, and something like **ten times** its density of unnamed environmental texture. That is
+the correct shape for a world viewed from 300 m at 200 km/h — few things worth landing at, and a
+great many things worth seeing on the way.
 
 ### 3.3 Handcrafted vs procedural
 
@@ -277,6 +569,21 @@ correct shape for a game viewed from 300 m at 200 km/h.
 | **Site** | 45 | 36% | Fuel depot, SAM site, crashed airliner, drowned mall, fire lookout, rail bridge, dam gatehouse. Exterior plus at most one small interior, a hazard, loot, maybe one NPC | 15–40 min each |
 | **Kit POI** | 68 | 55% | Assembled from a reusable kit, hand-placed, hand-named, one line of written flavour | 3–10 min each |
 | **Scatter** | ~3,000 | — | Unnamed, rule-placed, never marked on the map | 0 — it is scenery and navigation |
+
+**Does that add up to a game?** The content-hours target in §3.2 is the thing worth checking, so
+here it is explicitly:
+
+| Tier | Count | Time per place | Total |
+|---|---|---|---|
+| Anchor | 11 | ~2.5 h | 27.5 h |
+| Site | 45 | ~25 min | 18.8 h |
+| Kit POI | 68 | ~6 min | 6.8 h |
+| **Place-content subtotal** | **124** | | **~53 h** |
+
+53 hours over a 169 km² envelope is **0.31 content-hours per km²** — speed-normalised parity with
+*GTA V* (§1, Finding 4) — before counting flight time, the critical path, the refit and economy
+loops, or repeat visits. It is a 50–60 hour game, which is the right size, and it is achieved with
+one thirtieth of *Skyrim*'s POI density.
 
 **45% handcrafted by count, but ~85% of the player's on-the-ground time should be in handcrafted
 places.** For contrast, *Microsoft Flight Simulator* is roughly 0.1% hand-crafted by count — a few
@@ -337,12 +644,12 @@ a scope cut removes the most expensive third of the project rather than gutting 
 
 | Cut | Regions | POIs | Area reached | World-content hours | At 15 h/wk |
 |---|---|---|---|---|---|
-| **v0.5 vertical slice** | Tidewater only | 18 | 32 km² | ~800 h | ~1.0 year |
-| **v1.0 — recommended ship target** | Acts 1–2 (4 regions) | 62 | 145 km² | ~2,150 h | ~2.8 years |
-| **v1.5** | + Act 3 (6 regions) | 90 | 217 km² | ~2,900 h | ~3.7 years |
-| **Full plan** | All 8 regions | 124 | 268 km² | ~3,800 h | ~4.9 years |
+| **v0.5 vertical slice** | Tidewater only | 18 | 20 km² | ~800 h | ~1.0 year |
+| **v1.0 — recommended ship target** | Acts 1–2 (4 regions) | 62 | 89 km² | ~2,150 h | ~2.8 years |
+| **v1.5** | + Act 3 (6 regions) | 90 | 136 km² | ~2,900 h | ~3.7 years |
+| **Full plan** | All 8 regions | 124 | 169 km² | ~3,800 h | ~4.9 years |
 
-v1.0 at 62 POIs over 145 km² is 0.43/km² — *effectively the full plan's density*, because the
+v1.0 at 62 POIs over 89 km² is 0.70/km² — *the full plan's density*, because the
 unreached regions are behind threat gates that the fiction already justifies. A player who
 finishes Acts 1–2 has played a complete game. That is the whole point of building D-010 early.
 ---
@@ -444,31 +751,41 @@ budget accordingly.
 
 ## 5. Proposed region breakdown
 
-Eight regions on the existing 16.384 km square. Coordinates are Godot world axes as used in
-`WorldHeight.cs` — **X east, Z south, origin at map centre, ±8,192 m**. Boundaries are soft:
-they are biome-blend zones and threat-envelope edges, never walls.
+Eight regions inside the **13.0 km content envelope** recommended in §3.1 — i.e. **X and Z within
+±6,500 m** of the map centre, with the remaining ~1.7 km ring out to ±8,192 m given over to water,
+terrain above the 3,000 m hover ceiling, and a contamination band. Coordinates are Godot world axes
+as used in `WorldHeight.cs`: **X east, Z south, origin at map centre.** Region boundaries are soft —
+biome blends and threat-envelope edges, never walls.
 
 The ordering is chosen so that **cost rises monotonically with act**. Act 1 regions are roads,
 sheds and water; Act 4 is a city and a military complex. If the project runs short of time, the
 cut lands on the expensive end and the game still has an ending.
 
-| # | Region | Bounds (X, Z metres) | Area | Act | POIs (A/S/K) | Gate — the key that opens it |
-|---|---|---|---|---|---|---|
-| 1 | **Tidewater** | X −8192…−3000, Z +2000…+8192 | 32.2 km² | 1 | **18** (2/6/10) | None. Start here |
-| 2 | **The Interchange** | X −3000…+2500, Z +2000…+8192 | 34.1 km² | 1 | **20** (2/7/11) | None. Small arms and technicals only |
-| 3 | **The Weal** | X −3000…+2500, Z −4500…+2000 | 35.8 km² | 2 | **14** (1/5/8) | **MANPADS.** Flares + IR suppressor, *or* fly the hedgerows with terrain-masking charts |
-| 4 | **The Pines** | X −8192…+3500, Z −8192…−4500 | 43.3 km² | 2 | **10** (1/4/5) | **Weather and a mobile IR team.** RWR to find it; charts to route round it |
-| 5 | **Cold River** | X +2500…+8192, Z −4500…+2000 | 37.1 km² | 3 | **16** (1/6/9) | **Fixed radar SAM ring.** RWR + chaff |
-| 6 | **Saltback Flats** | X +2500…+8192, Z +2000…+8192 | 35.3 km² | 3 | **12** (1/4/7) | **Long-range radar over ground with no masking.** Chaff + jammer, or night and low visibility |
-| 7 | **Grayling Range** | X +3500…+8192, Z −8192…−4500 | 17.4 km² | 4 | **8** (1/4/3) | **Emitter locator.** The source of every countermeasure; the reason everything else is defended |
-| 8 | **Ashmount** | X −8192…−3000, Z −4500…+2000 | 33.8 km² | 4 | **26** (2/9/15) | **Tethered aerostat + flak + drone patrol.** Jammer, then kill the aerostat. Endgame |
-| | **Total** | | **269 km²** | | **124** (11/45/68) | |
+| # | Region | Bounds (X, Z metres) | Area | POI/km² | Act | POIs (A/S/K) | Gate — the key that opens it |
+|---|---|---|---|---|---|---|---|
+| 1 | **Tidewater** | X −6500…−2400, Z +1600…+6500 | 20.1 km² | 0.90 | 1 | **18** (2/6/10) | None. Start here |
+| 2 | **The Interchange** | X −2400…+1800, Z +1600…+6500 | 20.6 km² | **0.97** | 1 | **20** (2/7/11) | None. Small arms and technicals only |
+| 3 | **The Weal** | X −2400…+1800, Z −3600…+1600 | 21.8 km² | 0.64 | 2 | **14** (1/5/8) | **MANPADS.** Flares + IR suppressor, *or* fly the hedgerows with terrain-masking charts |
+| 4 | **The Pines** | X −6500…+2600, Z −6500…−3600 | 26.4 km² | **0.38** | 2 | **10** (1/4/5) | **Weather and a mobile IR team.** RWR to find it; charts to route round it |
+| 5 | **Cold River** | X +1800…+6500, Z −3600…+1600 | 24.4 km² | 0.66 | 3 | **16** (1/6/9) | **Fixed radar SAM ring.** RWR + chaff |
+| 6 | **Saltback Flats** | X +1800…+6500, Z +1600…+6500 | 23.0 km² | 0.52 | 3 | **12** (1/4/7) | **Long-range radar over ground with no masking.** Chaff + jammer, or night and low visibility |
+| 7 | **Grayling Range** | X +2600…+6500, Z −6500…−3600 | 11.3 km² | 0.71 | 4 | **8** (1/4/3) | **Emitter locator.** The source of every countermeasure; the reason everything else is defended |
+| 8 | **Ashmount** | X −6500…−2400, Z −3600…+1600 | 21.3 km² | **1.22** | 4 | **26** (2/9/15) | **Tethered aerostat + flak + drone patrol.** Jammer, then kill the aerostat. Endgame |
+| | **Content envelope** | ±6,500 m | **168.9 km²** | **0.73** | | **124** (11/45/68) | |
+| | **Border ring** | to ±8,192 m | 99.5 km² | 0 | — | 0 | Water · terrain above the 3,000 m hover ceiling · contamination band |
+| | **Full terrain grid** | ±8,192 m | **268.4 km²** | | | | |
 
 *(A = Anchor, S = Site, K = Kit POI — tiers defined in §3.3.)*
 
+**Transit times across the envelope** at ~110 kt cruise: **3 m 49 s** edge to edge, **5 m 24 s**
+corner to corner, and ~60–90 s for a typical mission leg. With the route inflation of §2.3 those
+become roughly 8–12 minutes for a contested crossing, which is the number that actually matters.
+Density varies **3.2×** across the map (0.38 in the Pines to 1.22 in Ashmount) — the sparse regions
+are what make the dense ones read as dense.
+
 ### Region detail
 
-**1 · Tidewater** — 32 km², 0.56 POI/km², Act 1, no gate.
+**1 · Tidewater** — 20.1 km², 0.90 POI/km², Act 1, no gate.
 A silted river mouth and the drowned suburbs behind it. Tidal flats, half-submerged cul-de-sacs,
 a marina with boats on their sides, a causeway that floods twice a day, sunken car roofs breaking
 the surface. The starting settlement is a marina and boatyard that has become a town, because the
@@ -479,7 +796,7 @@ only working infrastructure left is a slipway and a fuel bowser.
 skids. This is the tutorial for "arrival is the hard part" and it costs almost nothing to build.
 *Anchors:* the marina town; the lock-keeper's compound.
 
-**2 · The Interchange** — 34 km², 0.59 POI/km², Act 1, essentially no gate.
+**2 · The Interchange** — 20.6 km², 0.97 POI/km², Act 1, essentially no gate.
 Pillar 5 made literal: the ragged country between things. A collapsed four-level stack
 interchange, ribbon development, a strip mall, a distribution warehouse the size of a village, a
 retail park, a caravan site, a light-industrial estate, a scrapyard, a car auction. **The highest
@@ -491,7 +808,7 @@ the ideal kit content and they tile convincingly.
 *Anchors:* a settlement inside the distribution warehouse; a scrapyard that is the first real
 parts source for the refit system.
 
-**3 · The Weal** — 36 km², 0.39 POI/km², Act 2, MANPADS gate.
+**3 · The Weal** — 21.8 km², 0.64 POI/km², Act 2, MANPADS gate.
 Farm belt and low hill country. Hedgerows, silos, a grain terminal, an overgrown airstrip, a
 village, wind-thrown orchards, a reservoir. The gate is IR-guided man-portable missiles held by
 people who live there — which means the region is passable at *very* low level along hedge lines
@@ -500,7 +817,7 @@ the first place the player learns that altitude is a decision rather than a comf
 *Aerial signature:* field pattern. Regular, coloured, with hedge lines as a navigation grid.
 *Landmark:* a grain elevator and a lone church tower. *Anchor:* the village.
 
-**4 · The Pines** — 43 km², 0.23 POI/km², Act 2, weather + mobile IR gate.
+**4 · The Pines** — 26.4 km², 0.38 POI/km², Act 2, weather + mobile IR gate.
 Forest, ridges and a hydroelectric dam. **Deliberately the sparsest region on the map**, and the
 one that proves empty country can be good: ridge lines you follow, valleys that are dead ground,
 cloud that sits on the tops, a fire lookout on every third summit that doubles as a chart source.
@@ -510,7 +827,7 @@ region to build and the most valuable per hour spent.
 *Landmark:* the dam wall and its spillway. *Anchor:* the dam and its inspection galleries — the
 first vertical-layered interior, and one a helicopter cannot skip.
 
-**5 · Cold River** — 37 km², 0.43 POI/km², Act 3, radar SAM gate.
+**5 · Cold River** — 24.4 km², 0.66 POI/km², Act 3, radar SAM gate.
 A river valley full of the machinery that used to run the country: a refinery with a tank farm, a
 rail yard, a coal-fired power station with two cooling towers, a lift bridge, a barge terminal.
 Defended by fixed radar SAMs, because this is where the fuel is — which ties the gate directly to
@@ -519,7 +836,7 @@ D-007's economy.
 farm's circles; the rail yard's parallel lines; the river as the one safe low route.
 *Landmark:* the cooling towers. *Anchor:* the refinery, which is the endgame fuel source.
 
-**6 · Saltback Flats** — 35 km², 0.34 POI/km², Act 3, long-range radar gate.
+**6 · Saltback Flats** — 23.0 km², 0.52 POI/km², Act 3, long-range radar gate.
 Salt pan, playa, a dry lake bed, a decommissioned airfield with hangars and a long runway, a solar
 farm, a wind farm with most of the blades gone, a prison. **Nothing to hide behind.** This is the
 region that cannot be beaten by flying skill — the only answers are chaff, a jammer, or weather
@@ -531,7 +848,7 @@ solar farm as a grid, turbine towers as the only vertical objects for kilometres
 the natural home for the hangar, the late-game free-form airframe work in D-011, and the best
 place in the game to keep an aircraft.
 
-**7 · Grayling Range** — 17 km², 0.46 POI/km², Act 4, emitter-locator gate.
+**7 · Grayling Range** — 11.3 km², 0.71 POI/km², Act 4, emitter-locator gate.
 The smallest region and the densest in consequence: an army training area and depot in the
 north-east corner. Ranges, bunkers, a magazine, an AA school, hardened shelters, and the stores
 that every faction's air-defence hardware came out of. It answers the question the whole map has
@@ -540,7 +857,7 @@ been asking — *why is a dead country still defended?*
 perimeter road, hardened arches.
 *Landmark:* a radar tower on the high ground. *Anchor:* the depot.
 
-**8 · Ashmount** — 34 km² of which a **~10 km² dense core**, 0.77 POI/km², Act 4, aerostat gate.
+**8 · Ashmount** — 21.3 km² of which a **~8 km² dense core**, 1.22 POI/km², Act 4, aerostat gate.
 The city. High-rise core, a stadium, a hospital with a rooftop helipad, a flooded metro, a
 multi-storey car park stack, a cathedral, a river through the middle with four bridges in four
 states of collapse. Defended by a tethered aerostat with look-down radar, flak, and drone patrols
@@ -551,8 +868,8 @@ understood. **Recommended construction:** a procedural block-and-canyon generato
 kit and a hand-authored skyline — roughly a dozen landmark silhouettes, three authored districts,
 and interiors at only five to eight specific places. This is the section of §4.2 that pays for
 itself: a ruined city read from 200 m is a *pattern*, and patterns are what procedural generation
-is good at. Ten km² of dense core is already generous; for scale, downtown Los Angeles is about
-14 km² and Manhattan is 59 km². Do not build 30 km² of city.
+is good at. Eight km² of dense core is already generous; for scale, downtown Los Angeles is about
+14 km² and Manhattan is 59 km². Do not build 20 km² of city.
 *Aerial signature:* canyons and standing towers, a street grid readable from 3 km, the river as
 the one legal low-level route, and the aerostat itself — a visible, hateable object hanging over
 the whole region from the moment the player first sees the skyline in Act 1.
@@ -567,7 +884,7 @@ under-stadium settlement.
 - **A cost curve that rises with act**, so the scope cut is pre-planned.
 - **Every D-010 key has exactly one region where it is the only answer**, which is what makes each
   one feel like a key rather than a stat bump.
-- **Density that varies 3× across the map** (0.23 in the Pines to 0.77 in Ashmount) — sparse
+- **Density that varies 3.2× across the map** (0.38 in the Pines to 1.22 in Ashmount) — sparse
   regions create the breathing room that makes dense ones read as dense.
 
 ### What to build first
@@ -586,16 +903,16 @@ under-stadium settlement.
 
 | # | Recommendation | Confidence | Reversibility |
 |---|---|---|---|
-| 1 | Keep the world at **16.384 km square (268 km²)**. Do not grow it | High | High — one constant |
+| 1 | Keep the **16.384 km terrain grid** but reduce the **content envelope to a 13.0 km square (169 km²)**, ringed by water, terrain above the 3,000 m hover ceiling, and a contamination band | High — the §1 data is unambiguous | High — envelope is data, not terrain |
 | 2 | Correct the design assumption from 60 kt to **~110 kt cruise**; re-derive every timing estimate that depends on it | Very high — measured | n/a |
-| 3 | Target **124 named POIs (0.46/km²)**: 11 Anchors, 45 Sites, 68 Kit POIs | Medium-high | High early |
-| 4 | Target **~3,000 unnamed procedural features (≈11/km²)** — this matters more for atmosphere than POI count | High | High |
-| 5 | Plan **~65% of the map as deliberately empty**. Emptiness is cheap when traversal is fast; it is the one gift the premise gives us | High | High |
+| 3 | Target **124 named POIs (0.73/km² of envelope)**: 11 Anchors, 45 Sites, 68 Kit POIs | Medium-high | High early |
+| 4 | Target **~2,500 unnamed procedural features (≈15/km²)** — this matters more for atmosphere than POI count does | High | High |
+| 5 | Track **content-hours per km² (target ≥ 0.30)** as the primary scope metric, not POI count. It is the axis on which worlds actually fail | High | High |
 | 6 | Promote **threat envelopes (D-010) to the second thing built**, not the seventh. It is the world-scale system, not a progression system | High | High |
 | 7 | Build **landing-site evaluation and a wire/obstruction system** early. It converts POI count into event count at near-zero cost | High | High |
 | 8 | Re-frame **fuel (D-007) as economy and load, not range**. One tank is 34 map diagonals | Very high — measured | n/a |
 | 9 | Hold the **interior : exterior ratio near 1 : 4**. Interiors are where the money goes and where the aerial view earns nothing | Medium-high | Medium |
-| 10 | Build **Ashmount procedurally** with a hand-authored skyline and 5–8 interiors. Cap the dense core at ~10 km² | High | Medium |
+| 10 | Build **Ashmount procedurally** with a hand-authored skyline and 5–8 interiors. Cap the dense core at ~8 km² | High | Medium |
 | 11 | Order regions so **cost rises with act**, so a scope cut removes the city rather than the tutorial | High | High |
 | 12 | Cost **D-003's dual lighting path per POI** and decide explicitly whether the POI target survives it | High | Low (D-003 is locked) |
 
@@ -622,3 +939,85 @@ under-stadium settlement.
 3. **Consumption speed.** Without D-010 working properly, the player sees the entire map in the
    first session and the game is over before the story starts. This is *Just Cause 3*'s failure and
    it is the failure this project is most structurally exposed to.
+
+### What changed during this research, and why
+
+The first draft of §3.1 recommended keeping the full 268 km² and planning for 65% of it to be
+empty. The measured data in §1 overturned that, and it is worth recording the reasoning so the
+decision can be revisited rather than inherited:
+
+- Every reference world turned out to be **three to six times smaller than published**. The
+  comparison set the plan was reasoning against did not exist.
+- **Content-hours per km²** — not POIs per km² — is the axis on which worlds are judged, and the
+  plan landed at 0.19: between *GTA V* (0.67) and *Just Cause 3* (0.067), but much nearer the
+  failure case.
+- The plan's POI density, 0.46/km², is **within 10% of Just Cause 3's 0.42 settlements/km²**.
+  Shipping the same numbers as the genre's canonical failure demands a stronger argument than
+  "a helicopter makes emptiness cheaper".
+- *Skyrim* fills **38.7%** of its own worldspace; *Horizon Zero Dawn* was **cut down
+  mid-development** because Guerrilla could not fill it; Avalanche said explicitly that *Mad Max*
+  was scaled to density rather than size and then shipped the thinnest world in the set anyway.
+  The precedent for building more terrain than you fill is overwhelming — and so is the precedent
+  for regretting it.
+
+The compromise — full terrain grid, smaller content envelope, diegetic border built from water and
+the aircraft's own measured hover ceiling — keeps the horizon that makes the world read as a
+country while bringing the density back into the band every successful game in §1 occupies.
+
+---
+
+## Sources
+
+**Measured areas and methodology**
+- Bethesda cell math: [GECK wiki Units](https://geckwiki.com/index.php/Units) · [fallout.wiki Creation Kit/Cell](https://fallout.wiki/wiki/Resource:Creation_Kit/Cell) · [archived cell-count analysis](https://web.archive.org/web/20180614074653id_/http://www.gamesas.com/fallout-map-size-anolysis-t393192.html) · [FO4Edit navmesh filter](https://steamcommunity.com/app/377160/discussions/0/350543319567332507/) · [sprint-timing cross-check](https://steamcommunity.com/app/377160/discussions/0/1648791520835992591/?ctp=14)
+- Skyrim worldspace rectangle: [MapFight](https://www.mapfight.xyz/map/skyrim/) · [Reality is a Game](https://www.realityisagame.com/archives/648/the-geographic-size-of-skyrim/)
+- New Vegas dev bounding box (Josh Sawyer): [archived Bethsoft forums](https://web.archive.org/web/20160329135212/http://forums.bethsoft.com/topic/1139270-new-vegas-is-linear/?p=16657713) · [fallout.wiki Mojave Wasteland](https://fallout.wiki/wiki/Mojave_Wasteland)
+- Elden Ring re-measurement: [PC Gamer via inkl](https://www.inkl.com/news/elden-ring-geographer-tests-rigorous-calculation-against-weed-fueled-horse-math-to-determine-the-exact-size-of-the-lands-between) · [NeverAwakeMan independent analysis](https://note.com/neverawakeman/n/n5725ff38d5bc?hl=en) · [VGTimes](https://vgtimes.com/gaming-news/118846-enthusiast-measures-the-size-of-elden-rings-open-world-reveals-its-much-smaller-than-initially-thought.html) · [the 79 km² myth](https://screenrant.com/elden-ring-open-world-map-how-big/)
+- GTA V land/water split: [IPS News, KeWiS figures](https://ipsnews.net/business/2020/07/25/gta-ranking-the-maps-in-order-of-size/) · [GTA VI Insider](https://gtaviinsider.com/gta-vi-map-size-vs-gta-v/) · [TheGamer](https://www.thegamer.com/which-grand-theft-auto-has-the-biggest-world-map/) · on why figures diverge, [gta6explained](https://gta6explained.com/blog/gta-map-size-comparison)
+- STALKER SoC level extents from shipped config: [OpenXRay game_maps_single.ltx](https://github.com/OpenXRay/xray/blob/d7b23596a70374d8a7ffda0e98852f93ce985182/trunk/resources/config/game_maps_single.ltx) · [ixray mirror](https://github.com/ixray-team/ixray-1.0-stsoc/blob/a11547a2e4e6426b77ebe4ee19550ab1cab7fdef/src/resources/config/game_maps_single.ltx) · [GSC official FAQ](https://soc.stalker-game.com/?page=faq) · [Wikipedia on the 18-level structure](https://en.wikipedia.org/wiki/S.T.A.L.K.E.R.:_Shadow_of_Chernobyl)
+- Death Stranding: [Beyond Satire measurement](https://www.beyondsatire.com/investigations/death-stranding-map-size/)
+- Just Cause 3: [Steam store claim](https://store.steampowered.com/app/225540/Just_Cause_3/) · [archived Inquisitr, Lesterlin interview](https://web.archive.org/web/20211013010927/https://www.inquisitr.com/1847980/just-cause-3-director-discusses-the-map-size-of-the-games-new-setting/) · [archived GameSpot](https://web.archive.org/web/20210515084541/https://www.gamespot.com/articles/just-cause-3-dev-talks-world-size-destruction-and-/1100-6423646/) · [Medici land/water estimate](https://justcause.fandom.com/wiki/Medici)
+- Witcher 3's disputed 136 km²: [GamingBolt, Apr 2015](https://gamingbolt.com/witcher-3-map-size-compared-to-gta5-skyrim-far-cry-4-new-screens-show-different-visual-settings)
+
+**Location and POI counts**
+- [Fallout 3 locations](https://fallout.fandom.com/wiki/Fallout_3_locations) · [Fallout: New Vegas locations](https://fallout.fandom.com/wiki/Fallout:_New_Vegas_locations) · [Skyrim map markers](https://elderscrolls.fandom.com/wiki/Map_(Skyrim)/Locations) · [UESP clearable dungeons](https://en.uesp.net/wiki/Skyrim:Dungeons)
+- [Elden Ring Sites of Grace](https://game-checklists.com/elden-ring/all-sites-of-grace/) · [dungeon entrances](https://lootmap.gg/elden-ring/guides/dungeons-caves-and-catacombs/) · [catacombs](https://segmentnext.com/elden-ring-catacomb-locations-and-map/)
+- [JC3 military bases](https://justcause.fandom.com/wiki/Military_bases_in_Medici) · [JC3 towns](https://justcause.fandom.com/wiki/Towns_in_Medici) · [JC3 collectables](https://justcause.fandom.com/wiki/Collectable_Items_in_Medici)
+- [Death Stranding network nodes, MapGenie](https://mapgenie.io/death-stranding/maps/world) · [Knot Cities](https://deathstranding.fandom.com/wiki/Knot)
+- [Witcher 3 markers, MapGenie](https://mapgenie.io/witcher-3) · [RDR2 Points of Interest](https://reddead.fandom.com/wiki/Point_of_Interest) · [RDR2 MapGenie](https://mapgenie.io/rdr2/maps/rdr2)
+- [Mad Max minefields](https://madmax.fandom.com/wiki/Minefield_(Mad_Max_Game)) · [Mad Max 100% guide](https://steamcommunity.com/sharedfiles/filedetails/?id=3157776055)
+- [MSFS hand-crafted airports](https://flight.wiki.gg/wiki/Microsoft_Flight_Simulator_(2020)/List_of_hand-crafted_airports) · [what "hand-crafted" means](https://flyawaysimulation.com/ask/answers/handcrafted-airports-microsoft-flight-simulator/)
+
+**Traversal times** — all from [How Big Is The Map](https://howbigisthemap.com/)
+- [GTA V, flying](https://howbigisthemap.com/gta-v-fly-across-the-map/) · [Skyrim, walking](https://howbigisthemap.com/skyrim-walk-across-the-map/) · [Skyrim SE, running](https://howbigisthemap.com/skyrim-special-edition-run-across-the-map/) · [Just Cause 3, walking](https://howbigisthemap.com/just-cause-3-walk-across-the-map/) · [Far Cry 2, walking](https://howbigisthemap.com/far-cry-2-map-2-walk-across-the-map/) · [Far Cry 2, driving](https://howbigisthemap.com/far-cry-2-map-2-drive-across-map/) · [Death Stranding, walking Central](https://howbigisthemap.com/death-stranding-walk-across-the-map-map-2/) · [Mad Max, driving](https://howbigisthemap.com/mad-max-drive-across-map/) · [RDR2 on horseback, via Twinfinite](https://twinfinite.net/news/heres-long-takes-cross-red-dead-redemption-2s-map/)
+
+**Hours** — HowLongToBeat, pulled 2026-09-18
+- [Elden Ring](https://howlongtobeat.com/game/68151) · [GTA V](https://howlongtobeat.com/game/4064) · [STALKER SoC](https://howlongtobeat.com/game/8038) · [Just Cause 3](https://howlongtobeat.com/game/26404) · [Death Stranding](https://howlongtobeat.com/game/38061) · [Mad Max](https://howlongtobeat.com/game/17610) · [Horizon Zero Dawn](https://howlongtobeat.com/game/26784)
+
+**Design commentary and theory**
+- [Jaber, *The 40 Seconds Rule and Points of Interest in The Witcher 3*, Uppsala University](https://uu.diva-portal.org/smash/get/diva2:1569059/FULLTEXT01.pdf)
+- [BotW's triangle rule, Nintendo Life](https://www.nintendolife.com/news/2017/10/zelda_breath_of_the_wilds_ingenious_design_is_all_about_triangles_apparently) · [5 design lessons from BotW, Game Developer](https://www.gamedeveloper.com/design/5-design-lessons-learned-from-i-the-legend-of-zelda-breath-of-the-wild-i-)
+- [Miyazaki on the Erdtree as a navigation landmark, GamesRadar](https://www.gamesradar.com/elden-ring-fromsoftware-hidetaka-miyazaki-interview/) · [FromSoftware sightline design](https://medium.com/@Jamesroha/world-design-lessons-from-fromsoftware-78cadc8982df)
+- [Guerrilla on deliberately hiding HZD's size, and the 10× vertical miniature](https://gamingbolt.com/horizon-zero-dawn-heres-why-guerrilla-didnt-revealed-the-actual-map-size-it-will-destroy-the-illusion) · [HZD's world was cut down mid-development](https://en.wikipedia.org/wiki/Horizon_Zero_Dawn)
+- [Avalanche: Mad Max scaled to density, not size](https://en.wikipedia.org/wiki/Mad_Max_(2015_video_game))
+- [Just Cause 3 review, GamesRadar 3/5](https://www.gamesradar.com/just-cause-3-review/) · [Eurogamer](https://www.eurogamer.net/just-cause-3-review) · [Screen Rant](https://screenrant.com/just-cause-3-review/)
+- [Death Stranding: slow walking as content](https://harrygboulton.medium.com/slow-walking-and-world-wandering-in-death-stranding-9130bf61981) · [Gamepressure on gated, slow traversal](https://www.gamepressure.com/death-stranding/does-the-game-have-a-large-in-game-world/z1ccf5)
+- [Far Cry 2's absent fast travel](https://www.wholebeangames.com/blog/thoughts_on_games/the-lack-of-fast-travel-in-far-cry-2/)
+- [Burgess, *Skyrim's Modular Level Design*, GDC 2013](http://blog.joelburgess.com/2013/04/skyrims-modular-level-design-gdc-2013.html) · [Skyrim's 8-person dungeon team](https://www.thegamer.com/skyrim-development-trivia-stories/)
+- [StraySpark, open-world pacing](https://www.strayspark.studio/blog/open-world-design-pacing-player-freedom) — studio blog, heuristic only
+
+**Figures actively distrusted** — recorded so they are not re-imported later
+- [TheGamer, "Every Fallout Game, Ranked By Total Map Size"](https://www.thegamer.com/every-fallout-map-size/) — square-mile/km² unit error, and real-world footprints rather than game area
+- [Trucoteca on Horizon Zero Dawn](https://trucoteca.com/en/how-big-is-the-horizon-zero-dawn-map/) — three mutually contradictory totals on one page
+- [ScreenRant, whole STALKER trilogy at 7.5 km²](https://screenrant.com/stalker-2-map-size-comparison-original-trilogy/) — below the measured figure for SoC alone
+- [Just Cause Wiki "Game limits"](https://justcause.fandom.com/wiki/Game_limits) — units error implying a 1,000,000 km² map
+- [Mad Max "78 km²"](https://steamcommunity.com/app/234140/discussions/0/537405286657082759/) — uncited forum assertion; treat as folklore
+- fallout.wiki's "459 marked locations" for Fallout 3 — a `{{DPL Counter}}` pointing at a category that does not exist, silently counting all location articles. Use 163.
+
+**Not verified this session** — HowLongToBeat figures for Fallout 3 (none found) and New Vegas
+(undated forum citation only); RDR2 and Mad Max playable area (no credible measurement exists);
+Horizon Zero Dawn playable area (Guerrilla withholds it deliberately); a land-only figure for
+Witcher 3's Skellige; GTA V's district and collectible counts (search-snippet only); Mad Max camp,
+scarecrow, sniper-tower and convoy counts (published only inside annotated map images); Fallout 3's
+own HLTB entry. Reddit was unreachable from every tool this session, so no measurement thread was
+read first-hand.

@@ -61,7 +61,7 @@ public sealed partial class PropScatter : Node3D
     {
         for (int i = 0; i < 4; i++) _rockMeshes.Add(ProceduralProps.Rock(Seed + i * 31, 1.0f, 2));
         for (int i = 0; i < 5; i++) _treeMeshes.Add(ProceduralProps.DeadTree(Seed + 700 + i * 17, 9f));
-        _scrubMesh = ProceduralProps.ScrubCard(1.8f, 1.15f, 3);
+        _scrubMesh = ProceduralProps.ScrubCard(1.05f, 0.72f, 3);
 
         _clumpNoise = new FastNoiseLite
         {
@@ -101,8 +101,8 @@ public sealed partial class PropScatter : Node3D
             Roughness = 1.0f,
             SpecularMode = BaseMaterial3D.SpecularModeEnum.Disabled,
             BacklightEnabled = true,
-            Backlight = new Color(0.34f, 0.31f, 0.20f),
-            AlbedoColor = new Color(1.05f, 1.02f, 0.92f),
+            Backlight = new Color(0.26f, 0.24f, 0.16f),
+            AlbedoColor = new Color(0.94f, 0.93f, 0.88f),
         };
     }
 
@@ -237,7 +237,7 @@ public sealed partial class PropScatter : Node3D
 
             float scale = kind switch
             {
-                PropKind.Scrub => rng.RandfRange(0.8f, 2.1f),
+                PropKind.Scrub => rng.RandfRange(0.65f, 1.55f),
                 PropKind.Rock => rng.RandfRange(0.4f, 3.0f),
                 _ => rng.RandfRange(0.65f, 1.40f),
             };
