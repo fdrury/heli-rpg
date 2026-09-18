@@ -21,6 +21,7 @@ public sealed partial class Main : Node3D
     private SiteStreamer _sites = null!;
     private SiteInteraction _play = null!;
     private Kneeboard _kneeboard = null!;
+    private ThreatWorld _threats = null!;
     private FlightHud _hud = null!;
     private Label _debugLabel = null!;
     private bool _showDebug;
@@ -86,6 +87,14 @@ public sealed partial class Main : Node3D
         };
         AddChild(_play);
 
+        _threats = new ThreatWorld
+        {
+            Name = "Threats",
+            HelicopterPath = _heli.GetPath(),
+            InteractionPath = _play.GetPath(),
+        };
+        AddChild(_threats);
+
         var layer = new CanvasLayer { Name = "Hud" };
         AddChild(layer);
         _dust.AttachHaze(layer);
@@ -95,6 +104,7 @@ public sealed partial class Main : Node3D
             HelicopterPath = _heli.GetPath(),
             LandingControllerPath = _landing.GetPath(),
             InteractionPath = _play.GetPath(),
+            ThreatWorldPath = _threats.GetPath(),
         };
         layer.AddChild(_hud);
 
@@ -126,6 +136,10 @@ public sealed partial class Main : Node3D
             {
                 GD.Print("[main] running the bridge self-test");
                 _hud.Visible = false;
+                // This one measures control derivatives. It cannot do that while being
+                // shot at, and the difference between "the cyclic is backwards" and "a
+                // SAM hit the tail rotor" is not visible in the numbers.
+                _threats.Disabled = true;
                 AddChild(new GodotBridgeSelfTest(_heli) { Name = "SelfTest" });
                 break;
             }
@@ -135,6 +149,12 @@ public sealed partial class Main : Node3D
                 _hud.Visible = false;
                 AddChild(new LoopTest(_heli, _play, _landing, _sites) { Name = "LoopTest" });
                 break;
+            }
+            if (arg == "--threatreport")
+            {
+                ThreatReport.Run(_threats);
+                GetTree().Quit(0);
+                return;
             }
             if (arg == "--worldreport")
             {
@@ -146,6 +166,7 @@ public sealed partial class Main : Node3D
             {
                 GD.Print("[main] running the screenshot pass");
                 _hud.Visible = false;
+                _threats.Disabled = true;
                 AddChild(new ScreenshotDirector(_heli, _camera, "res://../builds/screenshots")
                 { Name = "Screenshots" });
                 break;
@@ -322,6 +343,20 @@ public sealed partial class Main : Node3D
             case Key.Key2: _play.Trigger(1); break;
             case Key.Key3: _play.Trigger(2); break;
             case Key.Key4: _play.Trigger(3); break;
+            case Key.Z:
+                if (!_threats.DispenseChaff()) GD.Print("[threat] no chaff");
+                break;
+            case Key.X:
+                if (!_threats.DispenseFlares()) GD.Print("[threat] no flares");
+                break;
+            case Key.F3:
+                // Bench fit, until the refit system exists. Every one of these is meant to
+                // be a thing you find and bolt on, not a key you press.
+                _threats.Fit(Countermeasure.RadarWarning);
+                _threats.Fit(Countermeasure.Chaff, 30);
+                _threats.Fit(Countermeasure.Flares, 30);
+                GD.Print("[threat] bench-fitted RWR, chaff and flares");
+                break;
             case Key.F2:
                 _heli.SasAuthority = _heli.SasAuthority > 0.5f ? 0f : 1f;
                 GD.Print($"[heli] stability augmentation {(_heli.SasAuthority > 0 ? "ENGAGED" : "off")}");

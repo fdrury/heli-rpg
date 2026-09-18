@@ -313,3 +313,32 @@ Two bugs found by testing, both of which would have shipped silently:
   the instant it was set. **Nothing in the world ever actually fired a shot.**
 - Flares burned for 3.5 s against a weapon with a 3.57 s time of flight, so they expired
   0.07 s before impact and appeared simply not to work.
+
+### D-014 — Terrain relief is tuned against the threat report, not by eye · 2026-09-18
+Threat envelopes went into the world and the coverage report immediately showed the
+masking mechanic was decoration: emitters could see **96-100% of their envelope from
+150 m**. The valleys were broad and shallow, which looks fine and hides nothing.
+
+Two rounds of tuning, each measured rather than eyeballed:
+1. Narrowed and deepened the valley carve, and added a tighter gully network. Masking
+   became real - but median slope went to 21 degrees and the land you can put a settlement
+   on halved, because the gullies were carving the basins people live in.
+2. Made the upland field **bimodal** (`smoothstep(0.34, 0.72, continent)`) instead of a
+   power curve. A power curve makes most of the map "somewhat upland"; a smoothstep gives
+   genuinely flat low country and genuinely broken high country.
+
+| | before threats | first fix | now |
+|---|---|---|---|
+| Median slope | 12.1° | 21.3° | **15.1°** |
+| Settleable (slope < 7°) | 16.6% | 8.4% | **18.5%** |
+| Airfield-able | 3.1% | 1.7% | **5.2%** |
+| Emitter visibility at 50 m | ~99% | ~45% | **13-98%, avg 70%** |
+| at 150 m | ~99% | ~75% | avg 88% |
+
+**The variance is the design.** A site in the broken country sees 13% of its envelope and
+is a nuisance; a site in the open basin sees 98% and is a wall. The player learns which is
+which, and that knowledge is progression under D-005.
+
+**And it produced the trade the world needed anyway:** the easy country to fly and land in
+is the country with nowhere to hide. That is "cities, wilderness and everything in between"
+expressed as a mechanic rather than as scenery.

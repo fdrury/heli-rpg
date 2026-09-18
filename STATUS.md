@@ -36,13 +36,16 @@ godot --headless --path game -- --looptest
 # survey the generated world: terrain statistics, site placement, coverage
 godot --headless --path game -- --worldreport
 
+# measure how much cover the terrain actually gives against each emitter
+godot --headless --path game -- --threatreport
+
 # the standard screenshot set, for comparing the look over time
 godot --path game -- --screenshot
 ```
 
 Controls: `W`/`S` or throttle = collective · arrows or stick = cyclic · `A`/`D` or twist =
-pedals · `TAB` kneeboard · `1`-`4` actions · `C` camera · `F2` stability augmentation ·
-`F1` device info · `R` respawn.
+pedals · `TAB` kneeboard · `1`-`4` actions · `Z`/`X` chaff/flares · `C` camera ·
+`F2` stability augmentation · `F3` bench-fit countermeasures · `R` respawn.
 
 ## Done
 
@@ -70,18 +73,20 @@ on flat sheltered ground.
 blade slap sits at the blade-pass frequency the physics predicts and is loudest in a
 loaded turn.
 
+**Threat** — five classes, each owning an altitude band, with real terrain masking: a ray
+walked from every emitter to the aircraft through the actual height field. A SAM cannot see
+you below 120 m AGL at all; the aerostat looks down and ignores the dead ground everything
+else misses. Chaff takes a SAM from 7 hits to 0 and does nothing to a heat seeker; flares
+the reverse. 45 s in two envelopes: everything damaged, 62% forced down, none deleted. The
+RWR logs every emitter that paints you, so the sortie that nearly killed you pays out.
+
 **Play** — refuel, repair, salvage, survey, tune a relay, ask around. Carried load is real
 mass and is felt in the hover. The kneeboard records facts, not inferences, and shows the
 empty bays.
 
 ## Next
 
-1. **Threat envelopes and countermeasures** (D-010) — promoted to second by the world-scale
-   benchmark: route inflation is a 3x multiplier on the whole map for the price of a data
-   file, and it is what makes 23 km feel like a journey
-2. **The RWR that logs every emitter that paints you** — the sortie that nearly killed you
-   pays out (D-005a)
-3. Dialogue: baked corpus plus the local-SLM coda (D-006a)
+1. Dialogue: baked corpus plus the local-SLM coda (D-006a)
 4. The refit system — modules on real hardpoints (D-011)
 5. On-foot: third person, Rotor Time
 6. Weather, night, and the flying that goes with them

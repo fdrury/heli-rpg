@@ -76,8 +76,18 @@ public static class WorldHeight
     {
         Seed = Seed + 733,
         NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin,
-        Frequency = 0.00058f,
+        Frequency = 0.00075f,
         FractalOctaves = 3,
+        FractalGain = 0.5f,
+    };
+
+    /// <summary>A second, tighter drainage network. Gullies, not valleys.</summary>
+    private static readonly FastNoiseLite Gullies = new()
+    {
+        Seed = Seed + 1481,
+        NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin,
+        Frequency = 0.0021f,
+        FractalOctaves = 2,
         FractalGain = 0.5f,
     };
 
@@ -122,7 +132,13 @@ public static class WorldHeight
         // or a runway on - and uplands are genuinely steep. Scaling everything uniformly
         // gives either a prairie or a mountain range, and the first two attempts here
         // produced exactly one of each.
-        float upland = Mathf.Pow(continent, 1.7f);
+        // Bimodal, not gradual. With a plain power curve the median of the continental
+        // field sits mid-range, so "somewhat upland" describes most of the map and every
+        // basin gets carved up too. A smoothstep gives genuinely flat low country and
+        // genuinely broken high country, with a transition between them - which is the
+        // "cities, wilderness and everything in between" the brief asked for, and also
+        // the trade the threat system needs: the easy country to fly in is the exposed one.
+        float upland = Mathf.SmoothStep(0.34f, 0.72f, continent);
         float h = continent * 300f
                 + hills * hills * 280f * upland
                 + ridge * 400f * Mathf.Max(0f, continent - 0.30f)
@@ -131,15 +147,23 @@ public static class WorldHeight
         // --- Carve the valleys ------------------------------------------------
         // A narrow band around the zero crossing of the valley field becomes a cut. The
         // power shapes the cross-section: high exponent gives a V, low gives a bowl.
+        // Narrow and deep, not broad and shallow. The threat-coverage report measured the
+        // first version at 96-100% visibility from 150 m, which made terrain masking - the
+        // mechanic the entire world-scale argument rests on - into decoration. A valley
+        // only hides an aircraft if it is deep relative to its width.
         float vRaw = Valleys.GetNoise2D(x + wx * 0.35f, z + wz * 0.35f);
-        float vBand = 1.0f - Mathf.Min(1.0f, Mathf.Abs(vRaw) / 0.30f);
-        float cut = Mathf.Pow(vBand, 1.7f) * (16f + upland * 190f);
+        float vBand = 1.0f - Mathf.Min(1.0f, Mathf.Abs(vRaw) / 0.17f);
+        float cut = Mathf.Pow(vBand, 1.35f) * (10f + upland * 265f);
         h -= cut;
 
-        // A second, finer drainage network so the big valleys have side gullies.
-        float v2 = Detail.GetNoise2D(x * 0.42f + 9000f, z * 0.42f);
-        float band2 = 1.0f - Mathf.Min(1.0f, Mathf.Abs(v2) / 0.22f);
-        h -= Mathf.Pow(band2, 2.0f) * 26f * upland;
+        // Gullies: tighter, shallower, and everywhere. These are what turn a smooth
+        // hillside into ground a pilot can actually use.
+        float gRaw = Gullies.GetNoise2D(x + wx * 0.2f, z + wz * 0.2f);
+        float gBand = 1.0f - Mathf.Min(1.0f, Mathf.Abs(gRaw) / 0.19f);
+        // Scaled almost entirely by the upland field, so the basins stay flat enough to
+        // land on and build in. The consequence is a real trade the player will feel: the
+        // easy country to operate in is the country with nowhere to hide.
+        h -= Mathf.Pow(gBand, 1.5f) * (3f + upland * 88f);
 
         // Floor the deepest cuts into flat valley bottoms rather than knife edges: that
         // is where the rivers, the roads and the places people live all end up, and a
