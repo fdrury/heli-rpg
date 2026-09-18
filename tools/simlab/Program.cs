@@ -55,6 +55,7 @@ public static class Program
         Run("touchdown", LandingTests.Touchdowns);
         Run("brownout", LandingTests.Brownout);
         Run("damage", LandingTests.DamageEffects);
+        Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 
         Console.WriteLine();

@@ -40,3 +40,12 @@ Not assets — these informed the physics and are listed so the numbers can be c
 - Vegetation and props
 - Audio: turbine, rotor slap, wind, transmission
 - UI font
+
+## Audio
+
+All aircraft audio is **synthesised at runtime from the flight model** - see
+`sim/src/RotorSynth.cs`. There are no recordings and no sample libraries, so there is
+nothing here to licence. Blade slap runs at the blade-pass frequency the sim computes,
+the turbine tone tracks the gas generator, and the slap gets violent when the disc loads
+up. Verified spectrally against the physics: `dotnet run --project tools/simlab -- audio`
+writes `builds/audio/sortie.wav`.

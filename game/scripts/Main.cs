@@ -65,6 +65,8 @@ public sealed partial class Main : Node3D
         _landing = new LandingController { Name = "Landing", HelicopterPath = _heli.GetPath() };
         AddChild(_landing);
 
+        AddChild(new HelicopterAudio { Name = "Audio", HelicopterPath = _heli.GetPath() });
+
         _dust = new RotorwashDust
         {
             Name = "Rotorwash",
