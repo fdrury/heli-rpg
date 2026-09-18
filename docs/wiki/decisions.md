@@ -89,3 +89,44 @@ aircraft that exists. It also means a skilled pilot can sometimes beat a gate wi
 alone by masking in terrain, which is exactly the kind of optional mastery this project
 should reward.
 **Reversibility:** high - threat envelopes are data.
+
+### D-011 — The platform is a Huey, and the builder is a refit system · 2026-09-18 · **[FRED'S IDEA]**
+Fred asked whether a Huey would make a good all-purpose platform, and worried it would
+be "less block-buildy". It is the right call, and it makes the builder *better*, not worse.
+
+**Why a Huey is the correct airframe for this game specifically:**
+- It is the most modular helicopter ever built. Doors off or on, seats in or out, cargo
+  hook, hardpoints, litters, rescue hoist, gun mounts, external tanks, a flat cabin floor
+  you can bolt anything to. It is a flying pickup truck, which is exactly the fantasy.
+- The two-bladed teetering head is *characterful*: soft, laggy, slightly reluctant, with
+  the famous blade slap. It is a machine with opinions. A modern rigid-rotor helicopter
+  would fly better and feel like nothing.
+- It is plausibly maintainable after a collapse - simple, hydromechanical, forgiving,
+  built in tens of thousands. Nothing with a full-authority digital engine control would
+  still be flying, and that fact does a lot of the world-building for free.
+- The model in `sim/` is already this aircraft: 7.32 m rotor, 324 rpm, teetering head,
+  3790 kg, and its measured hover power and power curve sit within a few percent of a
+  real UH-1.
+
+**The builder becomes a refit system, which is a better game anyway.** Instead of "assemble
+an aircraft from voxels and hope it flies", the player works on a real airframe with real
+attachment points. Every module is a `MassItem` plus drag, power draw and hardpoint
+occupancy, and the existing physics already makes the trade real: hang armour on it and
+the hover ceiling drops, bolt a long-range tank on one side and it rolls, strip the seats
+and it climbs. Nothing needs faking.
+
+This keeps a hard promise the free-form version could not: **every configuration flies,
+but not every configuration flies well.** No player ever builds something that simply
+falls over, and no player is ever protected from the consequences of their choices.
+
+Free-form construction is not abandoned - it becomes the late-game *airframe* layer, when
+the player has a hangar, a welder and salvaged rotor systems, and can start building
+something that is no longer a Huey. That is a much better place for it than the tutorial.
+
+### D-012 — "Hugh" is the helicopter, not the pilot · 2026-09-18
+Fred suggested Hugh as the main character's name. Better: **Hugh is the aircraft.**
+- The aircraft is the second protagonist (pillar 1). Naming it is how that lands.
+- Players want to name themselves; almost nobody wants to be called Hugh.
+- Somebody, at some point, painted the name on the nose. That person is a hook.
+- "Hugh is not going to like this" is a line the game can earn a hundred times over, and
+  it is funnier and sadder than any amount of exposition about how attached you are to it.
