@@ -20,9 +20,11 @@ public sealed partial class FlightHud : Control
 {
     [Export] public NodePath HelicopterPath { get; set; } = "";
     [Export] public NodePath LandingControllerPath { get; set; } = "";
+    [Export] public NodePath InteractionPath { get; set; } = "";
 
     private HelicopterController? _heli;
     private LandingController? _landing;
+    private SiteInteraction? _play;
     private Font _font = null!;
     private double _warnBlink;
 
@@ -36,6 +38,7 @@ public sealed partial class FlightHud : Control
     {
         _heli = GetNodeOrNull<HelicopterController>(HelicopterPath);
         _landing = GetNodeOrNull<LandingController>(LandingControllerPath);
+        _play = GetNodeOrNull<SiteInteraction>(InteractionPath);
         _font = ThemeDB.FallbackFont;
         MouseFilter = MouseFilterEnum.Ignore;
         SetAnchorsPreset(LayoutPreset.FullRect);
@@ -60,6 +63,7 @@ public sealed partial class FlightHud : Control
         DrawControlPositions(new Vector2(size.X - 190, size.Y - 190), sim);
         DrawLandingPanel(new Vector2(size.X * 0.5f - 150, 26), t);
         DrawDamagePanel(new Vector2(28, size.Y * 0.30f + 210), sim);
+        DrawSitePanel(new Vector2(size.X * 0.5f - 250, size.Y - 300));
         DrawWarnings(new Vector2(size.X * 0.5f, size.Y - 122), t);
         DrawFooter(size);
     }
@@ -279,6 +283,50 @@ public sealed partial class FlightHud : Control
         }
     }
 
+    /// <summary>
+    /// What can be done here. Only ever shown when the aircraft is actually shut down at
+    /// a place, because landing is meant to be the act that pays (D-003a).
+    /// </summary>
+    private void DrawSitePanel(Vector2 origin)
+    {
+        if (_play is null) return;
+
+        if (_play.Busy is string busy)
+        {
+            var r = new Rect2(origin, new Vector2(500, 54));
+            DrawRect(r, Panel);
+            DrawRect(r, Bright * new Color(1, 1, 1, 0.5f), false, 1.2f);
+            DrawString(_font, origin + new Vector2(16, 26), busy + "...", HorizontalAlignment.Left, -1, 16, Bright);
+            Bar(origin + new Vector2(16, 34), 468, _play.BusyProgress, Bright);
+            return;
+        }
+
+        if (_play.Parked is not Site site) return;
+        var actions = _play.Actions;
+        if (actions.Count == 0) return;
+
+        float h = 42 + actions.Count * 24;
+        var panel = new Rect2(origin, new Vector2(500, h));
+        DrawRect(panel, Panel);
+        DrawRect(panel, Bright * new Color(1, 1, 1, 0.45f), false, 1.2f);
+
+        DrawString(_font, origin + new Vector2(16, 24), site.Name.ToUpperInvariant(),
+                   HorizontalAlignment.Left, -1, 15, Bright);
+        var kindSize = _font.GetStringSize(site.Kind.ToString(), HorizontalAlignment.Left, -1, 12);
+        DrawString(_font, origin + new Vector2(484 - kindSize.X, 24), site.Kind.ToString(),
+                   HorizontalAlignment.Left, -1, 12, Dim);
+
+        float y = origin.Y + 46;
+        for (int i = 0; i < actions.Count; i++)
+        {
+            Color c = actions[i].Available ? Bright : Dim * new Color(1, 1, 1, 0.75f);
+            DrawString(_font, new Vector2(origin.X + 16, y), $"{i + 1}", HorizontalAlignment.Left, -1, 13,
+                       actions[i].Available ? Warn : Dim);
+            DrawString(_font, new Vector2(origin.X + 34, y), actions[i].Label, HorizontalAlignment.Left, -1, 13, c);
+            y += 24;
+        }
+    }
+
     // ------------------------------------------------------------- warnings
 
     private void DrawWarnings(Vector2 centre, FlightTelemetry t)
@@ -310,7 +358,7 @@ public sealed partial class FlightHud : Control
     private void DrawFooter(Vector2 size)
     {
         string help = "W/S or throttle: collective   arrows or stick: cyclic   A/D: pedals   " +
-                      "C: camera   R: respawn   F1: device info";
+                      "C: camera   TAB: kneeboard   1-4: actions   R: respawn   F1: devices";
         DrawString(_font, new Vector2(20, size.Y - 16), help, HorizontalAlignment.Left, -1, 12,
                    Dim * new Color(1, 1, 1, 0.55f));
     }

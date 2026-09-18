@@ -1,0 +1,174 @@
+namespace Rotorwash.Sim;
+
+/// <summary>Things the player can be carrying. Deliberately few and concrete.</summary>
+public enum Stock
+{
+    Scrap,          // generic salvage, the currency of repair
+    Parts,          // specific serviceable components
+    Fuel,           // jerrycans, carried not plumbed - weight you choose to accept
+    Medical,
+    Food,
+    Ammunition,
+}
+
+/// <summary>A thing that is KNOWN rather than owned. This is the progression currency.</summary>
+public enum KnowledgeKind
+{
+    Chart,          // a region surveyed, terrain and hazards filled in
+    Frequency,      // a radio channel: contacts, traffic, warnings
+    Schematic,      // how to build or repair something
+    Contact,        // a person who will deal with you
+    ThreatSite,     // where something will shoot at you, and what kind
+    Rumour,         // an unresolved thread
+}
+
+public readonly record struct Knowledge(KnowledgeKind Kind, string Id, string Label, string Detail);
+
+/// <summary>What has happened at one place.</summary>
+public sealed class SiteRecord
+{
+    public bool Visited;
+    public bool Surveyed;
+    public double FuelRemaining = -1;   // -1 = not yet determined
+    public int SalvageRemaining = -1;
+    public double LastVisitedAt;
+    public int VisitCount;
+}
+
+/// <summary>
+/// Everything the player has, knows, and has done.
+///
+/// This is the save file, and under D-005 it is also the character sheet: there is no
+/// experience and there are no levels, so a player's capability is exactly the contents of
+/// this object plus whatever is bolted to the aircraft.
+///
+/// D-005a added the requirement that drove the shape of it: there must be one screen that
+/// shows the player they are further along than they were, and it must hold **facts, not
+/// inferences**. Nothing here computes a percentage or a score. It records what was found,
+/// where, and when - and lets the player do the thinking.
+/// </summary>
+public sealed class Progress
+{
+    private readonly Dictionary<Stock, double> _stock = new();
+    private readonly Dictionary<string, Knowledge> _known = new();
+    private readonly Dictionary<int, SiteRecord> _sites = new();
+    private readonly List<string> _journal = new();
+
+    /// <summary>In-world seconds since the game began.</summary>
+    public double Clock { get; set; }
+
+    public event Action<Knowledge>? Learned;
+    public event Action<Stock, double>? StockChanged;
+    public event Action<string>? Journalled;
+
+    // ------------------------------------------------------------------ stock
+
+    public double Amount(Stock kind) => _stock.GetValueOrDefault(kind);
+
+    public void Add(Stock kind, double amount)
+    {
+        if (amount == 0) return;
+        _stock[kind] = Math.Max(0, Amount(kind) + amount);
+        StockChanged?.Invoke(kind, _stock[kind]);
+    }
+
+    public bool Spend(Stock kind, double amount)
+    {
+        if (Amount(kind) < amount) return false;
+        Add(kind, -amount);
+        return true;
+    }
+
+    /// <summary>
+    /// Mass of everything carried, kg. Fed straight into the flight model, because the
+    /// point of a load system is that it is felt in the hover, not read off a screen.
+    /// </summary>
+    public double CarriedMass =>
+        Amount(Stock.Scrap) * 1.0 +
+        Amount(Stock.Parts) * 6.5 +
+        Amount(Stock.Fuel) * 20.0 +     // a full jerrycan
+        Amount(Stock.Medical) * 1.5 +
+        Amount(Stock.Food) * 0.8 +
+        Amount(Stock.Ammunition) * 0.05;
+
+    // -------------------------------------------------------------- knowledge
+
+    public bool Knows(string id) => _known.ContainsKey(id);
+    public IReadOnlyCollection<Knowledge> Known => _known.Values;
+
+    public int CountKnown(KnowledgeKind kind)
+    {
+        int n = 0;
+        foreach (Knowledge k in _known.Values) if (k.Kind == kind) n++;
+        return n;
+    }
+
+    /// <summary>Record something learned. Returns false if it was already known.</summary>
+    public bool Learn(Knowledge k)
+    {
+        if (_known.ContainsKey(k.Id)) return false;
+        _known[k.Id] = k;
+        Learned?.Invoke(k);
+        Journal($"{k.Kind}: {k.Label}");
+        return true;
+    }
+
+    // ------------------------------------------------------------------ sites
+
+    public SiteRecord Record(int siteId)
+    {
+        if (!_sites.TryGetValue(siteId, out SiteRecord? r)) _sites[siteId] = r = new SiteRecord();
+        return r;
+    }
+
+    public bool HasVisited(int siteId) => _sites.TryGetValue(siteId, out SiteRecord? r) && r.Visited;
+    public int VisitedCount { get { int n = 0; foreach (var r in _sites.Values) if (r.Visited) n++; return n; } }
+    public int SurveyedCount { get { int n = 0; foreach (var r in _sites.Values) if (r.Surveyed) n++; return n; } }
+
+    public void MarkVisited(int siteId)
+    {
+        SiteRecord r = Record(siteId);
+        if (!r.Visited) { r.Visited = true; }
+        r.VisitCount++;
+        r.LastVisitedAt = Clock;
+    }
+
+    // ---------------------------------------------------------------- journal
+
+    /// <summary>
+    /// A plain log of what happened, newest last. Facts only - no summaries, no progress
+    /// bars, no "you are 34% through the story". The kneeboard shows this, and the player
+    /// draws their own conclusions.
+    /// </summary>
+    public IReadOnlyList<string> Journal_ => _journal;
+
+    public void Journal(string line)
+    {
+        string stamped = $"[{FormatClock(Clock)}] {line}";
+        _journal.Add(stamped);
+        if (_journal.Count > 400) _journal.RemoveAt(0);
+        Journalled?.Invoke(stamped);
+    }
+
+    public static string FormatClock(double seconds)
+    {
+        int days = (int)(seconds / 86400);
+        int hours = (int)(seconds % 86400 / 3600);
+        int mins = (int)(seconds % 3600 / 60);
+        return days > 0 ? $"D{days + 1} {hours:00}:{mins:00}" : $"{hours:00}:{mins:00}";
+    }
+
+    /// <summary>A brand new pilot: one aircraft, almost nothing else, and a name.</summary>
+    public static Progress NewGame()
+    {
+        var p = new Progress { Clock = 6 * 3600 };   // dawn on the first day
+        p.Add(Stock.Scrap, 12);
+        p.Add(Stock.Parts, 1);
+        p.Add(Stock.Food, 6);
+        p.Learn(new Knowledge(KnowledgeKind.Rumour, "rumour.the_name",
+            "A name, and a partial frequency",
+            "The only two things you have that are worth anything. Neither of them is a place."));
+        p.Journal("Fuel state noted. Hugh is airworthy. Everything else is guesswork.");
+        return p;
+    }
+}

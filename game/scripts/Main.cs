@@ -19,6 +19,8 @@ public sealed partial class Main : Node3D
     private LandingController _landing = null!;
     private RotorwashDust _dust = null!;
     private SiteStreamer _sites = null!;
+    private SiteInteraction _play = null!;
+    private Kneeboard _kneeboard = null!;
     private FlightHud _hud = null!;
     private Label _debugLabel = null!;
     private bool _showDebug;
@@ -75,6 +77,15 @@ public sealed partial class Main : Node3D
         };
         AddChild(_dust);
 
+        _play = new SiteInteraction
+        {
+            Name = "Play",
+            HelicopterPath = _heli.GetPath(),
+            SiteStreamerPath = _sites.GetPath(),
+            LandingControllerPath = _landing.GetPath(),
+        };
+        AddChild(_play);
+
         var layer = new CanvasLayer { Name = "Hud" };
         AddChild(layer);
         _dust.AttachHaze(layer);
@@ -83,8 +94,17 @@ public sealed partial class Main : Node3D
             Name = "FlightHud",
             HelicopterPath = _heli.GetPath(),
             LandingControllerPath = _landing.GetPath(),
+            InteractionPath = _play.GetPath(),
         };
         layer.AddChild(_hud);
+
+        _kneeboard = new Kneeboard
+        {
+            Name = "Kneeboard",
+            HelicopterPath = _heli.GetPath(),
+            InteractionPath = _play.GetPath(),
+        };
+        layer.AddChild(_kneeboard);
 
         _debugLabel = new Label
         {
@@ -109,6 +129,13 @@ public sealed partial class Main : Node3D
                 AddChild(new GodotBridgeSelfTest(_heli) { Name = "SelfTest" });
                 break;
             }
+            if (arg == "--looptest")
+            {
+                GD.Print("[main] running the core loop test");
+                _hud.Visible = false;
+                AddChild(new LoopTest(_heli, _play, _landing, _sites) { Name = "LoopTest" });
+                break;
+            }
             if (arg == "--worldreport")
             {
                 WorldReport.Run();
@@ -131,6 +158,7 @@ public sealed partial class Main : Node3D
                      (r.StructuralDamage > 0.01 ? $"  [damage {r.StructuralDamage:P0}]" : ""));
         _landing.RotorStrike += what => GD.PrintErr($"[landing] ROTOR STRIKE: {what}");
         _sites.Entered += s2 => GD.Print($"[world] over {s2.Name} ({s2.Kind}, {s2.Region}, tier {s2.Tier})");
+        _play.Notice += n => GD.Print($"[play] {n}");
         _heli.Sim.Damage.Damaged += e =>
             GD.Print($"[damage] {e.Component} -{e.Amount:P0} ({e.Cause}) {e.Note}");
 
@@ -284,6 +312,16 @@ public sealed partial class Main : Node3D
                 _debugLabel.Visible = _showDebug;
                 foreach (string line in FlightInput.DescribeDevices()) GD.Print("[input] " + line);
                 break;
+            case Key.Tab:
+                _kneeboard.Toggle();
+                break;
+            case Key.E:
+                if (_kneeboard.Visible) _kneeboard.NextPage();
+                break;
+            case Key.Key1: _play.Trigger(0); break;
+            case Key.Key2: _play.Trigger(1); break;
+            case Key.Key3: _play.Trigger(2); break;
+            case Key.Key4: _play.Trigger(3); break;
             case Key.F2:
                 _heli.SasAuthority = _heli.SasAuthority > 0.5f ? 0f : 1f;
                 GD.Print($"[heli] stability augmentation {(_heli.SasAuthority > 0 ? "ENGAGED" : "off")}");
