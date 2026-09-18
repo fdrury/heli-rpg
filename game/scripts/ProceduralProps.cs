@@ -305,7 +305,7 @@ public static class ProceduralProps
             float v = (float)y / (size - 1);           // 0 hub, 1 tip
             // A rotor is more visible at the tips: more blade area per unit azimuth and
             // the tip vortices catch the light.
-            float radial = Mathf.Lerp(0.05f, 0.30f, Mathf.Pow(v, 1.6f));
+            float radial = Mathf.Lerp(0.02f, 0.20f, Mathf.Pow(v, 1.8f));
             for (int x = 0; x < size; x++)
             {
                 float u = (float)x / (size - 1);
@@ -316,7 +316,9 @@ public static class ProceduralProps
                     float d = Mathf.Abs(Mathf.Wrap(u - centre, -0.5f, 0.5f));
                     smear += Mathf.Exp(-d * d * 260.0f);
                 }
-                float alpha = Mathf.Clamp(radial + smear * 0.35f * v, 0, 0.72f);
+                // A real rotor disc is a suggestion, not a plate. Too opaque and the aircraft
+                // looks like it is wearing a hat.
+                float alpha = Mathf.Clamp(radial + smear * 0.30f * v, 0, 0.38f);
                 float grey = 0.10f + smear * 0.16f;
                 img.SetPixel(x, y, new Color(grey, grey, grey * 0.96f, alpha));
             }

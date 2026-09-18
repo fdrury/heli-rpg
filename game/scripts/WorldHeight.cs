@@ -71,42 +71,83 @@ public static class WorldHeight
 
     public const float SeaLevel = 0f;
 
+    /// <summary>Carves the valley network. Ridged noise inverted becomes drainage.</summary>
+    private static readonly FastNoiseLite Valleys = new()
+    {
+        Seed = Seed + 733,
+        NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin,
+        Frequency = 0.00058f,
+        FractalOctaves = 3,
+        FractalGain = 0.5f,
+    };
+
     /// <summary>
     /// Terrain height at a world XZ position, metres.
     ///
-    /// Shaped in three layers: a continental field that decides where the land is high and
-    /// where the basins are, a hill field warped so it meanders, and ridged noise that only
-    /// appears where the continental field is already high - so mountains sit on uplands
-    /// and the lowlands stay flat enough to land on and build on.
+    /// Four layers, and the order matters:
+    ///
+    ///   CONTINENT decides where the land is high and where the basins are.
+    ///   RIDGES are ridged noise, which creases rather than blobs, and they only appear
+    ///     where the continent is already high - so mountains sit on uplands and the
+    ///     lowlands stay flat enough to land on and to build a town on.
+    ///   VALLEYS are carved downward through everything, following their own warped
+    ///     network. Cutting valleys out is what produces terrain a helicopter can fly
+    ///     *through* rather than merely over, and it is the single biggest difference
+    ///     between a landscape and a lumpy plain.
+    ///   DETAIL is small, and mostly exists so the surface is not glassy up close.
+    ///
+    /// An earlier version flattened the basins so hard that the whole map came out at a
+    /// median slope of 2.9 degrees. Measured with the world report, that is a prairie: no
+    /// dead ground to hide in, no masking, nothing to look at, and every landing site
+    /// identical. Relief is not decoration here - it is the terrain-masking mechanic that
+    /// D-010 depends on.
     /// </summary>
     public static float At(float x, float z)
     {
-        float wx = Warp.GetNoise2D(x, z) * 900f;
-        float wz = Warp.GetNoise2D(x + 4000f, z - 2500f) * 900f;
+        float wx = Warp.GetNoise2D(x, z) * 1100f;
+        float wz = Warp.GetNoise2D(x + 4000f, z - 2500f) * 1100f;
 
         float continent = Continent.GetNoise2D(x, z) * 0.5f + 0.5f;          // 0..1
-        continent = Mathf.Pow(Mathf.Clamp(continent, 0f, 1f), 1.35f);
+        continent = Mathf.Pow(Mathf.Clamp(continent, 0f, 1f), 1.15f);
 
         float hills = Hills.GetNoise2D(x + wx, z + wz) * 0.5f + 0.5f;
 
-        // Ridged: 1 - |noise| makes creases rather than blobs, which is what reads as
-        // eroded rock from the air.
         float ridge = 1.0f - Mathf.Abs(Ridges.GetNoise2D(x + wx * 0.6f, z + wz * 0.6f));
-        ridge *= ridge;
+        ridge = Mathf.Pow(ridge, 2.6f);
 
         float detail = Detail.GetNoise2D(x, z);
 
-        float h = continent * 260f
-                + hills * hills * 145f * (0.35f + continent)
-                + ridge * 190f * Mathf.Max(0f, continent - 0.34f)
-                + detail * 4.5f;
+        // The important structural choice: relief is a strong function of the continental
+        // field, not a constant. Lowlands are genuinely flat - flat enough to put a town
+        // or a runway on - and uplands are genuinely steep. Scaling everything uniformly
+        // gives either a prairie or a mountain range, and the first two attempts here
+        // produced exactly one of each.
+        float upland = Mathf.Pow(continent, 1.7f);
+        float h = continent * 300f
+                + hills * hills * 280f * upland
+                + ridge * 400f * Mathf.Max(0f, continent - 0.30f)
+                + detail * 5.0f;
 
-        // Basins flatten out into valley floors: somewhere to land, somewhere to put a
-        // town, and somewhere the eye can rest.
-        float basin = Mathf.Clamp(1.0f - continent * 2.3f, 0f, 1f);
-        h = Mathf.Lerp(h, h * 0.22f + 6f, basin * 0.8f);
+        // --- Carve the valleys ------------------------------------------------
+        // A narrow band around the zero crossing of the valley field becomes a cut. The
+        // power shapes the cross-section: high exponent gives a V, low gives a bowl.
+        float vRaw = Valleys.GetNoise2D(x + wx * 0.35f, z + wz * 0.35f);
+        float vBand = 1.0f - Mathf.Min(1.0f, Mathf.Abs(vRaw) / 0.30f);
+        float cut = Mathf.Pow(vBand, 1.7f) * (16f + upland * 190f);
+        h -= cut;
 
-        return h - 34f;
+        // A second, finer drainage network so the big valleys have side gullies.
+        float v2 = Detail.GetNoise2D(x * 0.42f + 9000f, z * 0.42f);
+        float band2 = 1.0f - Mathf.Min(1.0f, Mathf.Abs(v2) / 0.22f);
+        h -= Mathf.Pow(band2, 2.0f) * 26f * upland;
+
+        // Floor the deepest cuts into flat valley bottoms rather than knife edges: that
+        // is where the rivers, the roads and the places people live all end up, and a
+        // pilot needs somewhere the ground is level.
+        float floorAt = 22f;
+        if (h < floorAt) h = floorAt - (floorAt - h) * 0.22f;
+
+        return h - 30f;
     }
 
     /// <summary>Surface normal by central difference.</summary>

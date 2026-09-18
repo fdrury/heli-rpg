@@ -158,9 +158,9 @@ public sealed partial class Main : Node3D
             Sky = new Sky { SkyMaterial = sky },
             AmbientLightSource = Godot.Environment.AmbientSource.Sky,
             AmbientLightSkyContribution = 1.0f,
-            AmbientLightEnergy = 1.35f,
+            AmbientLightEnergy = 1.15f,
             TonemapMode = Godot.Environment.ToneMapper.Aces,
-            TonemapExposure = 1.28f,
+            TonemapExposure = 1.12f,
             SsaoEnabled = QualityTier.Current >= QualityTier.Tier.Medium,
             GlowEnabled = QualityTier.Current >= QualityTier.Tier.Medium,
             FogEnabled = true,
@@ -198,7 +198,7 @@ public sealed partial class Main : Node3D
         var sun = new DirectionalLight3D
         {
             Name = "Sun",
-            LightEnergy = 1.45f,
+            LightEnergy = 1.25f,
             LightColor = new Color(1.0f, 0.955f, 0.875f),
             ShadowEnabled = true,
             DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel4Splits,
@@ -245,7 +245,7 @@ public sealed partial class Main : Node3D
 
         // The airframe proper: a parametric loft rather than a pile of boxes.
         // See AirframeBuilder for why it is built this way.
-        AirframeBuilder.Build(heli, af, AirframeBuilder.DefaultMaterials(new Color(0.24f, 0.27f, 0.22f)));
+        AirframeBuilder.Build(heli, af, AirframeBuilder.DefaultMaterials(new Color(0.33f, 0.36f, 0.30f)));
 
         return heli;
     }

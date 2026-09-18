@@ -45,8 +45,11 @@ uniform float macro_strength = 0.55;
 
 uniform float slope_rock_start = 0.68;
 uniform float slope_rock_end = 0.44;
-uniform float gravel_height = 135.0;
-uniform float gravel_fade = 80.0;
+// Bare high ground. Keyed well above the median terrain height and perturbed hard,
+// because a sharp altitude threshold near the median draws contour lines across the
+// whole landscape - which is exactly what it did at 135 m.
+uniform float gravel_height = 285.0;
+uniform float gravel_fade = 95.0;
 
 uniform float patch_frequency = 0.0030;
 uniform float field_frequency = 0.00048;
@@ -57,13 +60,13 @@ uniform float field_frequency = 0.00048;
 // the transition is invisible.
 uniform vec3 far_grass : source_color = vec3(0.265, 0.285, 0.168);
 uniform vec3 far_dirt : source_color = vec3(0.290, 0.238, 0.172);
-uniform vec3 far_rock : source_color = vec3(0.272, 0.260, 0.243);
-uniform vec3 far_gravel : source_color = vec3(0.345, 0.328, 0.288);
+uniform vec3 far_rock : source_color = vec3(0.225, 0.214, 0.198);
+uniform vec3 far_gravel : source_color = vec3(0.288, 0.272, 0.238);
 
 uniform float saturation = 0.58;
-uniform vec3 grade_tint : source_color = vec3(1.02, 1.00, 0.88);
+uniform vec3 grade_tint : source_color = vec3(1.06, 1.01, 0.86);
 uniform vec3 dead_tint : source_color = vec3(0.62, 0.55, 0.36);
-uniform float dead_amount = 0.55;
+uniform float dead_amount = 0.42;
 
 uniform float normal_strength = 1.1;
 
@@ -114,7 +117,7 @@ void fragment() {
 
     float rock_w = 1.0 - smoothstep(slope_rock_end, slope_rock_start, slope);
     float gravel_w = smoothstep(gravel_height - gravel_fade, gravel_height + gravel_fade,
-                                world_pos.y + (patch - 0.5) * 110.0) * (1.0 - rock_w);
+                                world_pos.y + (patch - 0.5) * 210.0) * (1.0 - rock_w);
     float dirt_w = smoothstep(0.50, 0.74, patch) * (1.0 - rock_w) * (1.0 - gravel_w);
     float grass_w = max(0.0, 1.0 - rock_w - dirt_w - gravel_w);
 
@@ -138,7 +141,9 @@ void fragment() {
         vec2 muv = uv * macro_scale;
         vec2 muv2 = vec2(muv.x * 0.7071 - muv.y * 0.7071, muv.x * 0.7071 + muv.y * 0.7071) * 2.31;
         float m = texture(grass_col, muv).g * 0.62 + texture(rock_col, muv2).g * 0.38;
-        col *= mix(1.0, 0.55 + m * 1.35, macro_strength);
+        // Kept near unity on average and bounded at both ends. An earlier version scaled
+        // up to 1.9x, and every sunlit slope in the world blew out to white.
+        col *= mix(1.0, clamp(0.72 + m * 0.74, 0.62, 1.34), macro_strength);
     }
 
     if (detail > 0.004) {
