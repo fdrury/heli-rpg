@@ -272,3 +272,44 @@ same constant.
 **Scope warning, recorded honestly:** the full eight-region plan is roughly **3,800 hours
 of world content alone**. That is years of solo evenings before any other system exists.
 The 124-POI target is the version that can actually be finished.
+
+### D-009a — Title and aircraft name confirmed · 2026-09-18 · **[APPROVED BY FRED]**
+**ROTORWASH** is the title. **Hugh** is the aircraft, not the pilot. Both settled; stop
+hedging about them in the docs.
+
+### D-013 — Threat envelopes: how the world is actually gated · 2026-09-18
+Built to D-010 and D-003b. Five classes, and the altitude band each owns *is* the level
+design — measured as seconds of exposure before it has a firing solution:
+
+| Threat | Band AGL | 10 m | 150 m | 800 m | 2500 m |
+|---|---|---|---|---|---|
+| Gun | 0–900 m | 3.5 s | 3.5 s | 3.5 s | — |
+| MANPADS | 30–3000 m | — | 3.5 s | 3.5 s | 3.5 s |
+| SAM | 120–6000 m | — | 5.2 s | 3.5 s | 3.5 s |
+| Aerostat | 0–8000 m | 3.1 s | 3.1 s | 3.1 s | 3.1 s |
+
+The consequences that make it a game rather than a stat block:
+- **Below 120 m AGL a SAM simply cannot see you.** Hugging the ground is a real, legible
+  tactic with a real cost — you are then inside every gun envelope in the country.
+- **The aerostat is the answer to the habit.** It looks *down*, so it is the one thing that
+  sees into the dead ground the player has learned to live in. That is what a tier-3
+  region is for.
+- **Terrain masking decays, it does not switch off.** Drop behind a ridge with a full track
+  on you and it falls 1.00 → 0.09 over three seconds. Somebody is still looking at where
+  you were.
+- **The right countermeasure, or none.** Measured over three minutes in a live envelope:
+  chaff takes a SAM from 7 hits to 0 and does nothing at all to a heat seeker; flares take
+  MANPADS from 4 to 0 and do nothing to a SAM.
+- **Graded, per D-005a.** 45 seconds inside a gun *and* a MANPADS envelope: everything took
+  damage, 62% were forced down, none were deleted, and hits landed across six different
+  systems. Dangerous and survivable — a gate, not a punishment.
+- **Route inflation, measured.** A 14 km SAM between two points 29 km apart: straight
+  through is 29 km at full exposure for 508 seconds; around is 47.2 km at zero. **1.63x on
+  flat ground with nothing to hide behind** — and with terrain the detour is shorter while
+  the map stays bigger. That is D-003b's claim, verified.
+
+Two bugs found by testing, both of which would have shipped silently:
+- The state machine recomputed `State` from confidence every frame, overwriting `Engaging`
+  the instant it was set. **Nothing in the world ever actually fired a shot.**
+- Flares burned for 3.5 s against a weapon with a 3.57 s time of flight, so they expired
+  0.07 s before impact and appeared simply not to work.

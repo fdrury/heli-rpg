@@ -55,6 +55,11 @@ public static class Program
         Run("touchdown", LandingTests.Touchdowns);
         Run("brownout", LandingTests.Brownout);
         Run("damage", LandingTests.DamageEffects);
+        Run("masking", ThreatTests.Masking);
+        Run("altbands", ThreatTests.AltitudeBands);
+        Run("countermeasures", ThreatTests.Countermeasures);
+        Run("survivability", ThreatTests.Survivability);
+        Run("routeinflation", ThreatTests.RouteInflation);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 
