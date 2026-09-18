@@ -1,0 +1,252 @@
+using System;
+using Godot;
+using Rotorwash.Sim;
+
+namespace Rotorwash;
+
+/// <summary>
+/// Flight instruments.
+///
+/// Drawn rather than authored as a scene, because during bring-up the instruments change
+/// every time the flight model does, and a code HUD can be diffed and reviewed.
+///
+/// The choice of what to show is deliberate: rotor speed and torque are the two gauges a
+/// helicopter pilot actually lives by, and neither means anything in most games. Here they
+/// do - Nr decaying is the engine dying, torque pegged is the transmission about to be the
+/// thing you have to scavenge a replacement for.
+/// </summary>
+public sealed partial class FlightHud : Control
+{
+    [Export] public NodePath HelicopterPath { get; set; } = "";
+
+    private HelicopterController? _heli;
+    private Font _font = null!;
+    private double _warnBlink;
+
+    private static readonly Color Dim = new(0.62f, 0.72f, 0.66f, 0.85f);
+    private static readonly Color Bright = new(0.80f, 0.94f, 0.84f, 0.95f);
+    private static readonly Color Warn = new(0.98f, 0.74f, 0.25f);
+    private static readonly Color Danger = new(0.98f, 0.33f, 0.28f);
+    private static readonly Color Panel = new(0.04f, 0.06f, 0.05f, 0.45f);
+
+    public override void _Ready()
+    {
+        _heli = GetNodeOrNull<HelicopterController>(HelicopterPath);
+        _font = ThemeDB.FallbackFont;
+        MouseFilter = MouseFilterEnum.Ignore;
+        SetAnchorsPreset(LayoutPreset.FullRect);
+    }
+
+    public override void _Process(double delta)
+    {
+        _warnBlink += delta;
+        QueueRedraw();
+    }
+
+    public override void _Draw()
+    {
+        if (_heli is null) return;
+        var t = _heli.Sim.Telemetry;
+        var sim = _heli.Sim;
+        Vector2 size = Size;
+
+        DrawAttitude(size, sim);
+        DrawLeftPanel(new Vector2(28, size.Y * 0.30f), t, sim);
+        DrawRightPanel(new Vector2(size.X - 232, size.Y * 0.30f), t, sim);
+        DrawControlPositions(new Vector2(size.X - 190, size.Y - 190), sim);
+        DrawWarnings(new Vector2(size.X * 0.5f, size.Y - 122), t);
+        DrawFooter(size);
+    }
+
+    // ------------------------------------------------------------- attitude
+
+    private void DrawAttitude(Vector2 size, Helicopter sim)
+    {
+        Vector2 c = new(size.X * 0.5f, size.Y * 0.46f);
+        float roll = (float)sim.State.Orientation.Roll;
+        float pitch = (float)sim.State.Orientation.Pitch;
+
+        // Horizon line, rolled and shifted by pitch. Kept small and unobtrusive: this is
+        // a symbol on the glass, not a full artificial horizon ball.
+        float pixelsPerRadian = 420f;
+        Vector2 dir = new(Mathf.Cos(roll), -Mathf.Sin(roll));
+        Vector2 up = new(Mathf.Sin(roll), Mathf.Cos(roll));
+        Vector2 mid = c + up * (pitch * pixelsPerRadian);
+
+        DrawLine(mid - dir * 230, mid - dir * 70, Dim, 1.6f, true);
+        DrawLine(mid + dir * 70, mid + dir * 230, Dim, 1.6f, true);
+
+        for (int deg = -30; deg <= 30; deg += 10)
+        {
+            if (deg == 0) continue;
+            Vector2 m = c + up * ((pitch - Mathf.DegToRad(deg)) * pixelsPerRadian);
+            float w = deg % 20 == 0 ? 44 : 26;
+            DrawLine(m - dir * w, m + dir * w, Dim * new Color(1, 1, 1, 0.45f), 1.1f, true);
+        }
+
+        // Fixed aircraft symbol.
+        DrawLine(c + new Vector2(-52, 0), c + new Vector2(-18, 0), Bright, 2.4f, true);
+        DrawLine(c + new Vector2(18, 0), c + new Vector2(52, 0), Bright, 2.4f, true);
+        DrawLine(c + new Vector2(-18, 0), c + new Vector2(0, 11), Bright, 2.4f, true);
+        DrawLine(c + new Vector2(18, 0), c + new Vector2(0, 11), Bright, 2.4f, true);
+        DrawRect(new Rect2(c - new Vector2(2, 2), new Vector2(4, 4)), Bright);
+
+        // Slip/skid ball: the cheapest possible cue that tells a pilot they are flying
+        // out of balance, which on a helicopter costs real speed and fuel.
+        double slip = sim.Telemetry.Sideslip;
+        float ballX = Mathf.Clamp((float)slip * 3.2f, -1, 1) * 46f;
+        DrawLine(c + new Vector2(-52, 34), c + new Vector2(52, 34), Dim * new Color(1, 1, 1, 0.5f), 1.2f);
+        DrawCircle(c + new Vector2(ballX, 34), 5.0f, Math.Abs(slip) > 0.14 ? Warn : Bright);
+    }
+
+    // ----------------------------------------------------------- side panels
+
+    private void DrawLeftPanel(Vector2 origin, FlightTelemetry t, Helicopter sim)
+    {
+        DrawRect(new Rect2(origin - new Vector2(10, 22), new Vector2(196, 210)), Panel);
+        float y = origin.Y;
+
+        Label(origin with { Y = y }, "AIRSPEED", Dim, 11); y += 15;
+        Value(origin with { Y = y }, $"{t.AirspeedTrue * SimBridge.MetresPerSecondToKnots,5:F0}", "kt", Bright); y += 30;
+
+        Label(origin with { Y = y }, "RADAR ALT", Dim, 11); y += 15;
+        Color agl = t.HeightAgl < 25 ? Warn : Bright;
+        Value(origin with { Y = y }, $"{t.HeightAgl,5:F0}", "m", agl); y += 30;
+
+        Label(origin with { Y = y }, "VERT SPEED", Dim, 11); y += 15;
+        double fpm = t.VerticalSpeed * SimBridge.MetresPerSecondToFpm;
+        Value(origin with { Y = y }, $"{fpm,5:F0}", "fpm", Math.Abs(fpm) > 1800 ? Warn : Bright); y += 30;
+
+        Label(origin with { Y = y }, "HEADING", Dim, 11); y += 15;
+        double hdg = sim.State.Orientation.Yaw * 180.0 / Math.PI;
+        if (hdg < 0) hdg += 360;
+        Value(origin with { Y = y }, $"{hdg,5:F0}", "deg", Bright);
+    }
+
+    private void DrawRightPanel(Vector2 origin, FlightTelemetry t, Helicopter sim)
+    {
+        DrawRect(new Rect2(origin - new Vector2(10, 22), new Vector2(206, 232)), Panel);
+        float y = origin.Y;
+
+        // Rotor speed: the single most important number in the aircraft.
+        Label(origin with { Y = y }, "ROTOR  Nr", Dim, 11); y += 15;
+        Color nrColour = t.RotorRpmPercent < 90 || t.RotorRpmPercent > 108 ? Danger
+                       : t.RotorRpmPercent < 95 || t.RotorRpmPercent > 104 ? Warn : Bright;
+        Value(origin with { Y = y }, $"{t.RotorRpmPercent,5:F0}", "%", nrColour);
+        Bar(origin + new Vector2(0, 18) with { Y = y + 18 }, 178, (float)(t.RotorRpmPercent / 120.0), nrColour);
+        y += 44;
+
+        Label(origin with { Y = y }, "TORQUE", Dim, 11); y += 15;
+        Color tq = t.TorquePercent > 100 ? Danger : t.TorquePercent > 92 ? Warn : Bright;
+        Value(origin with { Y = y }, $"{t.TorquePercent,5:F0}", "%", tq);
+        Bar(origin + new Vector2(0, 18) with { Y = y + 18 }, 178, (float)(t.TorquePercent / 120.0), tq);
+        y += 44;
+
+        Label(origin with { Y = y }, "FUEL", Dim, 11); y += 15;
+        double frac = t.FuelKg / Math.Max(sim.Airframe.FuelCapacity, 1);
+        Color fc = frac < 0.10 ? Danger : frac < 0.22 ? Warn : Bright;
+        Value(origin with { Y = y }, $"{t.FuelKg,5:F0}", "kg", fc);
+        Bar(origin + new Vector2(0, 18) with { Y = y + 18 }, 178, (float)frac, fc);
+        y += 42;
+
+        double enduranceHours = t.FuelFlow > 1e-6 ? t.FuelKg / (t.FuelFlow * 3600) : 0;
+        Label(origin with { Y = y }, $"ENDURANCE  {enduranceHours:F1} h   {t.FuelFlow * 3600:F0} kg/h", Dim, 11);
+    }
+
+    // ------------------------------------------------------ control position
+
+    private void DrawControlPositions(Vector2 origin, Helicopter sim)
+    {
+        var a = sim.Actual;
+        DrawRect(new Rect2(origin - new Vector2(8, 22), new Vector2(178, 172)), Panel);
+        Label(origin - new Vector2(0, 8), "CONTROLS", Dim, 11);
+
+        // Cyclic box: where the stick actually is, after actuator rate limiting. Useful
+        // for a player learning that a helicopter is flown with tiny, continuous inputs.
+        var box = new Rect2(origin + new Vector2(6, 8), new Vector2(96, 96));
+        DrawRect(box, new Color(0, 0, 0, 0.30f));
+        DrawRect(box, Dim * new Color(1, 1, 1, 0.5f), false, 1.0f);
+        DrawLine(new Vector2(box.Position.X, box.Position.Y + box.Size.Y / 2),
+                 new Vector2(box.End.X, box.Position.Y + box.Size.Y / 2), Dim * new Color(1, 1, 1, 0.25f));
+        DrawLine(new Vector2(box.Position.X + box.Size.X / 2, box.Position.Y),
+                 new Vector2(box.Position.X + box.Size.X / 2, box.End.Y), Dim * new Color(1, 1, 1, 0.25f));
+
+        Vector2 stick = box.Position + box.Size * 0.5f
+                        + new Vector2((float)a.CyclicRoll, (float)a.CyclicPitch) * (box.Size * 0.5f);
+        DrawCircle(stick, 4.5f, Bright);
+
+        // Collective lever.
+        var lever = new Rect2(origin + new Vector2(116, 8), new Vector2(16, 96));
+        DrawRect(lever, new Color(0, 0, 0, 0.30f));
+        DrawRect(lever, Dim * new Color(1, 1, 1, 0.5f), false, 1.0f);
+        float ly = lever.End.Y - (float)a.Collective * lever.Size.Y;
+        DrawRect(new Rect2(lever.Position.X, ly - 2, lever.Size.X, 4), Bright);
+        Label(origin + new Vector2(112, 120), "COLL", Dim, 10);
+
+        // Pedals.
+        var ped = new Rect2(origin + new Vector2(6, 112), new Vector2(96, 12));
+        DrawRect(ped, new Color(0, 0, 0, 0.30f));
+        DrawRect(ped, Dim * new Color(1, 1, 1, 0.5f), false, 1.0f);
+        float px = ped.Position.X + ped.Size.X * 0.5f * (1 + (float)a.Pedal);
+        DrawRect(new Rect2(px - 2, ped.Position.Y, 4, ped.Size.Y), Bright);
+        Label(origin + new Vector2(6, 140), "PEDAL", Dim, 10);
+    }
+
+    // ------------------------------------------------------------- warnings
+
+    private void DrawWarnings(Vector2 centre, FlightTelemetry t)
+    {
+        bool blink = (int)(_warnBlink * 3) % 2 == 0;
+        float x = centre.X - 300;
+
+        void Caption(string text, bool active, Color colour, bool flashing = false)
+        {
+            if (!active) return;
+            if (flashing && !blink) { x += 118; return; }
+            var r = new Rect2(x, centre.Y, 110, 24);
+            DrawRect(r, colour * new Color(1, 1, 1, 0.18f));
+            DrawRect(r, colour, false, 1.2f);
+            var sz = _font.GetStringSize(text, HorizontalAlignment.Left, -1, 13);
+            DrawString(_font, new Vector2(x + (110 - sz.X) / 2, centre.Y + 17), text,
+                       HorizontalAlignment.Left, -1, 13, colour);
+            x += 118;
+        }
+
+        Caption("VORTEX RING", t.VrsSeverity > 0.25, Danger, true);
+        Caption("LOW ROTOR", t.RotorRpmPercent < 92, Danger, true);
+        Caption("AUTOROTATE", t.Autorotating && t.Engine != EngineState.Running, Warn);
+        Caption("TORQUE", t.TorqueLimited, Warn);
+        Caption("TAIL AUTH", t.TailRotorSaturated, Warn);
+        Caption("BLADE STALL", t.StalledFraction > 0.18, Warn);
+    }
+
+    private void DrawFooter(Vector2 size)
+    {
+        string help = "W/S or throttle: collective   arrows or stick: cyclic   A/D: pedals   " +
+                      "C: camera   R: respawn   F1: device info";
+        DrawString(_font, new Vector2(20, size.Y - 16), help, HorizontalAlignment.Left, -1, 12,
+                   Dim * new Color(1, 1, 1, 0.55f));
+    }
+
+    // --------------------------------------------------------------- helpers
+
+    private void Label(Vector2 p, string s, Color c, int size) =>
+        DrawString(_font, p, s, HorizontalAlignment.Left, -1, size, c);
+
+    private void Value(Vector2 p, string v, string unit, Color c)
+    {
+        DrawString(_font, p + new Vector2(0, 18), v, HorizontalAlignment.Left, -1, 26, c);
+        var w = _font.GetStringSize(v, HorizontalAlignment.Left, -1, 26);
+        DrawString(_font, p + new Vector2(w.X + 6, 18), unit, HorizontalAlignment.Left, -1, 13, Dim);
+    }
+
+    private void Bar(Vector2 p, float width, float frac, Color c)
+    {
+        var bg = new Rect2(p.X, p.Y, width, 5);
+        DrawRect(bg, new Color(0, 0, 0, 0.35f));
+        DrawRect(new Rect2(p.X, p.Y, width * Mathf.Clamp(frac, 0, 1), 5), c);
+        // 100% tick
+        DrawLine(new Vector2(p.X + width / 1.2f, p.Y - 2), new Vector2(p.X + width / 1.2f, p.Y + 7),
+                 Dim * new Color(1, 1, 1, 0.7f), 1.0f);
+    }
+}

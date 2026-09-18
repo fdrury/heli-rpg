@@ -1,0 +1,32 @@
+; Rotorwash - Godot 4 project
+config_version=5
+
+[application]
+config/name="Rotorwash"
+config/description="Post-apocalyptic helicopter RPG"
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+config/icon="res://icon.svg"
+
+[dotnet]
+project/assembly_name="Rotorwash"
+
+[physics]
+common/physics_ticks_per_second=120
+common/max_physics_steps_per_frame=12
+3d/default_gravity=9.80665
+3d/default_gravity_vector=Vector3(0, -1, 0)
+
+[rendering]
+renderer/rendering_method="forward_plus"
+anti_aliasing/quality/msaa_3d=2
+lights_and_shadows/directional_shadow/size=4096
+environment/defaults/default_clear_color=Color(0.47, 0.55, 0.62, 1)
+
+[display]
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/stretch/mode="canvas_items"
+
+[input_devices]
+pointing/emulate_touch_from_mouse=false

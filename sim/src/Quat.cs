@@ -29,6 +29,40 @@ public readonly struct Quat
             cr * cp * sy - sr * sp * cy);
     }
 
+    /// <summary>
+    /// Build a quaternion from the three body axes expressed in world coordinates.
+    /// Used by the engine bridge, which knows the aircraft orientation as a basis and
+    /// would otherwise have to convert through Euler angles and lose precision at the poles.
+    /// </summary>
+    public static Quat FromColumns(Vec3 xAxis, Vec3 yAxis, Vec3 zAxis)
+    {
+        double m00 = xAxis.X, m10 = xAxis.Y, m20 = xAxis.Z;
+        double m01 = yAxis.X, m11 = yAxis.Y, m21 = yAxis.Z;
+        double m02 = zAxis.X, m12 = zAxis.Y, m22 = zAxis.Z;
+
+        double trace = m00 + m11 + m22;
+        if (trace > 0)
+        {
+            double s = Math.Sqrt(trace + 1.0) * 2.0;
+            return new Quat(0.25 * s, (m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s).Normalized;
+        }
+        if (m00 > m11 && m00 > m22)
+        {
+            double s = Math.Sqrt(1.0 + m00 - m11 - m22) * 2.0;
+            return new Quat((m21 - m12) / s, 0.25 * s, (m01 + m10) / s, (m02 + m20) / s).Normalized;
+        }
+        if (m11 > m22)
+        {
+            double s = Math.Sqrt(1.0 + m11 - m00 - m22) * 2.0;
+            return new Quat((m02 - m20) / s, (m01 + m10) / s, 0.25 * s, (m12 + m21) / s).Normalized;
+        }
+        else
+        {
+            double s = Math.Sqrt(1.0 + m22 - m00 - m11) * 2.0;
+            return new Quat((m10 - m01) / s, (m02 + m20) / s, (m12 + m21) / s, 0.25 * s).Normalized;
+        }
+    }
+
     public double Roll  => Math.Atan2(2 * (W * X + Y * Z), 1 - 2 * (X * X + Y * Y));
     public double Pitch { get { double s = 2 * (W * Y - Z * X); return Math.Asin(Math.Clamp(s, -1, 1)); } }
     public double Yaw   => Math.Atan2(2 * (W * Z + X * Y), 1 - 2 * (Y * Y + Z * Z));
