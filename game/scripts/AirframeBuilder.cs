@@ -64,6 +64,7 @@ public static class AirframeBuilder
         public Material Glass = null!;
         public Material Dark = null!;
         public Material Metal = null!;
+        public Material Interior = null!;
     }
 
     public static Materials DefaultMaterials(Color liveryColour)
@@ -81,7 +82,9 @@ public static class AirframeBuilder
             },
             Glass = new StandardMaterial3D
             {
-                AlbedoColor = new Color(0.12f, 0.15f, 0.16f, 0.62f),
+                // Alpha was 0.62, which is a welding visor. You are meant to be able to
+                // see the ground through this.
+                AlbedoColor = new Color(0.38f, 0.43f, 0.45f, 0.11f),
                 Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
                 Roughness = 0.10f,
                 Metallic = 0.0f,
@@ -100,6 +103,17 @@ public static class AirframeBuilder
                 Roughness = 0.42f,
                 Metallic = 0.75f,
             },
+            // Cockpit interior. Much lighter than the exterior Dark, and not because
+            // real panels are light - they are not. An enclosed cockpit receives no
+            // direct sun at all, so everything inside is lit by whatever skylight finds
+            // its way through the glass. At the exterior's 0.135 albedo the whole
+            // interior rendered as a silhouette of solid black shapes.
+            Interior = new StandardMaterial3D
+            {
+                AlbedoColor = new Color(0.27f, 0.28f, 0.26f),
+                Roughness = 0.82f,
+                Metallic = 0.0f,
+            },
         };
     }
 
@@ -116,11 +130,138 @@ public static class AirframeBuilder
         parent.AddChild(Mesh("Cowling", BuildCowling(), mats.Dark));
         parent.AddChild(Mesh("Fin", BuildFin(), mats.Body));
         parent.AddChild(Mesh("Stabiliser", BuildStabiliser(), mats.Body));
+        parent.AddChild(Mesh("CockpitShell", BuildCockpitShell(), mats.Interior));
+        parent.AddChild(Mesh("CockpitFittings", BuildCockpitFittings(), mats.Metal));
+        parent.AddChild(CockpitFill());
         parent.AddChild(Mesh("Skids", BuildSkids(), mats.Metal));
         parent.AddChild(Mesh("Mast", BuildMast(), mats.Metal));
 
         BuildRotorHub(parent, airframe, mats);
         BuildTailRotor(parent, airframe, mats);
+    }
+
+    /// <summary>
+    /// Bounced skylight inside the cockpit.
+    ///
+    /// The engine gives the interior nothing: the sun is blocked by the airframe and the
+    /// sky contribution that would bounce around a real cabin is not modelled at this
+    /// quality tier. One soft omni standing in for it is what almost every flight sim
+    /// does, and it costs one light.
+    /// </summary>
+    private static Node3D CockpitFill()
+    {
+        // Two, not one. A single source low between the seats leaves the roof and the
+        // overhead console unlit, because everything up there faces away from it - and an
+        // unlit box in the top of frame reads as a hole in the aircraft.
+        var root = new Node3D { Name = "CockpitFill" };
+        root.AddChild(Fill("Lower", new Vector3(0, 0.15f, NoseZ + 2.00f), 1.5f, 3.6f));
+        root.AddChild(Fill("Upper", new Vector3(0, 0.62f, NoseZ + 1.55f), 1.1f, 2.8f));
+        return root;
+    }
+
+    private static OmniLight3D Fill(string name, Vector3 at, float energy, float range) => new()
+    {
+        Name = name,
+        Position = at,
+        LightColor = new Color(0.80f, 0.84f, 0.92f),
+        LightEnergy = energy,
+        OmniRange = range,
+        OmniAttenuation = 1.1f,
+        ShadowEnabled = false,
+        LightSpecular = 0.25f,
+    };
+
+    // ---------------------------------------------------------------- cockpit
+
+    /// <summary>
+    /// The inside of the cockpit: floor, roof, side walls, bulkhead, panel and seats.
+    ///
+    /// None of this existed, and the absence was invisible from outside and glaring from
+    /// within. The fuselage is a single-sided shell, so with the winding fixed every body
+    /// panel is backface-culled when viewed from inside it - the pilot was sitting in an
+    /// open frame looking straight out through the floor, the roof and both walls, with
+    /// only the double-sided glass left hanging in mid-air.
+    ///
+    /// Everything here is a closed box rather than a single-sided panel, deliberately. A
+    /// panel has to be wound to face the right way and there is no way to be sure which
+    /// that is except by rendering it; a box is correct from every side by construction.
+    /// The cost is a few dozen triangles nobody will ever count.
+    /// </summary>
+    private static ArrayMesh BuildCockpitShell()
+    {
+        var st = new SurfaceTool();
+        st.Begin(Godot.Mesh.PrimitiveType.Triangles);
+
+        // --- The box the crew sit in -----------------------------------------
+        AddBox(st, new Vector3(0, -1.12f, NoseZ + 2.10f), new Vector3(2.32f, 0.08f, 3.10f));   // floor
+        AddBox(st, new Vector3(0, 1.02f, NoseZ + 2.70f), new Vector3(2.00f, 0.08f, 1.90f));    // roof
+        AddBox(st, new Vector3(-1.18f, -0.55f, NoseZ + 2.70f), new Vector3(0.08f, 1.05f, 1.90f));
+        AddBox(st, new Vector3(1.18f, -0.55f, NoseZ + 2.70f), new Vector3(0.08f, 1.05f, 1.90f));
+        AddBox(st, new Vector3(0, -0.10f, NoseZ + 3.62f), new Vector3(2.30f, 2.10f, 0.08f));   // bulkhead
+
+        // --- Panel, glareshield, pedestal, overhead --------------------------
+        // The glareshield is the piece that makes a cockpit read as a cockpit from the
+        // seat: it puts a hard horizontal edge across the bottom of the windscreen.
+        AddBox(st, new Vector3(0, -0.52f, NoseZ + 1.08f), new Vector3(1.62f, 0.70f, 0.20f));
+        AddBox(st, new Vector3(0, -0.14f, NoseZ + 1.24f), new Vector3(1.70f, 0.10f, 0.48f));
+        AddBox(st, new Vector3(0, -0.68f, NoseZ + 1.95f), new Vector3(0.36f, 0.76f, 1.45f));
+        AddBox(st, new Vector3(0, 0.82f, NoseZ + 1.80f), new Vector3(0.88f, 0.16f, 1.05f));
+
+        // --- Pillars ----------------------------------------------------------
+        // The windscreen centre post and the door frames. Without them the glass has no
+        // structure holding it and the panes read as floating.
+        AddBox(st, new Vector3(0, 0.10f, NoseZ + 0.84f), new Vector3(0.07f, 1.60f, 0.09f));
+        for (int i = 0; i < 2; i++)
+        {
+            float side = i == 0 ? -1f : 1f;
+            AddBox(st, new Vector3(side * 1.02f, 0.20f, NoseZ + 1.55f), new Vector3(0.07f, 1.15f, 0.09f));
+            AddBox(st, new Vector3(side * 1.26f, 0.42f, NoseZ + 2.92f), new Vector3(0.09f, 1.05f, 0.10f));
+        }
+
+        // --- Seats -------------------------------------------------------------
+        for (int i = 0; i < 2; i++)
+        {
+            float x = i == 0 ? -0.62f : 0.62f;
+            AddBox(st, new Vector3(x, -0.80f, NoseZ + 2.55f), new Vector3(0.58f, 0.14f, 0.58f));
+            AddBox(st, new Vector3(x, -0.40f, NoseZ + 2.88f), new Vector3(0.58f, 0.78f, 0.12f));
+        }
+
+        st.GenerateNormals();
+        return st.Commit();
+    }
+
+    /// <summary>The metal bits: controls and instrument bezels.</summary>
+    private static ArrayMesh BuildCockpitFittings()
+    {
+        var st = new SurfaceTool();
+        st.Begin(Godot.Mesh.PrimitiveType.Triangles);
+
+        for (int i = 0; i < 2; i++)
+        {
+            float x = i == 0 ? -0.62f : 0.62f;
+
+            // Cyclic, between the knees, with a grip on top.
+            AddBox(st, new Vector3(x, -0.72f, NoseZ + 2.05f), new Vector3(0.05f, 0.62f, 0.05f));
+            AddBox(st, new Vector3(x, -0.38f, NoseZ + 2.05f), new Vector3(0.09f, 0.18f, 0.09f));
+
+            // Collective, outboard, lying along the floor with the grip aft.
+            float outboard = x < 0 ? -1.00f : 1.00f;
+            AddBox(st, new Vector3(outboard, -0.86f, NoseZ + 2.35f), new Vector3(0.05f, 0.05f, 0.85f));
+            AddBox(st, new Vector3(outboard, -0.82f, NoseZ + 2.80f), new Vector3(0.08f, 0.10f, 0.22f));
+
+            // Pedals.
+            AddBox(st, new Vector3(x - 0.16f, -1.00f, NoseZ + 1.52f), new Vector3(0.15f, 0.07f, 0.26f));
+            AddBox(st, new Vector3(x + 0.16f, -1.00f, NoseZ + 1.52f), new Vector3(0.15f, 0.07f, 0.26f));
+
+            // Instrument bezels, proud of the panel so they catch a highlight.
+            for (int r = 0; r < 2; r++)
+                for (int c = 0; c < 3; c++)
+                    AddBox(st, new Vector3(x - 0.20f + c * 0.20f, -0.34f - r * 0.22f, NoseZ + 0.97f),
+                                new Vector3(0.15f, 0.15f, 0.04f));
+        }
+
+        st.GenerateNormals();
+        return st.Commit();
     }
 
     private static MeshInstance3D Mesh(string name, ArrayMesh mesh, Material mat) =>

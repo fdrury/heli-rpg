@@ -2,15 +2,19 @@ using Godot;
 
 namespace Rotorwash;
 
-public enum CameraMode { Chase, Cockpit, Orbit, Flyby }
+public enum CameraMode { Chase, Cockpit, Orbit, Flyby, ThirdPerson }
 
 /// <summary>
-/// Camera rig for the helicopter.
+/// Camera rig for the helicopter and the pilot on foot.
 ///
 /// Chase is deliberately not rigidly attached: it lags in position and leads in
 /// direction, so the aircraft visibly moves inside the frame. A helicopter manoeuvres by
 /// changing attitude long before it changes direction, and a camera welded to the
 /// airframe hides exactly the information the pilot needs.
+///
+/// ThirdPerson follows the pilot on foot with an over-shoulder offset. The camera's
+/// delta is compensated for Rotor Time so the player's view stays responsive during
+/// slow-motion.
 /// </summary>
 public sealed partial class ChaseCamera : Camera3D
 {
@@ -20,13 +24,24 @@ public sealed partial class ChaseCamera : Camera3D
     // Low and well back. Sitting the camera high turns the game into a map: a pilot
     // reads attitude against the horizon, so the horizon has to be in shot.
     [Export] public Vector3 ChaseOffset { get; set; } = new(0, 2.1f, 16.0f);
-    [Export] public Vector3 CockpitOffset { get; set; } = new(-0.62f, 0.55f, 1.45f);
+    /// <summary>
+    /// Where the pilot's eyes are, in the airframe's local frame.
+    ///
+    /// Was (-0.62, 0.55, +1.45). Forward is -Z and the cockpit spans Z -4.0 to -2.4, so
+    /// +1.45 put the viewpoint behind the CG in the engine bay, looking forward through the
+    /// length of the fuselage. That is why the "cockpit" view was a black slab with panes
+    /// of glass floating in it: the camera was inside the hull with every body panel
+    /// backface-culled away from it, and only the double-sided glass left to see.
+    /// </summary>
+    [Export] public Vector3 CockpitOffset { get; set; } = new(-0.62f, 0.22f, -2.15f);
+    [Export] public Vector3 ThirdPersonOffset { get; set; } = new(0.6f, 1.8f, 3.5f);
 
     [Export] public float PositionLag { get; set; } = 6.5f;
     [Export] public float RotationLag { get; set; } = 7.5f;
 
     private Node3D? _target;
     private HelicopterController? _heli;
+    private PilotController? _pilot;
     private float _orbitAngle;
     private Vector3 _flybyPoint;
     private float _shake;
@@ -41,8 +56,12 @@ public sealed partial class ChaseCamera : Camera3D
         Near = 0.15f;
     }
 
+    /// <summary>Set the pilot for third-person mode. Called by Main after construction.</summary>
+    public void SetPilot(PilotController pilot) => _pilot = pilot;
+
     public void CycleMode()
     {
+        // Only cycle through flight camera modes; ThirdPerson is set by the game mode.
         Mode = Mode switch
         {
             CameraMode.Chase => CameraMode.Cockpit,
@@ -54,22 +73,35 @@ public sealed partial class ChaseCamera : Camera3D
             _flybyPoint = _target.GlobalPosition + new Vector3(38, 12, 38);
     }
 
+    /// <summary>Switch to third-person or back to chase for mode transitions.</summary>
+    public void SetOnFoot(bool onFoot)
+    {
+        Mode = onFoot ? CameraMode.ThirdPerson : CameraMode.Chase;
+    }
+
     public override void _PhysicsProcess(double delta)
     {
-        if (_target is null) return;
-        float dt = (float)delta;
+        // During Rotor Time the engine delta is scaled. The camera should stay responsive,
+        // so we compensate: camera moves at real-time rate, world slows around it.
+        float timeScale = (float)Engine.TimeScale;
+        float dt = timeScale > 0.01f ? (float)delta / timeScale : (float)delta;
 
         // Vibration: the 2/rev shake of a two-bladed rotor, scaled by how hard the rotor
         // is working, plus a hard kick if the aircraft is in the vortex ring state.
-        if (_heli is not null)
+        if (_heli is not null && Mode != CameraMode.ThirdPerson)
         {
             float load = (float)Mathf.Clamp(_heli.Sim.Telemetry.TorquePercent / 100.0, 0, 1.4);
             float vrs = (float)_heli.Sim.Telemetry.VrsSeverity;
             _shake = Mathf.Lerp(_shake, load * 0.012f + vrs * 0.10f, dt * 6f);
         }
+        else if (Mode == CameraMode.ThirdPerson)
+        {
+            _shake = Mathf.Lerp(_shake, 0, dt * 6f);
+        }
 
         switch (Mode)
         {
+            case CameraMode.ThirdPerson: UpdateThirdPerson(dt); break;
             case CameraMode.Cockpit: UpdateCockpit(dt); break;
             case CameraMode.Orbit: UpdateOrbit(dt); break;
             case CameraMode.Flyby: UpdateFlyby(dt); break;
@@ -146,5 +178,35 @@ public sealed partial class ChaseCamera : Camera3D
         }
         GlobalPosition = _flybyPoint;
         LookAt(_target.GlobalPosition, Vector3.Up);
+    }
+
+    private void UpdateThirdPerson(float dt)
+    {
+        if (_pilot is null) return;
+
+        // The camera sits behind and above the pilot's right shoulder.
+        // Direction comes from the pilot's camera pivot (mouse-driven pitch + yaw).
+        Transform3D pivotXform = _pilot.CameraPivot.GlobalTransform;
+        Vector3 pivotPos = pivotXform.Origin;
+
+        // Offset is applied in the pilot's local space so the camera orbits with mouse look.
+        Basis pilotBasis = _pilot.GlobalTransform.Basis;
+        Vector3 back = -pivotXform.Basis.Z;
+        Vector3 up = Vector3.Up;
+        Vector3 right = pilotBasis.X;
+
+        Vector3 desired = pivotPos
+                          + back * ThirdPersonOffset.Z
+                          + up * (ThirdPersonOffset.Y - 1.6f)  // offset relative to pivot
+                          + right * ThirdPersonOffset.X;
+
+        GlobalPosition = GlobalPosition.Lerp(desired, 1f - Mathf.Exp(-5f * dt));
+
+        // Look at a point slightly ahead and above the pilot.
+        Vector3 lookTarget = pivotPos - pivotXform.Basis.Z * 8f;
+        var targetXform = GlobalTransform.LookingAt(lookTarget, Vector3.Up);
+        GlobalTransform = new Transform3D(
+            GlobalTransform.Basis.Slerp(targetXform.Basis, 1f - Mathf.Exp(-12f * dt)),
+            GlobalPosition);
     }
 }

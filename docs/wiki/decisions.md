@@ -648,3 +648,38 @@ reports whether the subject is actually in frame.
 of view — the settlements were building correctly and sitting underneath the aircraft.
 Staring at the images could not distinguish "did not build" from "behind the camera", so
 the capture now measures it.
+
+## D-025 — The cockpit has an inside
+
+**Decision.** `AirframeBuilder` builds a cockpit interior — floor, roof, side walls,
+bulkhead, glareshield, panel, pedestal, overhead, pillars, seats and controls — lit by two
+omni fills, with the viewpoint moved to where a pilot's eyes actually are.
+
+**Why.** Fred said the interior view looked weird. It was worse than weird: there was no
+interior at all, and the viewpoint was in the wrong place twice over.
+
+`CockpitOffset` was `(-0.62, 0.55, +1.45)`. Forward is −Z and the cockpit spans Z −4.0 to
+−2.4, so the camera sat behind the CG in the engine bay looking forward through the entire
+length of the fuselage. And because the fuselage is a single-sided shell, the winding fix
+(D-016) means every body panel is backface-culled when seen from inside — so the view was
+an open frame with the terrain visible through the floor, roof and both walls, and the
+double-sided glass left hanging in mid-air. That is exactly what the screenshot showed.
+
+Two things worth keeping:
+
+* Everything in here is a **closed box**, never a single-sided panel. A panel has to be
+  wound correctly and there is no way to know which way that is except by rendering it; a
+  box is right from every side by construction. Given D-016, that is cheap insurance.
+* The interior needs **its own light and its own material**. An enclosed cockpit receives no
+  direct sun, and sky bounce is not modelled at this quality tier, so at the exterior's
+  0.135 albedo the whole interior rendered as solid black shapes. One low fill left the
+  roof and overhead unlit — an unlit box in the top of frame reads as a hole in the
+  aircraft — so there are two.
+
+The windscreen was also at 0.62 alpha, which is a welding visor. Now 0.11.
+
+**Still crude.** The panel face sits below the fixed forward view, so no instruments are
+visible from the seat, and the windscreen side pillar is chunky at this eye position. Both
+want a proper look-around control rather than more geometry.
+
+**Reversible.** Two mesh builders and a light; delete the three lines in `Build`.
