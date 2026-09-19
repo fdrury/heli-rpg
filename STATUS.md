@@ -214,6 +214,12 @@ godot --headless --path game -- --looptest
    each flight a purpose.
 4. **Interior lighting.** Buildings have dark window recesses but no light comes from
    inside. A warm glow behind the glass at night would make settlements read as inhabited.
+5. **Autorotation glides half as far as it should.** Measured and localised, not fixed —
+   `simlab autoglide`, D-041 and D-043. Best glide 1.99:1 at 3191 fpm against a real
+   4:1 at 1700. Ruled out: vortex ring (severity exactly 0.00), inflow (λ 0.009, which is
+   what momentum theory gives at μ 0.125), blade loading (C_T/σ 0.070). What remains is
+   profile power, which would have to roughly triple between powered flight and the
+   descent, with 9–15% of blade elements past stall. Guarded against regression meanwhile.
 
 ## Open questions for Fred
 
