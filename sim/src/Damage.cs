@@ -101,6 +101,15 @@ public sealed class DamageState
     /// </summary>
     public double ActuatorSlowdown => 1.0 + (1.0 - Health(Component.Hydraulics)) * 3.5;
 
+    /// <summary>
+    /// How much of the stability augmentation still works, 0..1.
+    ///
+    /// It runs off the same hydraulics as the actuators, so a hydraulic hit both slows the
+    /// controls down and takes the artificial damping away - which is the right pairing.
+    /// Losing the augmentation is the moment the aircraft stops being forgiving.
+    /// </summary>
+    public double ActuatorEffectiveness => Health(Component.Hydraulics);
+
     /// <summary>Parasite drag multiplier from a torn-up airframe.</summary>
     public double DragFactor => 1.0 + (1.0 - Health(Component.Fuselage)) * 0.55;
 

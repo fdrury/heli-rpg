@@ -37,6 +37,9 @@ public static class Program
         }
 
         Run("cyclicbench", CyclicBench.Step);
+        Run("trim", TrimTests.TrimSweep);
+        Run("handsoff", TrimTests.HandsOff);
+        Run("sassweep", TrimTests.SasSweep);
         Run("freetrace", Trace.FreeTrace);
         Run("hovertrace", Trace.HoverTrace);
         Run("rotorbench", RotorBench.Sweep);

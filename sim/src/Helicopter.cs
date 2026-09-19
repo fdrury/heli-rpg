@@ -102,10 +102,25 @@ public sealed class Helicopter
     /// </summary>
     public Controls Actual => _actual;
 
+    /// <summary>
+    /// Put the actuators somewhere directly, bypassing the rate limiter.
+    ///
+    /// Only two things have any business doing this: spawning the aircraft into a known
+    /// condition, and the trim solver, which needs the surfaces exactly where it asked
+    /// for them rather than wherever 0.35 s of actuator travel has got to.
+    /// </summary>
+    public void ForceActuators(Controls c) { _actual = c; Input = c; }
+
     private Controls _actual = Controls.Neutral;
 
     /// <summary>Seconds for a control to travel its full range. Roughly a real servo.</summary>
     public double ActuatorFullTravelTime { get; set; } = 0.35;
+
+    /// <summary>
+    /// Limited-authority stability augmentation, between the pilot's hands and the
+    /// actuators. Switchable; see <see cref="Stability"/> for what it does and does not do.
+    /// </summary>
+    public Stability Sas { get; } = new();
 
     /// <summary>Enable the simple spring-damper ground model (headless use only).</summary>
     public bool UseInternalGroundModel { get; set; } = true;
@@ -184,6 +199,54 @@ public sealed class Helicopter
             Orientation = Quat.FromEuler(0, 0, headingRad),
             AngularVelocity = Vec3.Zero,
         };
+        Rotor.Reset();
+        Tail.Reset();
+        Engine.SetRunning();
+        RotorOmega = Airframe.MainRotor.NominalOmega;
+        SeedRotorForWeight();
+    }
+
+    /// <summary>
+    /// Spawn the aircraft airborne and actually in balance: controls at trim, attitude at
+    /// trim. <see cref="PlaceInFlight"/> puts it wings-level with the stick centred, which
+    /// is not a trim state - the tail rotor's side force starts pushing on frame one.
+    /// </summary>
+    public TrimResult PlaceInFlightTrimmed(double altitude, double forwardSpeed = 0,
+                                           double headingRad = 0)
+    {
+        Rotor.Reset();
+        Tail.Reset();
+        Engine.SetRunning();
+        RotorOmega = Airframe.MainRotor.NominalOmega;
+        SeedRotorForWeight();
+
+        TrimResult t = Trim.Solve(this, altitude, forwardSpeed);
+
+        // Solved at heading zero; rotate the whole solution onto the requested heading.
+        State.Position = new Vec3(0, 0, -altitude);
+        State.Orientation = Quat.FromEuler(t.RollRad, t.PitchRad, headingRad);
+        State.Velocity = new Vec3(Math.Cos(headingRad) * forwardSpeed,
+                                  Math.Sin(headingRad) * forwardSpeed, 0);
+        State.AngularVelocity = Vec3.Zero;
+        ForceActuators(t.Controls);
+        Sas.TrimRollRad = t.RollRad;
+        Sas.TrimPitchRad = t.PitchRad;
+        Sas.TrimControls = t.Controls;
+        return t;
+    }
+
+    /// <summary>
+    /// Put the rotor, tail rotor and engine back to a known, repeatable state.
+    ///
+    /// The trim solver needs its residual to be a pure function of the six unknowns. It is
+    /// not one by default: rotor inflow, blade flap, azimuth and governor state all carry
+    /// over from whatever was evaluated before, so the same candidate evaluated twice gives
+    /// two different answers and the numerical Jacobian ends up measuring drift instead of
+    /// gradient. That is precisely what stopped the first version of the solver converging
+    /// from any starting guess.
+    /// </summary>
+    public void ResetRotorState()
+    {
         Rotor.Reset();
         Tail.Reset();
         Engine.SetRunning();
@@ -410,10 +473,15 @@ public sealed class Helicopter
             double d = target - current;
             return Math.Abs(d) <= step ? target : current + Math.Sign(d) * step;
         }
-        _actual.Collective = Move(_actual.Collective, Input.Collective, maxStep);
-        _actual.CyclicPitch = Move(_actual.CyclicPitch, Input.CyclicPitch, maxStep * 2.0);
-        _actual.CyclicRoll = Move(_actual.CyclicRoll, Input.CyclicRoll, maxStep * 2.0);
-        _actual.Pedal = Move(_actual.Pedal, Input.Pedal, maxStep * 2.0);
+        // The augmentation commands the actuators, it does not bypass them: it is a series
+        // actuator upstream of the same lag the pilot feels, not a torque applied to the
+        // rigid body. That distinction is why a saturated SAS degrades gracefully.
+        Controls demand = Sas.Augment(Input, State, Damage.ActuatorEffectiveness);
+
+        _actual.Collective = Move(_actual.Collective, demand.Collective, maxStep);
+        _actual.CyclicPitch = Move(_actual.CyclicPitch, demand.CyclicPitch, maxStep * 2.0);
+        _actual.CyclicRoll = Move(_actual.CyclicRoll, demand.CyclicRoll, maxStep * 2.0);
+        _actual.Pedal = Move(_actual.Pedal, demand.Pedal, maxStep * 2.0);
         _actual.Throttle = Input.Throttle;
         _actual.Brake = Input.Brake;
     }

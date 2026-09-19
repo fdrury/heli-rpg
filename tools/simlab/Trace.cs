@@ -44,12 +44,15 @@ public static class Trace
         var env = new FlatEnvironment();
         var heli = new Helicopter(Airframe.Workhorse(), env) { Fuel = 500 };
         heli.InvalidateMass();
-        heli.PlaceInFlight(200);
+        // From TRIM. Starting this trace wings-level with the stick centred meant it was
+        // never showing the bare airframe dynamics at all - it was showing the response to
+        // a large step input of uncancelled tail rotor thrust, which is a different and
+        // much more alarming picture.
+        heli.PlaceInFlightTrimmed(200);
         heli.UseInternalGroundModel = false;
         double dt = 1.0 / 240.0;
-        heli.Input = new Controls { Collective = 0.53, Throttle = 1.0, Pedal = 0.0 };
 
-        Console.WriteLine("  fixed controls, no feedback - the bare airframe dynamics");
+        Console.WriteLine("  fixed controls at trim, no feedback - the bare airframe dynamics");
         Console.WriteLine("    t     alt   roll  pitch    yaw   p     q     r   thrust  a0deg  a1deg  b1deg   Mx     My     Mz   Fy");
         for (double t = 0; t < 8; t += dt)
         {
