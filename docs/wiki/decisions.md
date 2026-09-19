@@ -1281,3 +1281,32 @@ PrismMesh — no new types, no textures, no UVs).
 
 **Reversibility:** high. Building() is one function; reverting the commit restores the
 original single-archetype generator. No sim/ changes, no save/load changes.
+
+## D-039 — The game starts in summer, not on the first of January
+
+**Decision.** The clock starts at day 172, 09:30, rather than day 0.
+
+**Why.** The solar model takes the clock as a real date, so day 0 is midwinter. At 42° north
+the sun never got above about 15°, and **every frame the game had ever rendered was in
+raking low light**. It read as permanent dusk and made every screenshot a silhouette — which
+is also why the airframe and prop work looked so dark when I first checked it. Day 172 puts
+the morning sun at 54° and leaves the long evenings somewhere to fall from.
+
+## D-040 — Position hold, because speed hold never arrives
+
+**Decision.** `AutopilotDemand.GroundTarget` holds a point on the ground, converting
+position error into a closing speed. The core loop test uses it for both approach and
+descent.
+
+**Why.** Commanding zero ground speed **freezes the position error wherever it happens to
+be**. An approach that ends ninety-eight metres short stays ninety-eight metres short
+indefinitely — hovering perfectly, having arrived nowhere.
+
+Worse in wind, and that is how it surfaced: commanding a speed along a heading toward the
+site does not converge at all, because the nose points at the pad while the ground track
+crabs off to one side. The core loop test began failing the moment the world had weather in
+it, shutting down 98 m from a site it thought it was at.
+
+Verified separately: a 216 m run to a point in a 17 kt wind settles to 0.1 m and stays.
+The loop test now touches down on a **0.0° slope** — the graded pad — instead of 7.3°,
+because it is finally landing at the site rather than on the hillside next to it.

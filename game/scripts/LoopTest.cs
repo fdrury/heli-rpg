@@ -81,11 +81,18 @@ public sealed partial class LoopTest : Node
             case 0:
             {
                 float ground = WorldHeight.At(_target.Position.X, _target.Position.Y);
+                // Position hold, not speed hold.
+                //
+                // Commanding a speed along a heading toward the site does not converge in
+                // wind: the nose points at the pad while the ground track crabs off to one
+                // side, and the aircraft arrives abeam of where it was going. This test shut
+                // down 98 m from the site the moment the world acquired real weather.
                 var demand = new AutopilotDemand
                 {
                     Altitude = ground + 70,
-                    ForwardSpeed = Mathf.Clamp(range * 0.22f, 2f, 26f),
-                    LateralSpeed = 0,
+                    GroundTarget = SimBridge.PositionToSim(
+                        new Vector3(_target.Position.X, ground, _target.Position.Y)),
+                    ApproachSpeed = 26,
                     Heading = HeadingTo(flat, _target.Position),
                 };
                 _heli.OverrideControls = _ap.Update(sim, demand, delta);
@@ -106,11 +113,16 @@ public sealed partial class LoopTest : Node
                 float ground = WorldHeight.At(p.X, p.Z);
                 // Come down at a sensible rate and slow it right down near the ground.
                 float targetAgl = agl > 25 ? 12 : 0;
+                // Hold the PAD on the way down, not zero speed. Zero ground speed freezes
+                // whatever offset the approach left and the wind adds more all the way to
+                // touchdown - this phase alone put the aircraft 87 m from the site.
+                float padGround = WorldHeight.At(_target.Position.X, _target.Position.Y);
                 var demand = new AutopilotDemand
                 {
                     VerticalSpeed = agl > 25 ? -3.0 : -1.1,
-                    ForwardSpeed = 0,
-                    LateralSpeed = 0,
+                    GroundTarget = SimBridge.PositionToSim(
+                        new Vector3(_target.Position.X, padGround, _target.Position.Y)),
+                    ApproachSpeed = agl > 25 ? 8 : 3,
                     Heading = sim.State.Orientation.Yaw,
                 };
                 _heli.OverrideControls = _ap.Update(sim, demand, delta);

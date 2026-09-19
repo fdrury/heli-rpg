@@ -190,6 +190,58 @@ public static class TrimTests
         return double.NaN;
     }
 
+    /// <summary>
+    /// Position hold has to actually arrive, and stay, in wind.
+    ///
+    /// Written because the core loop test started failing the moment the world had real
+    /// weather in it: the aircraft shut down ninety-eight metres from the site it was
+    /// supposed to be at, hovering perfectly, because zero ground speed freezes the
+    /// position error rather than removing it.
+    /// </summary>
+    public static string? PositionHold()
+    {
+        var env = new FlatEnvironment { SteadyWind = new Vec3(-7.5, 4.0, 0) };  // ~17 kt
+        var h = new Helicopter(Airframe.Workhorse(), env) { Fuel = 500 };
+        h.InvalidateMass();
+        h.PlaceInFlightTrimmed(200);
+        h.UseInternalGroundModel = false;
+
+        var target = new Vec3(180, -120, -200);          // 216 m away, same altitude
+        var ap = new Autopilot { CollectiveTrim = 0.5 };
+        var demand = new AutopilotDemand
+        {
+            Altitude = 200,
+            GroundTarget = target,
+            ApproachSpeed = 14,
+            Heading = 0,
+        };
+
+        Console.WriteLine($"  holding a point in a {env.SteadyWind.Length * 1.94384:F0} kt wind");
+        Console.WriteLine("     t     range    ground speed");
+
+        const double dt = 1.0 / 240.0;
+        double range = 0;
+        for (double t = 0; t < 120; t += dt)
+        {
+            h.Input = ap.Update(h, demand, dt);
+            h.Step(dt);
+
+            Vec3 raw = target - h.State.Position;
+            range = new Vec3(raw.X, raw.Y, 0).Length;
+
+            if (Math.Abs(t % 20.0) < dt)
+                Console.WriteLine($"  {t,4:F0}  {range,7:F1} m  " +
+                                  $"{new Vec3(h.State.Velocity.X, h.State.Velocity.Y, 0).Length,6:F1} m/s");
+        }
+
+        Console.WriteLine($"  settled {range:F1} m from the point after 120 s");
+
+        // Ten metres is a pad. Anything larger and "landing at" a site is a matter of luck.
+        if (range > 10)
+            return $"position hold settled {range:F0} m away in wind - it never arrives";
+        return null;
+    }
+
     private static string Fmt(double t) => double.IsNaN(t) ? "not at all in 30 s" : $"{t:F1} s";
 
     private static string? Release(bool augmented, out double departedAt)

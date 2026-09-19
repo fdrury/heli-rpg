@@ -45,6 +45,20 @@ public struct AutopilotDemand
     public double? Collective;      // 0..1, bypass the vertical loops entirely
 
     /// <summary>
+    /// A point on the ground to hold, NED. Overrides the speed demands.
+    ///
+    /// Speed hold and position hold are not the same thing, and the difference is the whole
+    /// reason this exists: commanding zero ground speed freezes the position ERROR wherever
+    /// it happens to be. An approach that ends ninety-eight metres short stays ninety-eight
+    /// metres short indefinitely, hovering perfectly, having arrived nowhere. Closing on a
+    /// point needs a speed proportional to how far away the point is.
+    /// </summary>
+    public Vec3? GroundTarget;
+
+    /// <summary>Fastest closing speed when running to a <see cref="GroundTarget"/>, m/s.</summary>
+    public double ApproachSpeed;
+
+    /// <summary>
     /// Hold this rotor speed (as a fraction of nominal) with the collective. This is
     /// what a pilot actually does in an autorotation: the collective stops being a
     /// climb control and becomes the rotor's throttle, trading the energy stored in the
@@ -150,6 +164,22 @@ public sealed class Autopilot
                 CollectiveTrim = Math.Clamp(CollectiveTrim + u * TrimRate * dt, 0.0, 1.0);
                 c.Collective = Math.Clamp(CollectiveTrim + u, 0, 1);
             }
+        }
+
+        // --- Position hold ---------------------------------------------------
+        // Turn "be there" into "go this fast in this direction", which is the only thing
+        // the loops below understand.
+        if (demand.GroundTarget is Vec3 target)
+        {
+            Vec3 raw = target - st.Position;
+            var err = new Vec3(raw.X, raw.Y, 0);         // altitude has its own loop
+            Vec3 errBody = st.Orientation.InverseRotate(err);
+            double max = demand.ApproachSpeed > 0.01 ? demand.ApproachSpeed : 12.0;
+
+            // Proportional, and deliberately gentle: a helicopter that dives at a point and
+            // stops hard is unpleasant to watch and hard on the rotor.
+            demand.ForwardSpeed = Math.Clamp(errBody.X * 0.32, -max, max);
+            demand.LateralSpeed = Math.Clamp(errBody.Y * 0.32, -max, max);
         }
 
         // --- Longitudinal ----------------------------------------------------

@@ -120,13 +120,16 @@ public static class WeatherTests
 
         // When does it next rain in daylight? Anything that wants to LOOK at weather needs
         // a time to look at, and scanning for it beats guessing and re-rendering.
+        // Measured from the summer day the game actually starts on (D-039), because that
+        // is the only epoch anything downstream cares about.
+        const double epoch = 172 * 86400.0;
         for (double t = 0; t < 10 * 86400.0; t += 900)
         {
-            Weather.Conditions wc = w.At(t);
-            if (wc.Precipitation > 0.25 && w.Sun(t).ElevationDeg > 12)
+            Weather.Conditions wc = w.At(epoch + t);
+            if (wc.Precipitation > 0.25 && w.Sun(epoch + t).ElevationDeg > 20)
             {
-                Console.WriteLine($"  first good daylight rain at {t / 3600:F2} h " +
-                                  $"(sun {w.Sun(t).ElevationDeg:F0} deg): {wc.Describe()}");
+                Console.WriteLine($"  first good daylight rain at +{t / 3600:F2} h from the start " +
+                                  $"(sun {w.Sun(epoch + t).ElevationDeg:F0} deg): {wc.Describe()}");
                 break;
             }
         }

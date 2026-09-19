@@ -22,8 +22,16 @@ public static class SceneMood
     /// <summary>The world's weather. Deterministic from its seed.</summary>
     public static Weather Weather { get; } = new();
 
-    /// <summary>Game clock, seconds. Starts mid-morning on day one.</summary>
-    public static double Clock { get; set; } = 9.25 * 3600.0;
+    /// <summary>
+    /// Game clock, seconds. Starts on a summer morning.
+    ///
+    /// Day 172, not day 0. The solar model takes the clock as a real date, so day 0 is the
+    /// first of January: at this latitude the sun never got above about 15 degrees, and
+    /// every single frame the game had ever rendered was in raking midwinter light. It read
+    /// as permanent dusk and it made every screenshot a silhouette. Midsummer puts the
+    /// morning sun at a sensible height and gives the long evenings somewhere to fall from.
+    /// </summary>
+    public static double Clock { get; set; } = 172 * 86400.0 + 9.5 * 3600.0;
 
     /// <summary>
     /// Game seconds per real second.

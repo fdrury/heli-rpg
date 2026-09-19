@@ -94,6 +94,7 @@ public sealed partial class PropScatter : Node3D
             NormalTexture = rockNrm,
             AlbedoColor = new Color(0.70f, 0.68f, 0.64f),
             Roughness = 0.95f,
+            VertexColorUseAsAlbedo = true,
             Uv1Triplanar = true,
             Uv1Scale = new Vector3(0.45f, 0.45f, 0.45f),
         };
@@ -102,6 +103,7 @@ public sealed partial class PropScatter : Node3D
         {
             AlbedoColor = new Color(0.27f, 0.245f, 0.215f),
             Roughness = 0.92f,
+            VertexColorUseAsAlbedo = true,
         };
 
         _scrubMaterial = new StandardMaterial3D
@@ -122,6 +124,7 @@ public sealed partial class PropScatter : Node3D
         _greenTreeMaterial = new StandardMaterial3D
         {
             AlbedoColor = new Color(0.16f, 0.20f, 0.12f),
+            VertexColorUseAsAlbedo = true,
             Roughness = 0.92f,
         };
     }
@@ -323,6 +326,31 @@ public sealed partial class PropScatter : Node3D
         public float RandfRange(float from, float to) => from + Randf() * (to - from);
     }
 
+    /// <summary>A stable per-instance tint, hashed from where the thing stands.</summary>
+    private static Color TintFor(PropKind kind, Vector3 at)
+    {
+        float h1 = Frac(Mathf.Sin(at.X * 12.9898f + at.Z * 78.233f) * 43758.5453f);
+        float h2 = Frac(Mathf.Sin(at.X * 39.3468f + at.Z * 11.1357f) * 24634.6345f);
+
+        // Brightness varies more than hue. Real stands differ mostly in how much light
+        // each plant is getting and how healthy it is, not in being different colours.
+        float v = 0.74f + h1 * 0.52f;
+
+        return kind switch
+        {
+            // Green things range from dark and healthy to bleached and half-dead, which in
+            // this world is most of them.
+            PropKind.GreenTree => new Color(v * (0.88f + h2 * 0.34f), v, v * (0.80f + h2 * 0.22f)),
+            PropKind.Scrub => new Color(v * (1.0f + h2 * 0.18f), v, v * 0.88f),
+            // Rock leans grey-to-ochre.
+            PropKind.Rock => new Color(v * (0.94f + h2 * 0.20f), v, v * (0.92f - h2 * 0.10f)),
+            // Dead wood is grey where it is weathered and browner where it is not.
+            _ => new Color(v * (1.0f + h2 * 0.16f), v * (0.97f + h2 * 0.06f), v * 0.92f),
+        };
+    }
+
+    private static float Frac(float v) => v - Mathf.Floor(v);
+
     private void ApplyReady()
     {
         for (int applied = 0; applied < MaxApplyPerFrame;)
@@ -361,13 +389,28 @@ public sealed partial class PropScatter : Node3D
                 _ => (_treeMeshes[built.Variant], _treeMaterial, 2600f),
             };
 
+            // Per-instance tint.
+            //
+            // A MultiMesh draws one mesh many times, so without this every tree of a given
+            // variant is pixel-identical to every other - and with only a handful of
+            // variants a hillside of them reads as a field of repeated dark blobs rather
+            // than as woodland. Tint costs one colour per instance and breaks the
+            // repetition more effectively than adding more meshes would.
+            //
+            // Derived by hashing the instance's own position, so it is stable across
+            // reloads and needs nothing carried through the worker thread.
             var mm = new MultiMesh
             {
                 TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
                 Mesh = mesh,
+                UseColors = true,
                 InstanceCount = built.Transforms.Length,
             };
-            for (int i = 0; i < built.Transforms.Length; i++) mm.SetInstanceTransform(i, built.Transforms[i]);
+            for (int i = 0; i < built.Transforms.Length; i++)
+            {
+                mm.SetInstanceTransform(i, built.Transforms[i]);
+                mm.SetInstanceColor(i, TintFor(built.Kind, built.Transforms[i].Origin));
+            }
 
             holder.AddChild(new MultiMeshInstance3D
             {

@@ -39,6 +39,7 @@ public static class Program
         Run("cyclicbench", CyclicBench.Step);
         Run("trim", TrimTests.TrimSweep);
         Run("handsoff", TrimTests.HandsOff);
+        Run("poshold", TrimTests.PositionHold);
         Run("sassweep", TrimTests.SasSweep);
         Run("ratesens", TrimTests.RateSensitivity);
         Run("audiowave", AudioTests.Waveform);
