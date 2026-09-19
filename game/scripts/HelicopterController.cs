@@ -70,6 +70,25 @@ public sealed partial class HelicopterController : RigidBody3D
     [Export] public float SasAuthority { get; set; } = 0.0f;
 
     /// <summary>
+    /// The sim's own limited-authority stability augmentation.
+    ///
+    /// Distinct from <see cref="SasAuthority"/> above, which blends in autopilot output and
+    /// is a much blunter instrument. This one lives in the flight model, damps body rates
+    /// through the actuators, and is what makes the aircraft pleasant to hand-fly. Off, the
+    /// bare airframe leaves trim in about six seconds; on, about twenty-two.
+    ///
+    /// OFF for now, and the reason is measured rather than cautious. In the pure sim it
+    /// behaves exactly as designed. Through the Godot bridge it does not: the bridge
+    /// self-test's roll response goes from 61.6 deg/s (Godot 61.5, in close agreement) to
+    /// 281.9 deg/s with Godot reading -156.0 - the sim and the rigid body disagreeing on
+    /// both magnitude and sign, which they never do otherwise. The likely cause is that
+    /// Godot integrates the body while Sim.Step integrates its own copy of the state, so a
+    /// rate-feedback loop closed inside the sim sees its own correction applied twice.
+    /// That wants fixing properly at the bridge, not papering over with lower gains.
+    /// </summary>
+    [Export] public bool StabilityAugmentation { get; set; } = false;
+
+    /// <summary>
     /// When set, these controls are flown instead of the player's. Used by the headless
     /// self-test and, later, by cutscenes and the autopilot hold modes.
     /// </summary>
@@ -92,6 +111,7 @@ public sealed partial class HelicopterController : RigidBody3D
             UseInternalGroundModel = false,   // Godot owns contacts
         };
         Sim.InvalidateMass();
+        Sim.Sas.Enabled = StabilityAugmentation;
 
         Input = new FlightInput();
         AddChild(Input);
@@ -141,7 +161,7 @@ public sealed partial class HelicopterController : RigidBody3D
 
         if (StartRunning)
         {
-            Sim.PlaceInFlight(p.Y);
+            Sim.PlaceInFlightTrimmed(p.Y);
             Input.SetCollectivePosition(0.5f);
         }
         else
@@ -162,7 +182,7 @@ public sealed partial class HelicopterController : RigidBody3D
             state.LinearVelocity = Vector3.Zero;
             state.AngularVelocity = Vector3.Zero;
             _pendingTeleport = null;
-            Sim.PlaceInFlight(target.Origin.Y, 0, -target.Basis.GetEuler().Y);
+            Sim.PlaceInFlightTrimmed(target.Origin.Y, 0, -target.Basis.GetEuler().Y);
         }
 
         // --- Read the body state into the sim ---------------------------------
@@ -272,7 +292,7 @@ public sealed partial class HelicopterController : RigidBody3D
         t.Basis = Basis.Identity;
         t.Origin = new Vector3(t.Origin.X, WorldHeight.At(t.Origin.X, t.Origin.Z) + StartAltitude, t.Origin.Z);
         GlobalTransform = t;
-        Sim.PlaceInFlight(t.Origin.Y);
+        Sim.PlaceInFlightTrimmed(t.Origin.Y);
         Input.SetCollectivePosition(0.5f);
     }
 }

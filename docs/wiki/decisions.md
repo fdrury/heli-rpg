@@ -536,3 +536,92 @@ Eight new sim tests verify these properties.
 **Reversibility:** high. The module catalog is data. Loadout is a pair of HashSets.
 Installation effects are symmetric (add on install, remove on uninstall). New modules
 are one record and one switch case.
+
+## D-020 — The aircraft is trimmed before the pilot ever touches it
+
+**Decision.** Every spawn goes through a real trim solve (`sim/src/Trim.cs`), and the
+solution's controls and attitude are what the aircraft starts at.
+
+**Why.** Fred reported the helicopter felt oscillatory. It was not oscillating: it was
+diverging, and he was chasing it. `PlaceInFlight` put the aircraft wings-level with the
+stick centred, which is not a trim state on a single-rotor helicopter — the tail rotor's
+3.6 kN of side force and its yaw moment were uncancelled from frame one. The pilot's whole
+job became correcting a divergence that never stopped, and correcting a continuous
+divergence through a lagged actuator is the textbook recipe for pilot-induced oscillation.
+
+Hands off at "trim", the old aircraft passed 30° of bank in 2.3 s and was inverted by 5 s.
+Trimmed, the same release holds for 6.5 s and starts from rest.
+
+**Reversible.** Entirely — `PlaceInFlight` still exists and does the old thing.
+
+## D-021 — Limited-authority stability augmentation, tuned by measurement
+
+**Decision.** `sim/src/Stability.cs` adds rate damping with weak levelling and heading hold,
+upstream of the actuator rather than as a force on the body. Authority 0.30 of travel.
+Off by default in the sim so instrumentation measures the bare airframe.
+
+**Why.** The bare airframe is genuinely unstable and should be — but a trimmed release still
+departs at 6.5 s, because the pedal that trims a hover is nearly a third of a travel wrong
+by 40 kt, so any acceleration walks the nose away and the spiral follows. Real helicopters
+answered this with a series actuator, not with "fly better".
+
+Three bugs in it were invisible in review and obvious on a graph, which is the pattern this
+project keeps hitting:
+
+* The pitch control derivative is **negative** (forward stick, nose down) while roll and
+  yaw are positive. A uniform `-rate * gain` therefore damped two axes and drove the third.
+  Signs now come from the measured derivatives, quoted in the source.
+* "Hands off" was tested against a centred stick — but trim holds 0.275 of lateral cyclic,
+  so the levelling terms were permanently disabled. Hands off means *the stick is where
+  trim left it*.
+* At 0.18 authority the system was saturated almost continuously, which turns a linear
+  damper into a bang-bang controller. The signature is unmistakable once plotted: at 0.18,
+  more gain made it *worse* (x0.4 → 7.2 s, x1.0 → 4.0 s); at 0.30, more gain simply helped
+  (x0.4 → 7.2 s, x1.0 → 22.3 s).
+
+**Reversible.** `Sas.Enabled = false` gives the bare airframe exactly as before.
+
+## D-022 — Not enabled in the game yet, and why that is recorded rather than hidden
+
+**Decision.** `HelicopterController.StabilityAugmentation` ships **false**.
+
+**Why.** It behaves correctly in the pure sim and incorrectly through the Godot bridge. The
+bridge self-test's roll response goes from 61.6 °/s (Godot 61.5 — close agreement) to
+281.9 °/s with Godot reading −156.0. Sim and rigid body disagreeing on magnitude *and* sign
+is a signature they never show otherwise, and it points at the bridge: Godot integrates the
+body while `Sim.Step` integrates its own copy, so a rate-feedback loop closed inside the sim
+plausibly sees its own correction applied twice.
+
+Lowering the gains until the symptom goes away would hide a real bridge defect. The fix
+belongs at the conversion boundary.
+
+**Reversible.** One exported bool.
+
+## D-023 — The lighting grade re-derived after the winding fix
+
+**Decision.** Lighting, sky, fog and grade moved out of `Main` into `SceneMood`, with
+values re-derived rather than adjusted.
+
+**Why.** D-016 recorded that the grade had been tuned against the winding bug — ambient at
+1.15 to rescue surfaces that were dark only because they were lit from behind, exposure and
+saturation compensating for the same thing. With the winding fixed those became
+over-corrections on top of a correct image. Ambient is now 0.66 and the sun does the work,
+so terrain reads as landform instead of a flat wash.
+
+Two things in the terrain shader were doing the same job: `dead_tint * 1.6` brightened the
+dry patches into acid yellow, and the detail texture was blended at only 0.65 toward the
+colour-matched version, so the near field read as green lawn while the far field read as dry
+olive — a seam visible from the air. Now 1.18 and 0.88.
+
+`SceneMood` carries Afternoon, Overcast and Dusk, which is the groundwork for weather.
+
+## D-024 — Site screenshots aim at the site
+
+**Decision.** The screenshot director's stand-off scales with altitude, and each capture
+reports whether the subject is actually in frame.
+
+**Why.** Every site picture in the set was empty scenery. A fixed 150 m stand-off at the
+160 m the settlement shot flew at puts the site 47° below the nose, well outside the field
+of view — the settlements were building correctly and sitting underneath the aircraft.
+Staring at the images could not distinguish "did not build" from "behind the camera", so
+the capture now measures it.
