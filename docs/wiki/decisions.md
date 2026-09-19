@@ -1918,3 +1918,43 @@ is exactly the bare HUD. Diegetically correct and mechanically meaningful.
 
 **Reversibility:** high. Two conditionals in FlightHud._Draw and one overlay method. Removing
 the feature is deleting the `hasSas` checks and the delta card code.
+
+## D-058 — Tone: Office-style humour, and rock music · **[FRED'S DIRECTION]**
+
+Two notes from Fred on audience, recorded because they steer content across dialogue, audio
+and writing, and several agents work from these documents without seeing the conversation.
+
+**"Humour like from The Office (US) lands."** Read specifically, not as "add jokes":
+
+* **Deadpan.** The funny line is delivered flatly, by someone not trying to be funny, usually
+  mid-chore.
+* **Character-driven, not gag-driven.** It comes from a self-image not quite matching
+  reality, a small vanity, an obsession nobody else shares. A trader with a system nobody
+  asked about. Someone who has plainly rehearsed a speech.
+* **Mundane detail played straight.** Inventory disputes, a grudge about a fence, firm views
+  on stacking fuel drums — at the end of the world.
+* **It must never undercut the weight.** The Office is funny *and* takes its people
+  seriously; it is sad when it needs to be. That is the same register D-007 already asks for
+  ("mature but not grim-dark"), and humour is what stops that tone curdling into misery.
+* **Not** quips, banter, wackiness or winking at the player. A line that works as a one-liner
+  out of context is the wrong kind of funny.
+
+This makes the nine named NPCs *easier* to separate, because each gets a comic register as
+well as a want.
+
+**Rock music.** The game currently has no music at all. It goes in **diegetically**, as a
+salvaged radio/cassette player in the cockpit, rather than as a score:
+
+* It fits the world instead of sitting on top of it — a machine somebody kept working.
+* It hooks into systems that already exist: tapes are salvage (D-005), the set can be damaged
+  and repaired (`Component.Avionics`), and it can fail in weather or at altitude.
+* It is the player's choice whether to have it on, which a score never is.
+* And it dodges the thing that kills licensed music in games: the score does not have to
+  match the drama, because it is not the score. It is a tape somebody left in.
+
+**Reversibility:** high for the delivery (it is one node), low for the tone — humour is a
+pillar-adjacent decision and changing it late would mean rewriting every line.
+
+**Licensing:** per Fred's original brief, free assets are fine including copyleft and
+attribution-required, but **every one must be tracked** in case the game is ever shared.
+`docs/wiki/attribution.md` is the register.

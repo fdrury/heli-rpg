@@ -151,6 +151,7 @@ public sealed partial class GodotBridgeSelfTest : Node
                              $"attitude {rollDeg:F1} deg, drift {lateral:F2} m right");
                     if (_peakRate < 0.05) Fail($"right cyclic produced {_peakRate * 57.3:F1} deg/s of roll - wrong direction");
                     if (rollDeg < 2) Fail($"right cyclic reached {rollDeg:F1} deg of roll - wrong direction");
+                    AgreeWithGodot("roll", sim.State.AngularVelocity.X, godotRollRate);
                     NextPhase();
                 }
                 break;
@@ -171,6 +172,7 @@ public sealed partial class GodotBridgeSelfTest : Node
                              $"turned {yawed:F1} deg");
                     if (_peakRate < 0.05) Fail($"right pedal produced {_peakRate * 57.3:F1} deg/s of yaw - anti-torque sense is reversed");
                     if (yawed < 2) Fail($"right pedal turned the aircraft {yawed:F1} deg - wrong direction");
+                    AgreeWithGodot("yaw", sim.State.AngularVelocity.Z, godotYawRate);
                     NextPhase();
                 }
                 break;
@@ -311,6 +313,39 @@ public sealed partial class GodotBridgeSelfTest : Node
         _settled = false;
         _ap.Reset();
         _heli.TeleportTo(TestStation);
+    }
+
+    /// <summary>
+    /// The sim and the rigid body must say the same thing about the same instant.
+    ///
+    /// This is the single most valuable check in the file and it did not exist. The bridge
+    /// reads the body's state into the sim every tick, so the two CANNOT legitimately
+    /// disagree about a body rate - and when they do, something is wrong in a way no
+    /// headless test can see, because `simlab` never runs the bridge at all.
+    ///
+    /// D-051 is the case in point. A blade-element change that was correct physics, improved
+    /// autorotation, and passed the entire headless suite also reversed right cyclic: the
+    /// sim reported -31.7 deg/s where the body reported +11.2. Both numbers were printed
+    /// side by side in this very function and nothing compared them, so it was caught by a
+    /// human reading the log. Now it is caught by the test.
+    ///
+    /// The tolerance is deliberately loose. They are sampled a frame apart and the sim
+    /// integrates its own copy forward, so a few per cent of drift is normal; what is not
+    /// normal is a different answer.
+    /// </summary>
+    private void AgreeWithGodot(string axis, double simRate, double godotRate)
+    {
+        double scale = Math.Max(Math.Abs(simRate), Math.Abs(godotRate));
+        if (scale < 0.02) return;                       // both effectively still
+        double disagreement = Math.Abs(simRate - godotRate) / scale;
+
+        if (Math.Sign(simRate) != Math.Sign(godotRate))
+            Fail($"{axis}: the sim and the rigid body disagree about the DIRECTION " +
+                 $"({simRate * 57.3:F1} vs {godotRate * 57.3:F1} deg/s) - the bridge and the " +
+                 "flight model are not describing the same aircraft");
+        else if (disagreement > 0.35)
+            Fail($"{axis}: sim {simRate * 57.3:F1} deg/s against body {godotRate * 57.3:F1} - " +
+                 $"{disagreement:P0} apart, which they never are when healthy");
     }
 
     private void Fail(string message) { _failures.Add(message); GD.PrintErr("  FAIL  " + message); }
