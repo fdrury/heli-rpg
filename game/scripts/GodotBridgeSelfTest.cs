@@ -185,6 +185,32 @@ public sealed partial class GodotBridgeSelfTest : Node
                 break;
             }
 
+            case 5:
+            {
+                // Hands off, through the PLAYER path.
+                //
+                // Every other phase drives OverrideControls, which bypasses the pilot's
+                // input layer entirely - so none of them exercise the two things a player
+                // actually depends on: that the stick's neutral position is the trim
+                // position, and that the stability augmentation is running. Headless there
+                // is no stick, which makes this exactly a hands-off release.
+                _heli.OverrideControls = null;
+                if (_phaseTime > 20)
+                {
+                    double bank = sim.State.Orientation.Roll * 57.2958;
+                    GD.Print($"  hands off:  bank {bank:F1} deg after 20 s, " +
+                             $"{t.AirspeedTrue * 1.94384:F0} kt, {sim.State.Altitude:F0} m, " +
+                             $"sas {(sim.Sas.Enabled ? "on" : "OFF")}" +
+                             $"{(sim.Sas.Saturated ? ", SATURATED" : "")}");
+                    if (!sim.Sas.Enabled)
+                        Fail("stability augmentation is not running on the player path");
+                    if (Math.Abs(bank) > 30)
+                        Fail($"left trim hands-off: {bank:F0} deg of bank inside 20 s");
+                    NextPhase();
+                }
+                break;
+            }
+
             default:
                 Finish();
                 break;

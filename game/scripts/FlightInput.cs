@@ -93,8 +93,50 @@ public sealed partial class FlightInput : Node
     private float _gamepadCollective = 0.0f;
 
     /// <summary>Trim offsets, adjusted by the player, applied to the cyclic.</summary>
+    /// <summary>
+    /// Where the stick's centre sits, per axis.
+    ///
+    /// This is the datum a real force-trim system holds, and it matters more than it
+    /// sounds. A trimmed hover needs about +0.275 of lateral cyclic; a spring-centred
+    /// joystick returns to zero. Without a trim datum, letting go of the stick is a large
+    /// out-of-trim COMMAND, so the aircraft that was carefully balanced at spawn is pushed
+    /// straight back out of balance the moment the pilot relaxes. Half of what reads as
+    /// "oscillatory" is a pilot fighting their own centring spring.
+    /// </summary>
     public float TrimPitch { get; set; }
     public float TrimRoll { get; set; }
+    public float TrimPedal { get; set; }
+
+    /// <summary>
+    /// Put the datum at a known set of control positions - the trim solution, at spawn.
+    ///
+    /// Poll composes each axis as (raw stick) + (datum), so with the stick at rest the
+    /// datum IS the commanded control position.
+    /// </summary>
+    public void SetTrim(double pitch, double roll, double pedal)
+    {
+        TrimPitch = (float)pitch;
+        TrimRoll = (float)roll;
+        TrimPedal = (float)pedal;
+    }
+
+    /// <summary>
+    /// Force trim release: make whatever is being commanded right now the new neutral, the
+    /// way holding the FTR button and releasing it does on the real aircraft.
+    ///
+    /// The commanded position is (raw + datum), so folding the raw stick into the datum
+    /// leaves the command untouched at the instant of the press and moves the point the
+    /// stick springs back to.
+    /// </summary>
+    public void ReTrimToCurrent()
+    {
+        TrimPitch = Mathf.Clamp(TrimPitch + (float)_rawPitch, -1, 1);
+        TrimRoll = Mathf.Clamp(TrimRoll + (float)_rawRoll, -1, 1);
+        TrimPedal = Mathf.Clamp(TrimPedal + (float)_rawPedal, -1, 1);
+    }
+
+    private double _rawPitch, _rawRoll, _rawPedal;
+    private bool _ftrHeld;
 
     /// <summary>True when a stick or pad is providing the collective, so keys should not fight it.</summary>
     public bool HasPhysicalCollective => Profile.Collective.Bound;
@@ -197,13 +239,25 @@ public sealed partial class FlightInput : Node
         _keyCyclicRoll = SpringAxis(_keyCyclicRoll, keyRollDemand, dt);
 
         // Up arrow means nose up, which is aft cyclic - negative in the sim's sense.
+        // Keep the raw stick separately: the force trim release needs to know how far the
+        // pilot has moved from the current datum in order to shift the datum by that much.
+        _rawPitch = pitch - _keyCyclicPitch;
+        _rawRoll = roll + _keyCyclicRoll;
+
         c.CyclicPitch = Mathf.Clamp(pitch - _keyCyclicPitch + TrimPitch, -1, 1);
         c.CyclicRoll = Mathf.Clamp(roll + _keyCyclicRoll + TrimRoll, -1, 1);
 
         // --- Pedals ----------------------------------------------------------
         float pedal = Profile.Pedal.Read();
         float keyPedal = (Input.IsKeyPressed(Key.A) ? -1 : 0) + (Input.IsKeyPressed(Key.D) ? 1 : 0);
-        c.Pedal = Mathf.Clamp(pedal + keyPedal, -1, 1);
+        // Force trim release. Tap it and wherever the stick is becomes the new neutral,
+        // which is how you fly a helicopter any distance without holding a load all day.
+        bool ftr = Input.IsKeyPressed(Key.T);
+        if (ftr && !_ftrHeld) ReTrimToCurrent();
+        _ftrHeld = ftr;
+
+        _rawPedal = pedal + keyPedal;
+        c.Pedal = Mathf.Clamp(pedal + keyPedal + TrimPedal, -1, 1);
 
         // --- Collective ------------------------------------------------------
         if (Profile.Collective.Bound)

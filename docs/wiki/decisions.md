@@ -581,21 +581,44 @@ project keeps hitting:
 
 **Reversible.** `Sas.Enabled = false` gives the bare airframe exactly as before.
 
-## D-022 — Not enabled in the game yet, and why that is recorded rather than hidden
+## D-022 — The augmentation stands down when another controller is flying
 
-**Decision.** `HelicopterController.StabilityAugmentation` ships **false**.
+**Decision.** `Sim.Sas.Enabled` is true only when a human is on the controls — never while
+`OverrideControls` is driving, and never while the blunt `SasAuthority` assist is blending
+in autopilot output.
 
-**Why.** It behaves correctly in the pure sim and incorrectly through the Godot bridge. The
-bridge self-test's roll response goes from 61.6 °/s (Godot 61.5 — close agreement) to
-281.9 °/s with Godot reading −156.0. Sim and rigid body disagreeing on magnitude *and* sign
-is a signature they never show otherwise, and it points at the bridge: Godot integrates the
-body while `Sim.Step` integrates its own copy, so a rate-feedback loop closed inside the sim
-plausibly sees its own correction applied twice.
+**Why.** Enabling the SAS made the bridge self-test's roll response go from 61.6 °/s to
+281.9 °/s at only 24.5° of attitude — a limit cycle, not a divergence. The first guess was
+that Godot and the sim were each integrating their own copy of the state. That was wrong:
+`ComputeWrench` contains the actuator update, so the SAS does run in the game path, and a
+rate sweep showed it behaves correctly at 60, 120, 240 and 480 Hz in the pure sim.
 
-Lowering the gains until the symptom goes away would hide a real bridge defect. The fix
-belongs at the conversion boundary.
+Instrumenting the real Godot path settled it in one run. The **commanded** roll input was
+swinging the full ±1 at about 2.5 Hz — the scripted autopilot was oscillating, not the SAS.
+Rate damping changes the plant, and the autopilot's gains were tuned against a plant without
+it, so the outer loop overshoots and the two controllers fight.
 
-**Reversible.** One exported bool.
+A human is the slow outer loop the augmentation exists for; another controller is not, and
+it already does attitude hold itself. Only one of them gets to be the damper.
+
+**Reversible.** One condition, one line.
+
+## D-022a — The stick's centre is the trim position
+
+**Decision.** `FlightInput` carries a trim datum on all three axes, set from the trim
+solution at every spawn, with a force trim release (T) that makes the current stick position
+the new neutral.
+
+**Why.** Trimming the airframe and not trimming the *controls* fixes half the problem and
+leaves the half the pilot feels. A trimmed hover needs about +0.275 of lateral cyclic; a
+spring-centred joystick returns to zero. Without a datum, letting go of the stick is a large
+out-of-trim command — the aircraft carefully balanced at spawn gets shoved straight back out
+of balance the moment the pilot relaxes their hand. `TrimPitch` and `TrimRoll` already
+existed in the input layer and nothing had ever set them; pedal had no trim at all.
+
+Verified end to end by a new self-test phase that releases the controls on the **player**
+path rather than through `OverrideControls`: hands off for 20 s now ends at 24.8° of bank,
+still flying, with the augmentation confirmed running.
 
 ## D-023 — The lighting grade re-derived after the winding fix
 

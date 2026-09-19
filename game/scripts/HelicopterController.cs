@@ -86,7 +86,7 @@ public sealed partial class HelicopterController : RigidBody3D
     /// rate-feedback loop closed inside the sim sees its own correction applied twice.
     /// That wants fixing properly at the bridge, not papering over with lower gains.
     /// </summary>
-    [Export] public bool StabilityAugmentation { get; set; } = false;
+    [Export] public bool StabilityAugmentation { get; set; } = true;
 
     /// <summary>
     /// When set, these controls are flown instead of the player's. Used by the headless
@@ -161,13 +161,27 @@ public sealed partial class HelicopterController : RigidBody3D
 
         if (StartRunning)
         {
-            Sim.PlaceInFlightTrimmed(p.Y);
-            Input.SetCollectivePosition(0.5f);
+            TrimResult trim = Sim.PlaceInFlightTrimmed(p.Y);
+            AdoptTrim(trim);
         }
         else
         {
             Sim.PlaceOnGround(running: false);
         }
+    }
+
+    /// <summary>
+    /// Put the pilot's controls where the trim solution says they belong.
+    ///
+    /// Without this the aircraft is spawned in balance and then immediately commanded out
+    /// of it, because a spring-centred stick asks for zero lateral cyclic and the trim
+    /// wants 0.275 of it. Trimming the airframe and not trimming the CONTROLS fixes half
+    /// the problem and leaves the half the pilot actually feels.
+    /// </summary>
+    private void AdoptTrim(TrimResult trim)
+    {
+        Input.SetTrim(trim.Controls.CyclicPitch, trim.Controls.CyclicRoll, trim.Controls.Pedal);
+        Input.SetCollectivePosition((float)trim.Controls.Collective);
     }
 
     public override void _IntegrateForces(PhysicsDirectBodyState3D state)
@@ -182,7 +196,7 @@ public sealed partial class HelicopterController : RigidBody3D
             state.LinearVelocity = Vector3.Zero;
             state.AngularVelocity = Vector3.Zero;
             _pendingTeleport = null;
-            Sim.PlaceInFlightTrimmed(target.Origin.Y, 0, -target.Basis.GetEuler().Y);
+            AdoptTrim(Sim.PlaceInFlightTrimmed(target.Origin.Y, 0, -target.Basis.GetEuler().Y));
         }
 
         // --- Read the body state into the sim ---------------------------------
@@ -213,6 +227,23 @@ public sealed partial class HelicopterController : RigidBody3D
             pilot.CyclicRoll = Mathf.Lerp((float)pilot.CyclicRoll, (float)augmented.CyclicRoll, a);
             pilot.Pedal = Mathf.Lerp((float)pilot.Pedal, (float)augmented.Pedal, a);
         }
+        // Stand the augmentation down whenever something else is already closing a loop
+        // through the controls.
+        //
+        // Measured, not assumed. With the SAS live underneath the scripted autopilot, the
+        // COMMANDED roll input swings the full +/-1 at about 2.5 Hz and the aircraft sits
+        // in a limit cycle: 281 deg/s of roll rate at only 24 deg of attitude. The SAS is
+        // not diverging - it is changing the plant. Rate damping is exactly what the
+        // autopilot's gains were tuned against the absence of, so the outer loop overshoots
+        // and the two controllers fight.
+        //
+        // A human is the slow outer loop the augmentation is FOR; another controller is
+        // not, and it already does attitude hold itself. So: whoever is flying, only one
+        // of them gets to be the damper.
+        Sim.Sas.Enabled = StabilityAugmentation
+                          && OverrideControls is null
+                          && SasAuthority <= 0.001f;
+
         Sim.Input = pilot;
 
         // --- Aerodynamics ------------------------------------------------------

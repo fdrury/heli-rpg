@@ -40,6 +40,7 @@ public static class Program
         Run("trim", TrimTests.TrimSweep);
         Run("handsoff", TrimTests.HandsOff);
         Run("sassweep", TrimTests.SasSweep);
+        Run("ratesens", TrimTests.RateSensitivity);
         Run("freetrace", Trace.FreeTrace);
         Run("hovertrace", Trace.HoverTrace);
         Run("rotorbench", RotorBench.Sweep);

@@ -144,6 +144,52 @@ public static class TrimTests
         return null;
     }
 
+    /// <summary>
+    /// The same release at different integration rates.
+    ///
+    /// The augmentation was tuned entirely at 240 Hz, and the game runs its physics at 120.
+    /// A rate feedback loop cares a great deal about how much delay sits inside it, so a
+    /// controller that is well damped at one rate can be an oscillator at half of it. This
+    /// asks the question directly instead of assuming the answer transfers.
+    /// </summary>
+    public static string? RateSensitivity()
+    {
+        Console.WriteLine("  time to 30 deg of bank, hands off at trim, by integration rate");
+        Console.WriteLine("      Hz    bare   augmented");
+
+        string? failure = null;
+        foreach (int hz in new[] { 60, 120, 240, 480 })
+        {
+            double bare = Depart(hz, false);
+            double aug = Depart(hz, true);
+            Console.WriteLine($"    {hz,4}  {Fmt(bare),8}  {Fmt(aug),8}");
+
+            // The augmentation must help at every rate the game might plausibly run at.
+            // Helping at 240 and hurting at 120 is not a tuning detail, it is a controller
+            // whose behaviour depends on something it should not depend on.
+            if (hz >= 120 && !double.IsNaN(aug) && !double.IsNaN(bare) && aug < bare)
+                failure ??= $"augmentation makes things worse at {hz} Hz " +
+                            $"(bare {bare:F1} s, augmented {aug:F1} s)";
+        }
+        return failure;
+    }
+
+    private static double Depart(int hz, bool augmented)
+    {
+        Helicopter h = Fresh();
+        h.PlaceInFlightTrimmed(200);
+        h.UseInternalGroundModel = false;
+        h.Sas.Enabled = augmented;
+
+        double dt = 1.0 / hz;
+        for (double t = 0; t < 30; t += dt)
+        {
+            h.Step(dt);
+            if (Math.Abs(h.State.Orientation.Roll * Deg) > 30) return t;
+        }
+        return double.NaN;
+    }
+
     private static string Fmt(double t) => double.IsNaN(t) ? "not at all in 30 s" : $"{t:F1} s";
 
     private static string? Release(bool augmented, out double departedAt)
