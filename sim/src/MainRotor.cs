@@ -69,6 +69,12 @@ public sealed class MainRotor
     private readonly Vec3 _xd, _yd, _zd;   // shaft (disc) axes expressed in body axes
     private double _lastThrust;
     private double _a1Filtered, _b1Filtered;
+    // Advancing-tip Mach, held as a maximum over a whole revolution. A single physics
+    // step only sweeps about eight degrees of azimuth, so the per-step maximum is a
+    // reading of wherever the blade happened to be - which is how a measured 0.73
+    // against a 0.74 divergence threshold came to clear compressibility (D-047) when
+    // the true advancing-tip figure at the same condition is 0.82.
+    private double _tipMachThisRev, _tipMachLastRev;
 
     public MainRotor(RotorConfig config)
     {
@@ -101,6 +107,7 @@ public sealed class MainRotor
         Azimuth = 0;
         Inflow.Reset();
         _lastThrust = 0;
+        _tipMachThisRev = _tipMachLastRev = 0;
     }
 
     /// <summary>
@@ -199,6 +206,8 @@ public sealed class MainRotor
         double Ib = cfg.BladeFlapInertia;
         double weightMoment = cfg.BladeMass * Atmosphere.Gravity * cfg.BladeCgRadius;
 
+        double azimuthAtEntry = Azimuth;
+
         for (int step = 0; step < sub; step++)
         {
             Azimuth += omega * dtSub;
@@ -256,7 +265,20 @@ public sealed class MainRotor
                     double viLocal = vInduced * radial
                                    * (1.0 + Inflow.Kx * rBar * along + Inflow.Ky * rBar * across);
 
-                    double uP = viLocal - Vec3.Dot(vElem, _zd);
+                    // Perpendicular velocity resolved on the FLAPPED BLADE'S normal,
+                    // which is what blade-element theory means by U_P. Resolving it on the
+                    // shaft axis instead - as this did - silently drops the classical
+                    // mu*beta*cos(psi) term: the component of the in-plane freestream that
+                    // blows through a CONED disc from below on the front of the rotor and
+                    // from above at the back. It costs nothing in powered flight, where
+                    // beta is small and the term averages out, but in a descent it is the
+                    // part of the upflow the driving region of the disc actually lives on.
+                    // Measured on the six-DOF autorotation trim: 2475 -> 2319 fpm at 70 kt
+                    // (2.86:1 -> 3.06:1) with hover power unchanged at 814 kW. See D-051.
+                    double uR = Vec3.Dot(vElem, er);
+                    double kCone = cfg.ConingInflow;
+                    double sB = sinB * kCone, cB = 1.0 + (cosB - 1.0) * kCone;
+                    double uP = viLocal * cB - (cB * Vec3.Dot(vElem, _zd) + sB * uR);
 
                     double u2 = uT * uT + uP * uP;
                     if (u2 < 1e-6) continue;
@@ -354,6 +376,13 @@ public sealed class MainRotor
             }
         }
 
+        // Roll the tip-Mach bucket when the blade passes the tail, so the reported
+        // figure is the maximum over the last full revolution rather than over the
+        // eight degrees of azimuth this step happened to cover.
+        if (Azimuth < azimuthAtEntry || omega < 1e-3)
+            { _tipMachLastRev = _tipMachThisRev; _tipMachThisRev = 0; }
+        _tipMachThisRev = Math.Max(_tipMachThisRev, maxTipMach);
+
         double inv = 1.0 / dt;
         var outp = new RotorOutput
         {
@@ -407,7 +436,7 @@ public sealed class MainRotor
         double ts2 = Math.Max(tipSpeed * tipSpeed, 1e-6);
         outp.Ct = outp.Thrust / (rho * cfg.DiscArea * ts2);
         outp.CtOverSigma = outp.Ct / Math.Max(cfg.Solidity, 1e-6);
-        outp.TipMachAdvancing = maxTipMach;
+        outp.TipMachAdvancing = Math.Max(_tipMachThisRev, _tipMachLastRev);
         outp.StalledFraction = elementCount > 0 ? (double)stalled / elementCount : 0;
         outp.PowerRequired = outp.ShaftTorque * omega;
         outp.InducedPower = inducedTorqueAcc * inv * omega;

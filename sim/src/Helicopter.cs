@@ -509,6 +509,24 @@ public sealed class Helicopter
         Telemetry.TailRotorSaturated = tr.Saturated;
         Telemetry.TorqueLimited = pp.TorqueLimited;
         Telemetry.Engine = Engine.State;
+
+        // --- Systems, fluids and consequential damage --------------------------
+        //
+        // Last, because it wants what the aircraft actually did this step rather than what
+        // it was asked to do. One frame of lag on the multipliers is invisible at 240 Hz
+        // and is the price of not having to guess at the engine's output before running it.
+        //
+        // The heat source is the power that went THROUGH the gearbox, so the cascade from a
+        // sick engine to a cooked transmission needs no wiring: the governor holds more
+        // collective, more power crosses the mesh, and the oil gets hotter. Nothing in
+        // Damage.cs knows the engine is sick.
+        Damage.UpdateSystems(new SystemLoad(
+            RotorFraction: RotorOmega / Math.Max(cfg.NominalOmega, 1e-6),
+            TorqueFraction: pp.TorquePercent,
+            ShaftPowerW: Math.Max(pp.PowerDelivered, 0),
+            PowerFraction: pp.PowerDelivered / Math.Max(pp.PowerAvailable, 1.0),
+            AmbientTempC: atmo.TemperatureAt(altitude) - 273.15,
+            EngineRunning: Engine.State == EngineState.Running), dt);
     }
 
     /// <summary>Move the actual control positions toward the pilot demand at a finite rate.</summary>

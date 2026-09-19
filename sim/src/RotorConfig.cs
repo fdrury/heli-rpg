@@ -53,6 +53,21 @@ public sealed class RotorConfig
     /// </summary>
     public double RadialInflow { get; set; } = 0.0;
 
+    /// <summary>
+    /// How much of the element velocity is resolved on the FLAPPED BLADE's normal rather
+    /// than on the shaft axis. 1 is correct blade-element theory; 0 reproduces the older,
+    /// shaft-normal behaviour, and it is a knob only so the difference stays measurable.
+    ///
+    /// Blade-element theory defines U_P along the coned blade's normal, which carries the
+    /// classical mu*beta*cos(psi) term - the in-plane freestream blowing up through the
+    /// front of a coned disc and down through the back. Dropping it costs almost nothing
+    /// in powered flight, where beta is small and the term averages out over a revolution,
+    /// but in a descent it is a real part of the upflow the driving region of the disc
+    /// runs on: measured on the six-DOF autorotation trim, 2475 -> 2319 fpm at 70 kt
+    /// (2.86:1 -> 3.06:1) with hover power unchanged (815 -> 814 kW).
+    /// </summary>
+    public double ConingInflow { get; set; } = 1.0;
+
     public double NominalOmega { get; init; } = 27.0;
 
     /// <summary>Forward tilt of the mast, radians. Lets the fuselage sit level in cruise.</summary>

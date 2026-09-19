@@ -477,7 +477,7 @@ public static class EnvelopeTests
         Console.WriteLine("     kt     ROD        glide     Nr");
 
         string? failure = null;
-        double bestRatio = 0, bestKt = 0, bestRod = 0;
+        double bestRatio = 0, bestKt = 0, bestRod = 0, minRod = double.MaxValue;
 
         foreach (double kt in new[] { 40.0, 50.0, 60.0, 70.0, 80.0, 90.0 })
         {
@@ -557,6 +557,7 @@ public static class EnvelopeTests
                               $"  stalled {stallSum / n,4:P0}");
 
             if (ratio > bestRatio) { bestRatio = ratio; bestKt = kt; bestRod = rod; }
+            if (rod > 0.1 && rod < minRod) minRod = rod;
             if (nr < 60) failure ??= $"rotor decayed to {nr:F0}% autorotating at {kt:F0} kt";
         }
 
@@ -583,13 +584,230 @@ public static class EnvelopeTests
                           $"descends {bestRod * Fpm / 1700:F1}x faster than the reference.");
         Console.WriteLine("  See D-041. Guarded against regression, not yet fixed.");
 
-        if (bestRatio < 1.8)
-            failure ??= $"autorotation glide has REGRESSED to {bestRatio:F2}:1 (was 1.99)";
+        Console.WriteLine($"  slowest descent in the sweep {minRod * Fpm:F0} fpm");
+
+        if (bestRatio < 2.1)
+            failure ??= $"autorotation glide has REGRESSED to {bestRatio:F2}:1 (was 2.33)";
         if (bestRatio > 7.0)
             failure ??= $"glide ratio {bestRatio:F2}:1 is a sailplane, not a helicopter";
-        if (bestRod * Fpm > 3500)
-            failure ??= $"rate of descent has REGRESSED to {bestRod * Fpm:F0} fpm (was 3191)";
+        // Guard the SLOWEST descent in the sweep rather than the descent at the best-glide
+        // speed. They are not the same number, and the second one jumps discontinuously the
+        // moment the best-glide speed shifts - which it did, to 90 kt, on a change that made
+        // every single speed in the table better (D-051). A guard that fires on an
+        // across-the-board improvement is measuring the sweep's argmax, not the aircraft.
+        if (minRod * Fpm > 3100)
+            failure ??= $"rate of descent has REGRESSED to {minRod * Fpm:F0} fpm (was 2804)";
 
         return failure;
+    }
+
+    /// <summary>
+    /// The autorotation equilibrium solved as a TRIM, not flown by a controller.
+    ///
+    /// <see cref="Autorotation"/> flies the aircraft with the autopilot and reads what
+    /// happens, which is the right question to ask on behalf of a player and the wrong one
+    /// to ask of the flight model. The autopilot has no lateral channel, so over sixty
+    /// seconds the aircraft slides sideways to 27-47 m/s and drags 13.5 m2 of side area
+    /// through the air. That artefact alone is worth 500-1300 fpm: pinning lateral velocity
+    /// to zero in the same rig moves 60 kt from 3864 fpm to 2561, and it is not the rotor.
+    ///
+    /// So this asks the rotor directly. Six unknowns (collective, both cyclics, pedal,
+    /// pitch, bank) against six residuals (three forces, three moments) at a pinned
+    /// descending condition with the engine failed and Nr held at 100%, then bisect the
+    /// descent rate until net shaft power crosses zero. Straight flight, no sideslip, no
+    /// controller, averaged over a whole revolution - what the disc can actually do.
+    /// </summary>
+    public static string? AutorotationTrim()
+    {
+        Console.WriteLine("  autorotation solved as a six-DOF trim: straight, no sideslip, Nr pinned 100%");
+        Console.WriteLine("     kt     ROD       glide    lever   pitch   shaft kW   residual");
+
+        string? failure = null;
+        double bestRatio = 0, bestKt = 0, bestRod = 0;
+
+        foreach (double kt in new[] { 40.0, 50.0, 60.0, 70.0, 80.0 })
+        {
+            Helicopter h = Fresh();
+            h.PlaceInFlight(1500);
+            h.UseInternalGroundModel = false;
+            h.Sas.Enabled = false;
+            h.Engine.Fail();
+
+            double vx = kt / Kt;
+            double lo = 3.0, hi = 30.0;
+            double[]? seed = null;
+            double[] x = new double[6];
+            double shaft = 0, res = 0;
+            for (int i = 0; i < 9; i++)
+            {
+                double mid = 0.5 * (lo + hi);
+                (x, shaft, res) = TrimDescent(h, vx, mid, seed);
+                seed = (double[])x.Clone();
+                // Positive shaft power means the rotor is being braked: descend harder.
+                if (shaft > 0) lo = mid; else hi = mid;
+            }
+            double w = 0.5 * (lo + hi);
+            (x, shaft, res) = TrimDescent(h, vx, w, seed);
+
+            double ratio = vx / w;
+            Console.WriteLine($"   {kt,5:F0}  {w * Fpm,6:F0} fpm  {ratio,5:F2}:1  {x[0],6:F3}  " +
+                              $"{x[4] * 180 / Math.PI,6:F1}  {shaft / 1000,8:F1}   {res:F5}");
+            if (res > 5e-3) failure ??= $"descent trim did not converge at {kt:F0} kt (residual {res:F4})";
+            if (ratio > bestRatio) { bestRatio = ratio; bestKt = kt; bestRod = w; }
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"  best glide {bestRatio:F2}:1 at {bestKt:F0} kt, {bestRod * Fpm:F0} fpm down");
+        Console.WriteLine("  reference, UH-1H: best glide near 4:1 at 60-70 kt, about 1700 fpm down");
+        Console.WriteLine("  The disc itself reaches about 3.1:1. Whatever the autopilot-flown rig");
+        Console.WriteLine("  reads below that is the lateral drift, not the rotor. See D-051.");
+
+        if (bestRatio < 2.9)
+            failure ??= $"trimmed autorotation glide has REGRESSED to {bestRatio:F2}:1 (was 3.15)";
+        if (bestRod * Fpm > 2800)
+            failure ??= $"trimmed rate of descent has REGRESSED to {bestRod * Fpm:F0} fpm (was 2568)";
+        return failure;
+    }
+
+    /// <summary>
+    /// Net specific force and angular acceleration at a pinned descending condition, after
+    /// letting inflow and flapping relax, averaged over a whole rotor revolution.
+    /// </summary>
+    private static double DescentResiduals(Helicopter h, double[] x, double vx, double w, double[] r)
+    {
+        const double dt = 1.0 / 240.0;
+        var c = new Controls
+        {
+            Collective = Math.Clamp(x[0], 0, 1),
+            CyclicPitch = Math.Clamp(x[1], -1, 1),
+            CyclicRoll = Math.Clamp(x[2], -1, 1),
+            Pedal = Math.Clamp(x[3], -1, 1),
+            Throttle = 0,
+        };
+        var att = Quat.FromEuler(x[5], x[4], 0);
+        var vel = new Vec3(vx, 0, w);
+        double nom = h.Airframe.MainRotor.NominalOmega;
+
+        // Start every evaluation from the same rotor state, or the residual is a function
+        // of evaluation ORDER as well as of the unknowns and Newton is being fed noise.
+        h.Rotor.Reset();
+        h.RotorOmega = nom;
+        for (int i = 0; i < 400; i++)
+        {
+            h.State.Position = new Vec3(0, 0, -1500);
+            h.State.Orientation = att;
+            h.State.Velocity = vel;
+            h.State.AngularVelocity = Vec3.Zero;
+            h.RotorOmega = nom;
+            h.ForceActuators(c);
+            h.Step(dt);
+        }
+
+        Vec3 f = Vec3.Zero, m = Vec3.Zero;
+        double shaft = 0;
+        int n = Math.Max(8, (int)Math.Round(Math.Tau / nom / dt));
+        for (int i = 0; i < n; i++)
+        {
+            h.State.Position = new Vec3(0, 0, -1500);
+            h.State.Orientation = att;
+            h.State.Velocity = vel;
+            h.State.AngularVelocity = Vec3.Zero;
+            h.RotorOmega = nom;
+            h.ForceActuators(c);
+            h.Step(dt);
+            f += (h.State.Velocity - vel) / dt;          // gravity included
+            m += h.State.AngularVelocity / dt;
+            shaft += h.Telemetry.MainRotorPower + h.Telemetry.TailRotorPower
+                     + h.Telemetry.DrivetrainPower;
+        }
+        r[0] = f.X / n / Atmosphere.Gravity;
+        r[1] = f.Y / n / Atmosphere.Gravity;
+        r[2] = f.Z / n / Atmosphere.Gravity;
+        r[3] = m.X / n * 0.05;
+        r[4] = m.Y / n * 0.05;
+        r[5] = m.Z / n * 0.05;
+        return shaft / n;
+    }
+
+    /// <summary>Damped Newton on the six descent residuals, numerical Jacobian.</summary>
+    private static (double[] x, double shaft, double residual)
+        TrimDescent(Helicopter h, double vx, double w, double[]? seed)
+    {
+        var x = new double[6];
+        if (seed is not null) Array.Copy(seed, x, 6); else x[0] = 0.2;
+
+        var r = new double[6];
+        var probe = new double[6];
+        var trial = new double[6];
+        double shaft = DescentResiduals(h, x, vx, w, r);
+        double norm = Norm(r);
+        var jac = new double[6, 6];
+
+        for (int it = 0; it < 25 && norm > 2e-4; it++)
+        {
+            for (int col = 0; col < 6; col++)
+            {
+                var xp = (double[])x.Clone();
+                xp[col] += 3e-4;
+                DescentResiduals(h, xp, vx, w, probe);
+                for (int row = 0; row < 6; row++) jac[row, col] = (probe[row] - r[row]) / 3e-4;
+            }
+            if (!SolveLinear(jac, r, out double[] dx)) break;
+
+            double a = 1.0;
+            bool improved = false;
+            for (int back = 0; back < 14; back++)
+            {
+                for (int i = 0; i < 6; i++) trial[i] = x[i] - a * dx[i];
+                trial[0] = Math.Clamp(trial[0], 0, 1);
+                double s = DescentResiduals(h, trial, vx, w, probe);
+                if (Norm(probe) < norm)
+                {
+                    Array.Copy(trial, x, 6);
+                    Array.Copy(probe, r, 6);
+                    norm = Norm(probe);
+                    shaft = s;
+                    improved = true;
+                    break;
+                }
+                a *= 0.5;
+            }
+            if (!improved) break;
+        }
+        return (x, shaft, norm);
+    }
+
+    private static double Norm(double[] r)
+    {
+        double s = 0;
+        foreach (double v in r) s += v * v;
+        return Math.Sqrt(s);
+    }
+
+    private static bool SolveLinear(double[,] a, double[] b, out double[] x)
+    {
+        int n = b.Length;
+        var m = new double[n, n + 1];
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < n; j++) m[i, j] = a[i, j];
+            m[i, n] = b[i];
+        }
+        for (int c = 0; c < n; c++)
+        {
+            int p = c;
+            for (int i = c + 1; i < n; i++) if (Math.Abs(m[i, c]) > Math.Abs(m[p, c])) p = i;
+            if (Math.Abs(m[p, c]) < 1e-12) { x = new double[n]; return false; }
+            if (p != c) for (int j = 0; j <= n; j++) (m[c, j], m[p, j]) = (m[p, j], m[c, j]);
+            for (int i = 0; i < n; i++)
+            {
+                if (i == c) continue;
+                double f = m[i, c] / m[c, c];
+                for (int j = c; j <= n; j++) m[i, j] -= f * m[c, j];
+            }
+        }
+        x = new double[n];
+        for (int i = 0; i < n; i++) x[i] = m[i, n] / m[i, i];
+        return true;
     }
 }

@@ -41,6 +41,21 @@ public struct PowerplantOutput
     public double PowerDelivered;      // W
     public double PowerAvailable;      // W at current density altitude
     public double TorquePercent;       // of transmission limit
+
+    /// <summary>
+    /// Torque the governor was <i>asking</i> for, as a fraction of the transmission limit,
+    /// uncapped. Above 1.0 means the pilot is demanding more than the gearbox is placarded
+    /// for and the ceiling is holding him back.
+    ///
+    /// Reported rather than delivered because the ceiling stays exactly where it was: this
+    /// is a gauge, not a change to the power available. It exists because
+    /// <see cref="PowerplantOutput.TorquePercent"/> is clamped at the limit and therefore
+    /// can never tell the difference between an aircraft comfortably at 100% and an
+    /// aircraft that would be at 130% if it could - which is the difference between a
+    /// heavy day and an impossible one.
+    /// </summary>
+    public double TorqueDemandPercent;
+
     public double FuelFlow;            // kg/s
     public bool FreewheelEngaged;      // false = autorotating
     public bool TorqueLimited;
@@ -162,6 +177,8 @@ public sealed class Powerplant
         double torqueCeilingPower = powerAvailable / Math.Max(rotorOmega, 1.0);
         double ceiling = Math.Min(torqueCeilingPower, torqueLimit);
         o.TorqueLimited = torqueCommand > ceiling;
+        // Recorded before the clamp: what was asked for, not what was allowed.
+        o.TorqueDemandPercent = Math.Max(0, torqueCommand) / Math.Max(torqueLimit, 1e-6);
         torqueCommand = Math.Clamp(torqueCommand, 0, ceiling);
 
         // --- Spool lag -------------------------------------------------------
