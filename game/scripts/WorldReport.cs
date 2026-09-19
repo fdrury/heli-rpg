@@ -12,6 +12,12 @@ namespace Rotorwash;
 /// simply get no airfields, with no error. This prints what the terrain actually offers
 /// so the placement rules can be written against reality instead of against a guess.
 ///
+/// It also prints the story-places table: every authored role in
+/// <see cref="StoryPlaces"/>, the generated site it bound to, and - loudly - any role
+/// that failed to bind. A role that does not bind is a beat that cannot fire, and that
+/// is a content bug rather than a missing feature, so it belongs in the same report as
+/// an airfield that silently never appeared.
+///
 ///     godot --headless --path game -- --worldreport
 /// </summary>
 public static class WorldReport
@@ -24,6 +30,8 @@ public static class WorldReport
         Sites();
         GD.Print("");
         Coverage();
+        GD.Print("");
+        StoryPlaces.Report();
         GD.Print("=====================================================================");
     }
 
@@ -105,7 +113,43 @@ public static class WorldReport
                 if (s.Region == r.Kind) { example = $"{s.Name} ({s.Kind})"; break; }
             GD.Print($"  {r.Name,-18} {r.Tier,3}   {byRegion.GetValueOrDefault(r.Kind),5}   {example}");
         }
+
+        // The census, by region and kind. Placement is rejection sampling and it fails
+        // SILENTLY - a region can ask for four settlements, get none, and say nothing.
+        // The totals above hide that completely, because the farmsteads make up the
+        // count. This table is what the story layer binds against, so it is the table
+        // that decides whether a beat has anywhere to happen.
+        var kinds = (SiteKind[])Enum.GetValues(typeof(SiteKind));
+        GD.Print("");
+        GD.Print("  what each region actually got (asked-for counts live in WorldMap.BuildSites)");
+        var header = new System.Text.StringBuilder("  region            ");
+        foreach (SiteKind k in kinds) header.Append($"{Abbrev(k),5}");
+        GD.Print(header.ToString());
+        foreach (Region r in WorldMap.Regions)
+        {
+            var row = new System.Text.StringBuilder($"  {r.Name,-18}");
+            foreach (SiteKind k in kinds)
+            {
+                int n = 0;
+                foreach (Site s in WorldMap.Sites) if (s.Region == r.Kind && s.Kind == k) n++;
+                row.Append(n == 0 ? "    ." : $"{n,5}");
+            }
+            GD.Print(row.ToString());
+        }
     }
+
+    private static string Abbrev(SiteKind k) => k switch
+    {
+        SiteKind.FuelCache => "fuel",
+        SiteKind.Settlement => "town",
+        SiteKind.Workshop => "shop",
+        SiteKind.Wreck => "wrek",
+        SiteKind.Relay => "mast",
+        SiteKind.Depot => "dpot",
+        SiteKind.Airfield => "fild",
+        SiteKind.Farmstead => "farm",
+        _ => "look",
+    };
 
     private static void Coverage()
     {
