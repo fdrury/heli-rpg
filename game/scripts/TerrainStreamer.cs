@@ -73,6 +73,7 @@ public sealed partial class TerrainStreamer : Node3D
         public int[] Indices = Array.Empty<int>();
         public float[]? Heights;
         public int HeightRes;
+        public Vector3[]? CollisionTris;
     }
 
     public override void _Ready()
@@ -262,6 +263,7 @@ public sealed partial class TerrainStreamer : Node3D
             }
 
             float[]? heights = null;
+            Vector3[]? collisionTris = null;
             int heightRes = 0;
             if (withCollision)
             {
@@ -274,6 +276,38 @@ public sealed partial class TerrainStreamer : Node3D
                 for (int j = 0; j < heightRes; j++)
                     for (int i = 0; i < heightRes; i++)
                         heights[j * heightRes + i] = WorldHeight.At(ox + i * hcell, oz + j * hcell);
+
+                // A triangle soup at true world spacing, NOT a HeightMapShape3D.
+                //
+                // HeightMapShape3D samples one unit apart and the only way to widen that is
+                // to scale the CollisionShape3D - here by (8, 1, 8), because chunks are
+                // 512 m across and sampled 65 times. Godot tolerates that badly: RAYCASTS
+                // against the scaled shape return correct hits at exactly the right height,
+                // while bodies pass straight through it. That combination is what made this
+                // so hard to see - every probe said the ground was there and correctly
+                // placed, and the pilot fell through it anyway, accelerating until they
+                // were 8.5 km below a helicopter they had been standing beside.
+                //
+                // A trimesh needs no scale, so there is nothing to get wrong. It costs
+                // about 8k triangles per chunk for the two dozen chunks that carry
+                // collision, which is a price worth paying for ground that is actually solid.
+                int quads = heightRes - 1;
+                collisionTris = new Vector3[quads * quads * 6];
+                int tri = 0;
+                for (int j = 0; j < quads; j++)
+                {
+                    for (int i = 0; i < quads; i++)
+                    {
+                        float x0 = i * hcell, x1 = (i + 1) * hcell;
+                        float z0 = j * hcell, z1 = (j + 1) * hcell;
+                        var v00 = new Vector3(x0, heights[j * heightRes + i], z0);
+                        var v10 = new Vector3(x1, heights[j * heightRes + i + 1], z0);
+                        var v11 = new Vector3(x1, heights[(j + 1) * heightRes + i + 1], z1);
+                        var v01 = new Vector3(x0, heights[(j + 1) * heightRes + i], z1);
+                        collisionTris[tri++] = v00; collisionTris[tri++] = v01; collisionTris[tri++] = v11;
+                        collisionTris[tri++] = v00; collisionTris[tri++] = v11; collisionTris[tri++] = v10;
+                    }
+                }
             }
 
             lock (_readyLock)
@@ -284,6 +318,7 @@ public sealed partial class TerrainStreamer : Node3D
                     Verts = verts, Normals = normals, Uvs = uvs, Colours = colours,
                     Indices = indices.ToArray(),
                     Heights = heights, HeightRes = heightRes,
+                    CollisionTris = collisionTris,
                 });
             }
         }
@@ -345,25 +380,17 @@ public sealed partial class TerrainStreamer : Node3D
             chunk.Mesh.Mesh = arrayMesh;
             chunk.Lod = build.Lod;
 
-            if (build.Heights is not null && chunk.Body is null)
+            if (build.CollisionTris is not null && chunk.Body is null)
             {
-                var shape = new HeightMapShape3D
-                {
-                    MapWidth = build.HeightRes,
-                    MapDepth = build.HeightRes,
-                    MapData = build.Heights,
-                };
-                float hcell = ChunkSize / (build.HeightRes - 1);
+                // Triangles are already in chunk-local space, so the body sits at the
+                // chunk's CORNER and the collision shape carries no scale at all.
+                var shape = new ConcavePolygonShape3D { Data = build.CollisionTris };
                 var body = new StaticBody3D
                 {
                     Name = $"Body_{build.Coord.X}_{build.Coord.Y}",
-                    // HeightMapShape3D centres itself on its origin, so the body sits at
-                    // the middle of the chunk rather than its corner.
-                    Position = new Vector3((build.Coord.X + 0.5f) * ChunkSize, 0,
-                                           (build.Coord.Y + 0.5f) * ChunkSize),
+                    Position = new Vector3(build.Coord.X * ChunkSize, 0, build.Coord.Y * ChunkSize),
                 };
-                var col = new CollisionShape3D { Shape = shape, Scale = new Vector3(hcell, 1, hcell) };
-                body.AddChild(col);
+                body.AddChild(new CollisionShape3D { Shape = shape });
                 AddChild(body);
                 chunk.Body = body;
             }
