@@ -26,22 +26,27 @@ public sealed partial class PropScatter : Node3D
     [Export] public int ScrubRadius { get; set; } = 3;
     [Export] public int RockRadius { get; set; } = 8;
     [Export] public int TreeRadius { get; set; } = 14;
+    [Export] public int GreenTreeRadius { get; set; } = 14;
 
     [Export] public float ScrubDensity { get; set; } = 0.022f;
     [Export] public float RockDensity { get; set; } = 0.0012f;
     [Export] public float TreeDensity { get; set; } = 0.00050f;
+    [Export] public float GreenTreeDensity { get; set; } = 0.0035f;
 
     [Export] public int MaxApplyPerFrame { get; set; } = 2;
 
     public Node3D? Target { get; set; }
 
-    private enum PropKind { Scrub = 0, Rock = 1, Tree = 2 }
+    private enum PropKind { Scrub = 0, Rock = 1, Tree = 2, GreenTree = 3 }
 
     private readonly List<Mesh> _rockMeshes = new();
     private readonly List<Mesh> _treeMeshes = new();
+    private readonly List<Mesh> _greenTreeMeshes = new();
     private Mesh _scrubMesh = null!;
     private Material _rockMaterial = null!, _treeMaterial = null!, _scrubMaterial = null!;
+    private Material _greenTreeMaterial = null!;
     private FastNoiseLite _clumpNoise = null!;
+    private FastNoiseLite _forestNoise = null!;
 
     private readonly Dictionary<(Vector2I, PropKind), Node3D> _active = new();
     private readonly HashSet<(Vector2I, PropKind)> _pending = new();
@@ -61,6 +66,7 @@ public sealed partial class PropScatter : Node3D
     {
         for (int i = 0; i < 4; i++) _rockMeshes.Add(ProceduralProps.Rock(Seed + i * 31, 1.0f, 2));
         for (int i = 0; i < 5; i++) _treeMeshes.Add(ProceduralProps.DeadTree(Seed + 700 + i * 17, 9f));
+        for (int i = 0; i < 6; i++) _greenTreeMeshes.Add(ProceduralProps.GreenTree(Seed + 2000 + i * 23));
         _scrubMesh = ProceduralProps.ScrubCard(1.05f, 0.72f, 3);
 
         _clumpNoise = new FastNoiseLite
@@ -68,6 +74,14 @@ public sealed partial class PropScatter : Node3D
             Seed = Seed + 5,
             NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin,
             Frequency = 0.0014f,
+            FractalOctaves = 3,
+        };
+
+        _forestNoise = new FastNoiseLite
+        {
+            Seed = Seed + 42,
+            NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin,
+            Frequency = 0.00065f,
             FractalOctaves = 3,
         };
 
@@ -104,6 +118,12 @@ public sealed partial class PropScatter : Node3D
             Backlight = new Color(0.26f, 0.24f, 0.16f),
             AlbedoColor = new Color(0.94f, 0.93f, 0.88f),
         };
+
+        _greenTreeMaterial = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.16f, 0.20f, 0.12f),
+            Roughness = 0.92f,
+        };
     }
 
     public override void _Process(double delta)
@@ -128,6 +148,7 @@ public sealed partial class PropScatter : Node3D
         Collect(wanted, centre, PropKind.Scrub, ScrubRadius);
         Collect(wanted, centre, PropKind.Rock, RockRadius);
         Collect(wanted, centre, PropKind.Tree, TreeRadius);
+        Collect(wanted, centre, PropKind.GreenTree, GreenTreeRadius);
 
         var stale = new List<(Vector2I, PropKind)>();
         foreach (var key in _active.Keys) if (!wanted.Contains(key)) stale.Add(key);
@@ -168,12 +189,14 @@ public sealed partial class PropScatter : Node3D
             {
                 PropKind.Rock => _rockMeshes.Count,
                 PropKind.Tree => _treeMeshes.Count,
+                PropKind.GreenTree => _greenTreeMeshes.Count,
                 _ => 1,
             };
             float density = kind switch
             {
                 PropKind.Scrub => ScrubDensity,
                 PropKind.Rock => RockDensity,
+                PropKind.GreenTree => GreenTreeDensity,
                 _ => TreeDensity,
             } / variants;
 
@@ -225,12 +248,14 @@ public sealed partial class PropScatter : Node3D
             // Large-scale clumping: stands of trees, scree fields, bare ground. Uniform
             // scatter is the clearest possible tell that a world was generated.
             float clump = _clumpNoise.GetNoise2D(wx, wz) * 0.5f + 0.5f;
+            float forest = _forestNoise.GetNoise2D(wx, wz) * 0.5f + 0.5f;
 
             bool keep = kind switch
             {
-                PropKind.Scrub => slope > 0.80f && h < 210f && clump > 0.44f,
+                PropKind.Scrub => slope > 0.80f && h > WorldHeight.WaterLevel && h < 210f && clump > 0.44f,
                 PropKind.Rock => slope > 0.40f && (slope < 0.92f || clump > 0.62f),
-                PropKind.Tree => slope > 0.88f && h < 180f && clump > 0.56f,
+                PropKind.Tree => slope > 0.88f && h > WorldHeight.WaterLevel && h < 180f && clump > 0.56f,
+                PropKind.GreenTree => slope > 0.72f && h > WorldHeight.WaterLevel && h < 240f && forest > 0.46f,
                 _ => false,
             };
             if (!keep) continue;
@@ -239,6 +264,7 @@ public sealed partial class PropScatter : Node3D
             {
                 PropKind.Scrub => rng.RandfRange(0.65f, 1.55f),
                 PropKind.Rock => rng.RandfRange(0.4f, 3.0f),
+                PropKind.GreenTree => rng.RandfRange(0.7f, 1.5f),
                 _ => rng.RandfRange(0.65f, 1.40f),
             };
 
@@ -331,6 +357,7 @@ public sealed partial class PropScatter : Node3D
             {
                 PropKind.Scrub => (_scrubMesh, _scrubMaterial, 300f),
                 PropKind.Rock => (_rockMeshes[built.Variant], _rockMaterial, 1400f),
+                PropKind.GreenTree => (_greenTreeMeshes[built.Variant], _greenTreeMaterial, 2200f),
                 _ => (_treeMeshes[built.Variant], _treeMaterial, 2600f),
             };
 

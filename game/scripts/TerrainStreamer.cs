@@ -48,6 +48,8 @@ public sealed partial class TerrainStreamer : Node3D
     private readonly object _readyLock = new();
 
     private Material _terrainMaterial = null!;
+    private Material _waterMaterial = null!;
+    private ArrayMesh _waterQuad = null!;
     private Vector2I _lastCentre = new(int.MinValue, int.MinValue);
     private int _chunksBuilt;
 
@@ -61,6 +63,7 @@ public sealed partial class TerrainStreamer : Node3D
         public StaticBody3D? Body;
         public int Lod = -1;
         public Node3D? Props;
+        public MeshInstance3D? Water;
     }
 
     private sealed class ChunkBuild
@@ -78,11 +81,14 @@ public sealed partial class TerrainStreamer : Node3D
         public float[]? Heights;
         public int HeightRes;
         public Vector3[]? CollisionTris;
+        public bool NeedsWater;
     }
 
     public override void _Ready()
     {
         _terrainMaterial = TerrainMaterial.Build();
+        _waterMaterial = BuildWaterMaterial();
+        _waterQuad = BuildWaterQuad(ChunkSize);
     }
 
     public override void _Process(double delta)
@@ -140,6 +146,7 @@ public sealed partial class TerrainStreamer : Node3D
             _active[coord].Mesh.QueueFree();
             _active[coord].Body?.QueueFree();
             _active[coord].Props?.QueueFree();
+            _active[coord].Water?.QueueFree();
             _active.Remove(coord);
         }
 
@@ -192,6 +199,7 @@ public sealed partial class TerrainStreamer : Node3D
             float cell = ChunkSize / (res - 1);
             float ox = coord.X * ChunkSize, oz = coord.Y * ChunkSize;
 
+            float minH = float.MaxValue;
             var verts = new Vector3[res * res];
             var normals = new Vector3[res * res];
             var uvs = new Vector2[res * res];
@@ -206,6 +214,7 @@ public sealed partial class TerrainStreamer : Node3D
                     Vector3 nrm = WorldHeight.NormalAt(ox + x, oz + z, cell * 0.5f);
                     int idx = j * res + i;
                     verts[idx] = new Vector3(x, h, z);
+                    if (h < minH) minH = h;
                     normals[idx] = nrm;
                     uvs[idx] = new Vector2((ox + x) * 0.02f, (oz + z) * 0.02f);
                     colours[idx] = new Color(nrm.Y, 0f, 0f, 1f);
@@ -323,6 +332,7 @@ public sealed partial class TerrainStreamer : Node3D
                     Indices = indices.ToArray(),
                     Heights = heights, HeightRes = heightRes,
                     CollisionTris = collisionTris,
+                    NeedsWater = minH < WorldHeight.WaterLevel + 3f,
                 });
             }
         }
@@ -401,6 +411,19 @@ public sealed partial class TerrainStreamer : Node3D
                 CollisionBodies++;
             }
 
+            if (build.NeedsWater && chunk.Water is null)
+            {
+                chunk.Water = new MeshInstance3D
+                {
+                    Name = $"Water_{build.Coord.X}_{build.Coord.Y}",
+                    Position = new Vector3(build.Coord.X * ChunkSize, WorldHeight.WaterLevel, build.Coord.Y * ChunkSize),
+                    Mesh = _waterQuad,
+                    MaterialOverride = _waterMaterial,
+                    CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                };
+                AddChild(chunk.Water);
+            }
+
             _pending.Remove(build.Coord);
             _chunksBuilt++;
 
@@ -414,4 +437,38 @@ public sealed partial class TerrainStreamer : Node3D
     public int ActiveChunks => _active.Count;
     public int PendingChunks => _pending.Count;
     public int ChunksBuilt => _chunksBuilt;
+
+    private static ArrayMesh BuildWaterQuad(float size)
+    {
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = new Vector3[]
+        {
+            new(0, 0, 0), new(size, 0, 0), new(size, 0, size), new(0, 0, size),
+        };
+        arrays[(int)Mesh.ArrayType.Normal] = new Vector3[]
+        {
+            Vector3.Up, Vector3.Up, Vector3.Up, Vector3.Up,
+        };
+        // CW winding for Godot front-facing, viewed from above.
+        arrays[(int)Mesh.ArrayType.Index] = new int[] { 0, 3, 2, 0, 2, 1 };
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
+    }
+
+    private static Material BuildWaterMaterial()
+    {
+        var shader = GD.Load<Shader>("res://assets/terrain/water.gdshader");
+        if (shader is null)
+        {
+            GD.PushWarning("[terrain] water shader missing, using fallback");
+            return new StandardMaterial3D
+            {
+                AlbedoColor = new Color(0.06f, 0.08f, 0.07f),
+                Roughness = 0.3f,
+            };
+        }
+        return new ShaderMaterial { Shader = shader };
+    }
 }

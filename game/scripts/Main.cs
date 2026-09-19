@@ -79,6 +79,8 @@ public sealed partial class Main : Node3D
         _sites = new SiteStreamer { Name = "Sites" };
         AddChild(_sites);
 
+        AddChild(new Roads { Name = "Roads" });
+
         _heli = BuildHelicopter();
         AddChild(_heli);
 

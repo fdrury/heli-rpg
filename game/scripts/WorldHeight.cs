@@ -71,6 +71,9 @@ public static class WorldHeight
 
     public const float SeaLevel = 0f;
 
+    /// <summary>Height of standing water in valleys. Terrain below this is underwater.</summary>
+    public const float WaterLevel = -5f;
+
     /// <summary>Carves the valley network. Ridged noise inverted becomes drainage.</summary>
     private static readonly FastNoiseLite Valleys = new()
     {

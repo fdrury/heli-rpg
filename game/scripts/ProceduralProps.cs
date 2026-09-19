@@ -164,6 +164,64 @@ public static class ProceduralProps
         st.SetUV(new Vector2(0, 0)); st.AddVertex(a);
     }
 
+    // -------------------------------------------------------------- green trees
+
+    /// <summary>
+    /// A living tree: trunk plus a noise-deformed canopy blob. The landscape is dying
+    /// but not dead — hardier species hold on in the lower, wetter ground, and from a
+    /// helicopter a dark blob of canopy is what reads as "forest".
+    /// </summary>
+    public static ArrayMesh GreenTree(int seed, float height = 7f)
+    {
+        var rng = new RandomNumberGenerator { Seed = (ulong)seed };
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+
+        // Trunk: a short tapered cylinder, barely visible from altitude.
+        float trunkH = height * rng.RandfRange(0.30f, 0.45f);
+        float baseR = height * 0.028f;
+        AddTaperedSegment(st, Vector3.Zero, Vector3.Up * trunkH, baseR, baseR * 0.35f, 5);
+
+        // Canopy: a noise-deformed icosphere, squashed vertically and spread wide.
+        BuildIcosphere(1, out var cv, out var ct);
+        var noise = new FastNoiseLite
+        {
+            Seed = seed + 42,
+            NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin,
+            Frequency = 1.1f,
+        };
+
+        float crownR = height * rng.RandfRange(0.24f, 0.38f);
+        float crownH = height * rng.RandfRange(0.20f, 0.32f);
+        Vector3 crownC = Vector3.Up * (trunkH + crownH * 0.35f);
+
+        for (int i = 0; i < cv.Count; i++)
+        {
+            Vector3 v = cv[i];
+            float n = noise.GetNoise3D(v.X * 2.5f, v.Y * 2.5f, v.Z * 2.5f);
+            cv[i] = new Vector3(
+                v.X * crownR * (1f + n * 0.30f),
+                v.Y * crownH * (1f + n * 0.20f),
+                v.Z * crownR * (1f + n * 0.30f)
+            ) + crownC;
+        }
+
+        // Canopy — reversed winding for Godot CW convention.
+        for (int i = 0; i < ct.Count; i += 3)
+        {
+            Vector3 a = cv[ct[i]], b = cv[ct[i + 1]], c = cv[ct[i + 2]];
+            foreach (Vector3 v in new[] { a, c, b })
+            {
+                st.SetUV(new Vector2(v.X * 0.1f + 0.5f, v.Z * 0.1f + 0.5f));
+                st.AddVertex(v);
+            }
+        }
+
+        st.GenerateNormals();
+        st.GenerateTangents();
+        return st.Commit();
+    }
+
     // ------------------------------------------------------------------ scrub
 
     /// <summary>
