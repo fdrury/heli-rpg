@@ -110,9 +110,16 @@ public sealed class RotorSynth
         double slapFromMach = Math.Clamp((_sTipMach - 0.62) / 0.22, 0, 1.0);
         double slapFromVrs = Math.Clamp(_sVrs * 1.4, 0, 1.0);
         double slapFromDescent = Math.Clamp(-s.VerticalSpeed / 7.0, 0, 1.0) * 0.6;
-        double slap = Math.Clamp(0.30 + slapFromLoad + slapFromMach * 0.9 + slapFromVrs + slapFromDescent, 0, 2.2);
+        // Torque in its own right, not only through blade loading. The transmission and
+        // the rotor are both working harder, and a Huey pulling power is unmistakably
+        // louder and harder-edged than one loafing along. Without this, going from a
+        // quarter torque to an overtorque changed the output level by two and a half per
+        // cent, which is to say the player could not hear power at all.
+        double slapFromTorque = Math.Clamp((_sTorque - 0.35) / 0.75, 0, 1.0) * 0.55;
+        double slap = Math.Clamp(0.30 + slapFromLoad + slapFromMach * 0.9 + slapFromVrs
+                                 + slapFromDescent + slapFromTorque, 0, 2.2);
 
-        double washLevel = Math.Clamp(nr * nr * (0.35 + _sCollective * 0.9), 0, 1.6);
+        double washLevel = Math.Clamp(nr * nr * (0.35 + _sCollective * 0.9 + _sTorque * 0.40), 0, 1.8);
         double tailLevel = Math.Clamp(nr * nr * 0.5, 0, 1.0) * Math.Clamp(s.TailRotorHealth, 0, 1);
         double turbineLevel = Math.Clamp(_sN1 * _sN1, 0, 1.2) * (0.35 + running * 0.65);
         double gearLevel = Math.Clamp(nr * _sTorque * 0.5, 0, 0.8);

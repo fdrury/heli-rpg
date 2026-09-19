@@ -41,6 +41,9 @@ public static class Program
         Run("handsoff", TrimTests.HandsOff);
         Run("sassweep", TrimTests.SasSweep);
         Run("ratesens", TrimTests.RateSensitivity);
+        Run("audiowave", AudioTests.Waveform);
+        Run("bladepass", AudioTests.BladePass);
+        Run("audiostate", AudioTests.RespondsToState);
         Run("solar", WeatherTests.Solar);
         Run("weather", WeatherTests.Conditions);
         Run("windeffect", WeatherTests.WindEffect);

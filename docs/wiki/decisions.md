@@ -1018,3 +1018,29 @@ Two more, both visible only in a render:
   could read them.
 * The first panel lighting pass blew the glareshield to white. Instrument lighting that
   outshines the world outside is how you lose the horizon; it is much more restrained now.
+
+## D-035 — The audio is measured, and power is now audible
+
+**Decision.** `tools/simlab/AudioTests.cs` renders `RotorSynth` into an array and measures
+it. Torque now contributes to blade slap and rotor wash directly, not only through blade
+loading.
+
+**Why.** Audio is the one part of this project nobody can check in a screenshot, and it had
+no test at all — a synthesiser can be silent, clipped, full of NaN, or modulating at the
+wrong rate, and every one of those survives indefinitely if the only way to notice is to put
+headphones on.
+
+The synth came out of it well. The **blade-pass rate** — the thing that decides whether it
+sounds like *this* machine — measures 10.73 Hz against 10.79 expected, and tracks rotor
+speed correctly down to 70% Nr.
+
+One real defect: going from a quarter torque to an overtorque changed the output level by
+**2.5%**, so the player could not hear power at all. Slap was driven by blade loading, tip
+Mach, vortex ring and descent, and torque reached only the gear whine. Now 0.0518 → 0.0964
+RMS across the same range.
+
+**And one bad test.** The first version held blade loading fixed while varying torque, which
+is not a flight condition any aircraft can be in. It made the synthesiser look deaf to power
+when the real answer was that the question was impossible. The state now moves coherently —
+which is the same lesson as the control-derivative tests that measured departure instead of
+response.
