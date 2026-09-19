@@ -21,7 +21,7 @@ public sealed partial class ScreenshotDirector : Node
     private readonly Autopilot _ap = new() { CollectiveTrim = 0.5 };
 
     private sealed record Shot(string Name, CameraMode Mode, float Altitude, float Speed, float Heading,
-                               SiteKind? Over = null);
+                               SiteKind? Over = null, double? ClockHours = null);
 
     private readonly List<Shot> _shots = new()
     {
@@ -38,6 +38,14 @@ public sealed partial class ScreenshotDirector : Node
         new("12_relay",          CameraMode.Orbit,   90f,  0f,  2.2f, SiteKind.Relay),
         new("13_depot_low",      CameraMode.Chase,   70f, 18f,  3.1f, SiteKind.Depot),
         new("06_high_cruise",    CameraMode.Chase,  420f,  50f,  5.1f),
+
+        // Time-pinned, so the day/night model can actually be LOOKED at. Without these the
+        // whole set renders inside a ninety-minute window and a night sky could be broken
+        // for weeks without anyone noticing.
+        new("14_dawn",           CameraMode.Chase,  160f,  38f,  1.3f, null,  7.7),
+        new("15_dusk",           CameraMode.Chase,  160f,  38f,  4.6f, null, 16.4),
+        new("16_night",          CameraMode.Chase,  160f,  38f,  2.2f, null, 22.0),
+        new("17_night_cockpit",  CameraMode.Cockpit,120f,  32f,  2.1f, null, 22.0),
     };
 
     private Site? _aimedAt;
@@ -76,6 +84,12 @@ public sealed partial class ScreenshotDirector : Node
     private void Setup(Shot shot)
     {
         _camera.Mode = shot.Mode;
+
+        // Hold the clock still for the duration of the set. Otherwise thirteen shots at
+        // sixteen seconds of settle each advance the world by an hour and a half, and no
+        // two pictures in the set are comparable.
+        SceneMood.TimeScale = 0;
+        SceneMood.Clock = (shot.ClockHours ?? 9.25) * 3600.0;
 
         Vector2 ground2;
         if (shot.Over is SiteKind kind)
@@ -160,6 +174,8 @@ public sealed partial class ScreenshotDirector : Node
         Error err = img.SavePng(path);
 
         var t = _heli.Sim.Telemetry;
+        GD.Print($"[shots]     {Progress.FormatClock(SceneMood.Clock)}  " +
+                 $"sun {SceneMood.SunNow.ElevationDeg:F0} deg  {SceneMood.Now.Describe()}");
         GD.Print($"[shots] {shot.Name}: {(err == Error.Ok ? "saved" : err.ToString())}  " +
                  $"{t.AirspeedTrue * 1.94384:F0} kt  {t.HeightAgl:F0} m agl  {Engine.GetFramesPerSecond()} fps");
 

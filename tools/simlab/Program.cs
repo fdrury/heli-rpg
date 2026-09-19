@@ -41,6 +41,9 @@ public static class Program
         Run("handsoff", TrimTests.HandsOff);
         Run("sassweep", TrimTests.SasSweep);
         Run("ratesens", TrimTests.RateSensitivity);
+        Run("solar", WeatherTests.Solar);
+        Run("weather", WeatherTests.Conditions);
+        Run("windeffect", WeatherTests.WindEffect);
         Run("freetrace", Trace.FreeTrace);
         Run("hovertrace", Trace.HoverTrace);
         Run("rotorbench", RotorBench.Sweep);

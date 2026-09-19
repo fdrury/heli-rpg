@@ -683,3 +683,47 @@ visible from the seat, and the windscreen side pillar is chunky at this eye posi
 want a proper look-around control rather than more geometry.
 
 **Reversible.** Two mesh builders and a light; delete the three lines in `Build`.
+
+## D-026 — Weather and the sun are a model, not a set of presets
+
+**Decision.** `sim/src/Weather.cs` provides a deterministic weather and solar model.
+`SceneMood` no longer offers named looks; it reads a clock and renders whatever the model
+implies. The game clock runs at 30× real time — a full day in forty-eight minutes.
+
+**Why.** The environment interface has carried a wind vector and a spatially correlated gust
+field through to the rotor since the beginning, and **nothing ever set them**. Every flight
+in the game so far has been in dead calm air at standard temperature. This puts something on
+the other end of that wire.
+
+Two properties were chosen deliberately:
+
+* **Deterministic, with no accumulated state.** Everything is a pure function of the clock
+  and a seed. A flight can be replayed; a headless test can ask what the weather will be at
+  14:20 on day three without simulating its way there; a save file stores a seed.
+* **Summed sines, not a random walk.** A walk wanders, needs clamping, and eventually parks
+  against a limit. Sines at incommensurate periods drift, return, and stay in range for
+  free.
+
+Wind is calibrated so an ordinary day is a light breeze. The first pass sat at 15–20 kt as
+its *baseline*, which makes every hover a handful and leaves no quiet days for weather to be
+a contrast against. It now peaks around 23 kt with 17 kt gusts over a fortnight.
+
+Verified: translational lift saves 12.3% of the collective in a 23 kt headwind, which is
+proof the wind reaches the rotor rather than merely existing.
+
+## D-027 — Night is lifted well above physical accuracy, on purpose
+
+**Decision.** The ambient floor at night is 0.24, not the 0.055 the light budget suggests.
+
+**Why.** At the physically honest value the night render was **pure black** — not moody, not
+dim, black, with no horizon, no terrain and no aircraft. You cannot fly what you cannot see.
+The chosen value reads terrain silhouettes and the airframe while leaving night as something
+you would rather not have to do. Moonlight runs as its own cooler directional light, so dusk
+is two sources crossing over rather than one source changing colour.
+
+**Also:** both directional lights are `SkyMode.LightOnly`. Godot draws the sky's sun disc
+from the light's colour and energy, and at dusk the light is dimmer than the horizon glow
+the gradient paints behind it — so the sun rendered as a **dark circular hole** sitting on
+the horizon. The gradient sells a sunset better than a disc does.
+
+**Reversible.** Both are single constants.

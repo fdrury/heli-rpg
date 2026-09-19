@@ -190,6 +190,14 @@ public sealed partial class HelicopterController : RigidBody3D
         _lastDt = dt;
         Environment.Advance(dt);
 
+        // Hand the weather to the flight model. The wind vector and the gust field have
+        // been plumbed through to the rotor since the beginning and nothing ever set them,
+        // so every flight until now has been in dead calm air at standard temperature.
+        Weather.Conditions wx = SceneMood.Now;
+        Environment.SteadyWind = wx.WindNed;
+        Environment.GustIntensity = wx.Gust;
+        Environment.Atmosphere.IsaDeviation = wx.IsaDeviation;
+
         if (_pendingTeleport is Transform3D target)
         {
             state.Transform = target;
