@@ -120,6 +120,14 @@ Verify your work, always:
 
 The Godot binary is tools\godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe
 
+STAGE EXPLICIT PATHS ONLY. Never `git add -A`, never `git add .`, never `git commit -a`.
+Other agents work in this same checkout at the same time, and a broad add sweeps their
+half-finished files into your commit. That is not hypothetical: it has now happened four
+times, twice costing attribution and once committing a file that referenced types which did
+not exist yet, which left HEAD unbuildable for everyone. Before staging, run
+`git status --short`, and stage only the paths you actually changed. Never revert, reset,
+checkout or stash - you would be discarding someone else's work in progress.
+
 When the item is done: commit with a real message explaining what and why, and update
 STATUS.md. Log any design decision in docs/wiki/decisions.md with its reasoning and how
 reversible it is.
