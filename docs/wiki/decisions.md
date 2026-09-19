@@ -1099,3 +1099,58 @@ term rings the whole world in contour lines, which is what it did on the first a
 shows gravel and stone where it did not, but most of the visible landscape is below 33° and
 still reads as ground cover. Real cliff faces would need the height function to produce
 them, and the same report says it mostly does not.
+
+## D-039 — Kneeboard map with fog of war · 2026-09-19
+
+**Decision.** The kneeboard gets a fourth page: MAP (previously AIRCRAFT, KNOWN, LOG).
+It shows a top-down terrain chart with grid-based fog of war, site markers, threat
+envelopes and the aircraft's position.
+
+**Why.** Pillar 4: "the map starts near-empty. Flying reveals it; people tell you about
+it; old charts fill it in." Pillar 3: "knowledge is the progression." Without a spatial
+map, discovery has no visual payoff. The player cannot tell they have explored 40% of the
+world versus 4%. The KNOWN page lists sites; the MAP page shows *where they are* and
+*what is between them*.
+
+**Architecture.**
+
+`sim/src/FogOfWar.cs` (pure .NET, no Godot dependency): 128×128 grid over the 13 km
+content envelope, ~102 m per cell, one bit per cell. `Reveal(north, east)` marks cells
+within a 500 m radius. Serialised as a packed byte array (2048 bytes) for save/load.
+
+`Kneeboard.cs` draws the MAP page using `_Draw()`:
+- Terrain: a 256×256 `ImageTexture` generated once from `WorldHeight.RawAt`, coloured
+  with a four-stop military-chart ramp (dark olive → olive → tan → pale grey).
+- Fog: a 128×128 `ImageTexture` updated only when `RevealedCount` changes. Unrevealed
+  cells are nearly opaque; revealed cells are transparent. The fog texture is overlaid
+  on the terrain texture, so undiscovered areas are uniformly dark.
+- Sites: coloured diamond markers, drawn only for visited or known sites. Colour varies
+  by kind (gold for fuel, green for settlements, blue for workshops, etc.). Labels
+  appear when the map is large enough.
+- Threats: translucent red circles at the engagement range of each detected emitter.
+  Only emitters that have been painted by the RWR appear — the sortie that nearly killed
+  you pays out on the map as well as in the kneeboard's KNOWN page.
+- Aircraft: a white chevron at the current position, rotated to heading.
+- Scale bar: 2 km reference at the bottom.
+- Header: "CHART" title with survey percentage ("14% surveyed").
+
+`Main.cs` calls `_fog.Reveal(-pos.Z, pos.X)` every physics frame, mapping Godot X=east
+and -Z=north into the sim's coordinate convention. Fog state is captured and restored in
+save/load (`SaveData.FogGrid`).
+
+**The screenshot director** now captures a kneeboard map shot (23_kneeboard_map.png) so
+the map rendering can be compared over time.
+
+**Tests.** `save_fog` simlab test: reveal at three positions, round-trip through bytes,
+round-trip through JSON, verify cell-by-cell match. All existing tests continue to pass.
+
+**What it does not do yet.**
+- No zooming or panning — the whole world fits on one page.
+- No waypoint selection or bearing line.
+- Knowledge from dialogue does not yet paint sites on the map (the Progress.Learn
+  pathway exists; wiring it is a single `p.Knows($"site.{site.Id}")` check that is
+  already in the site marker filter).
+- No compass rose or grid lines.
+
+**Reversibility:** high. One file in sim/ (FogOfWar.cs), one kneeboard page, one
+`byte[]` property on SaveData, three lines in Main. Nothing depends on it.

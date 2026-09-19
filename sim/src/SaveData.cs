@@ -51,6 +51,9 @@ public sealed class SaveData
     public int FlaresRemaining { get; set; }
     public List<int> DetectedEmitters { get; set; } = new();
 
+    // ---- fog of war ----
+    public byte[]? FogGrid { get; set; }
+
     // ================================================================ JSON
 
     private static readonly JsonSerializerOptions Opts = new()

@@ -32,6 +32,7 @@ public sealed partial class Main : Node3D
     private RotorTime _rotorTime = null!;
     private Sidearm _sidearm = null!;
     private readonly System.Collections.Generic.List<HostileNpc> _hostileNpcs = new();
+    private FogOfWar _fog = new();
     private Label _debugLabel = null!;
     private bool _showDebug;
     private GameMode _mode = GameMode.Flying;
@@ -40,6 +41,7 @@ public sealed partial class Main : Node3D
     public GameMode Mode => _mode;
     public RotorTime RotorTimeSystem => _rotorTime;
     public Sidearm Sidearm => _sidearm;
+    public FogOfWar Fog => _fog;
 
     public override void _Ready()
     {
@@ -155,6 +157,8 @@ public sealed partial class Main : Node3D
             HelicopterPath = _heli.GetPath(),
             InteractionPath = _play.GetPath(),
         };
+        _kneeboard.SetFog(_fog);
+        _kneeboard.SetThreats(_threats);
         layer.AddChild(_kneeboard);
 
         _dialogue = new DialoguePanel
@@ -243,7 +247,7 @@ public sealed partial class Main : Node3D
                 GD.Print("[main] running the screenshot pass");
                 _hud.Visible = false;
                 _threats.Disabled = true;
-                AddChild(new ScreenshotDirector(_heli, _camera, "res://../builds/screenshots")
+                AddChild(new ScreenshotDirector(_heli, _camera, "res://../builds/screenshots", _kneeboard)
                 { Name = "Screenshots" });
                 break;
             }
@@ -612,6 +616,10 @@ public sealed partial class Main : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
+        // Fog of war: reveal the map as the aircraft flies.
+        Vector3 p = _heli.GlobalPosition;
+        _fog.Reveal(-p.Z, p.X);   // Godot X=east, -Z=north
+
         // Rotor Time: charge from flight, drain when active.
         if (_mode == GameMode.Flying)
             _rotorTime.UpdateCharge(delta);
@@ -749,6 +757,9 @@ public sealed partial class Main : Node3D
             if (track.EverDetected)
                 data.DetectedEmitters.Add(track.Emitter.Id);
 
+        // Fog of war
+        data.FogGrid = _fog.ToBytes();
+
         return data;
     }
 
@@ -821,6 +832,10 @@ public sealed partial class Main : Node3D
 
         // Re-sync countermeasure fitted flags from loadout
         ReapplyThreatFittings();
+
+        // Fog of war
+        if (data.FogGrid is not null)
+            _fog.FromBytes(data.FogGrid);
     }
 
     /// <summary>

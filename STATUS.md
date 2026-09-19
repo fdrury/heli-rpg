@@ -8,15 +8,15 @@ every choice and why; `docs/wiki/benchmarks/` is where it was measured against t
 
 ## Where it is now
 
-**The core loop closes, people talk, and the machine levels up.** You can fly a
-physically simulated Huey across a streamed 16 km world, find a named settlement, put
-it down, shut down, talk to whoever lives there, and scavenge modules that bolt onto
-the aircraft and change what it can do. Eight bays — attitude hold, RWR, chaff,
-flares, exhaust suppressor, long-range tank, cargo hook, rescue hoist — each with real
-mass at a real position, each felt in the flight model. Install an exhaust suppressor
-and the drag rises; fit a long-range tank and the fuel capacity jumps but the hover
-ceiling drops. The kneeboard shows every bay, fitted or empty, because you cannot want
-a thing you do not know exists.
+**The core loop closes, people talk, the machine levels up, and the map fills in.** You
+can fly a physically simulated Huey across a streamed 16 km world, find a named
+settlement, put it down, shut down, talk to whoever lives there, and scavenge modules
+that bolt onto the aircraft and change what it can do. Eight bays — attitude hold, RWR,
+chaff, flares, exhaust suppressor, long-range tank, cargo hook, rescue hoist — each with
+real mass at a real position, each felt in the flight model. The kneeboard's MAP page
+fills itself in as you fly: fog of war lifts from the topo chart, discovered sites appear
+as diamond markers, and threat envelopes for detected emitters paint red circles around
+no-go zones. Knowledge is progression, and the map is where it shows.
 
 60 fps at 1600x900 on a GTX 1650 Ti, which is well under the GTX 1080 target.
 
@@ -26,7 +26,7 @@ a thing you do not know exists.
 # the game
 tools/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe --path game
 
-# 39 headless tests (flight + loadout + combat + save) - no engine needed
+# 41 headless tests (flight + loadout + combat + save + fog) - no engine needed
 dotnet run --project tools/simlab -c Release -- all
 
 # render a 126 s sortie to builds/audio/sortie.wav and listen to it
@@ -151,6 +151,15 @@ complex rotor/engine internal state needs serialising. `SaveData` lives in sim/ 
 threat state. Five simlab round-trip tests (progress, damage, loadout, NPC, full) and a
 headless Godot test (--savetest) that flies to a site, saves distinctive state, trashes
 everything, loads, and verifies fourteen properties survived the round trip.
+
+**Map** — fourth kneeboard page (TAB, then E to page 3). Fog of war reveals the map as
+you fly; sites appear as coloured diamonds when visited or learned about through dialogue.
+Threat envelopes for detected emitters are drawn as red translucent circles. Aircraft
+position and heading shown as a white chevron. Terrain is a topo-coloured heightmap,
+matching the military-chart aesthetic. The fog grid is 128×128 (~102 m cells), reveal
+radius 500 m, persisted through save/load. Scale bar and survey-percentage readout.
+`FogOfWar` lives in sim/ (pure .NET, no Godot dependency) with byte-array serialisation;
+the game layer generates terrain and fog textures and draws markers via `_Draw()`.
 
 ## Next
 

@@ -174,6 +174,56 @@ public static class SaveTests
         return null;
     }
 
+    /// <summary>FogOfWar: reveal pattern survives a byte-array round trip.</summary>
+    public static string? FogRoundTrip()
+    {
+        var fog = new FogOfWar();
+
+        // Reveal at a few positions (sim coords: north, east)
+        fog.Reveal(0, 0);           // centre
+        fog.Reveal(3000, -2000);    // northeast
+        fog.Reveal(-5000, 4000);    // southwest
+
+        int before = fog.RevealedCount;
+        if (before == 0) return "nothing revealed";
+
+        // Check a known-revealed cell
+        int cx0 = FogOfWar.WorldToCell(0);       // centre east
+        int cy0 = FogOfWar.WorldToCell(0);       // centre south (negated north=0 → south=0)
+        if (!fog.IsRevealed(cx0, cy0)) return "centre cell not revealed";
+
+        // Round trip through bytes
+        byte[] bytes = fog.ToBytes();
+        if (bytes.Length != (FogOfWar.GridSize * FogOfWar.GridSize + 7) / 8)
+            return $"byte array size: {bytes.Length}";
+
+        var fog2 = new FogOfWar();
+        fog2.FromBytes(bytes);
+
+        if (fog2.RevealedCount != before)
+            return $"count mismatch: {fog2.RevealedCount} vs {before}";
+
+        // Check all cells match
+        for (int y = 0; y < FogOfWar.GridSize; y++)
+            for (int x = 0; x < FogOfWar.GridSize; x++)
+                if (fog.IsRevealed(x, y) != fog2.IsRevealed(x, y))
+                    return $"cell ({x},{y}) mismatch";
+
+        // Round trip through JSON (SaveData)
+        var save = new SaveData { FogGrid = fog.ToBytes() };
+        string json = save.ToJson();
+        var loaded = SaveData.FromJson(json);
+        if (loaded is null) return "JSON round trip: null";
+        if (loaded.FogGrid is null) return "FogGrid null after JSON";
+
+        var fog3 = new FogOfWar();
+        fog3.FromBytes(loaded.FogGrid);
+        if (fog3.RevealedCount != before)
+            return $"JSON round trip count: {fog3.RevealedCount} vs {before}";
+
+        return null;
+    }
+
     /// <summary>Full SaveData: serialise everything, deserialise, verify key fields.</summary>
     public static string? FullRoundTrip()
     {

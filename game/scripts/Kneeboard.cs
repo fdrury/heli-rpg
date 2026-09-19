@@ -20,6 +20,10 @@ namespace Rotorwash;
 ///
 /// It also shows EMPTY BAYS, which is the other half of the trick: you cannot want a
 /// thing you do not know exists.
+///
+/// MAP page (D-037): pillar 4 says "the map starts near-empty". The map reveals itself
+/// through flight — your track paints the fog away. Sites appear when visited or learned
+/// about. Threat envelopes show for detected emitters.
 /// </summary>
 public sealed partial class Kneeboard : Control
 {
@@ -31,7 +35,7 @@ public sealed partial class Kneeboard : Control
     private Font _font = null!;
     private int _page;
 
-    private static readonly string[] Pages = { "AIRCRAFT", "KNOWN", "LOG" };
+    private static readonly string[] Pages = { "AIRCRAFT", "KNOWN", "LOG", "MAP" };
 
     private static readonly Color Ink = new(0.84f, 0.86f, 0.78f);
     private static readonly Color Faint = new(0.55f, 0.58f, 0.52f);
@@ -39,6 +43,20 @@ public sealed partial class Kneeboard : Control
     private static readonly Color Warn = new(0.95f, 0.74f, 0.32f);
     private static readonly Color Bad = new(0.93f, 0.42f, 0.36f);
     private static readonly Color Paper = new(0.07f, 0.08f, 0.07f, 0.93f);
+
+    // MAP page state
+    private FogOfWar? _fog;
+    private ThreatWorld? _threats;
+    private ImageTexture? _terrainTex;
+    private Image? _fogImage;
+    private ImageTexture? _fogTex;
+    private int _lastRevealedCount = -1;
+
+    private const int MapRes = 256;
+
+    /// <summary>Set by Main after construction.</summary>
+    public void SetFog(FogOfWar fog) => _fog = fog;
+    public void SetThreats(ThreatWorld threats) => _threats = threats;
 
     public override void _Ready()
     {
@@ -86,7 +104,8 @@ public sealed partial class Kneeboard : Control
         {
             case 0: DrawAircraft(body, sheet); break;
             case 1: DrawKnown(body, sheet); break;
-            default: DrawLog(body, sheet); break;
+            case 2: DrawLog(body, sheet); break;
+            case 3: DrawMap(body, sheet); break;
         }
 
         Text(new Vector2(sheet.Position.X + 30, sheet.End.Y - 18),
@@ -208,6 +227,276 @@ public sealed partial class Kneeboard : Control
             y += 19;
         }
     }
+
+    // ------------------------------------------------------------------ map
+
+    /// <summary>
+    /// Pillar 4: "the map starts near-empty."
+    ///
+    /// Terrain is rendered once as a topo image. Fog is a second image updated when
+    /// new cells are revealed. Sites and threats are drawn as markers on top. The
+    /// aircraft is a chevron.
+    /// </summary>
+    private void DrawMap(Vector2 o, Rect2 sheet)
+    {
+        if (_fog is null) return;
+
+        Text(o, "CHART", Ink, 17);
+        Text(o + new Vector2(0, 22),
+             $"{_fog.RevealedFraction:P0} surveyed", Faint, 12);
+
+        // Fit a square map into the available body area
+        float bodyW = sheet.Size.X - 60;
+        float bodyH = sheet.End.Y - o.Y - 80;
+        float mapSide = Math.Min(bodyW, bodyH);
+        float mapX = o.X + (bodyW - mapSide) * 0.5f;
+        float mapY = o.Y + 50;
+
+        var mapRect = new Rect2(mapX, mapY, mapSide, mapSide);
+
+        // Background
+        DrawRect(mapRect, new Color(0.03f, 0.04f, 0.03f));
+
+        // Terrain texture (generated once)
+        EnsureTerrainTexture();
+        if (_terrainTex is not null)
+            DrawTextureRect(_terrainTex, mapRect, false);
+
+        // Fog overlay (updated when cells change)
+        UpdateFogTexture();
+        if (_fogTex is not null)
+            DrawTextureRect(_fogTex, mapRect, false);
+
+        // Border
+        DrawRect(mapRect, Faint * new Color(1, 1, 1, 0.5f), false, 1.2f);
+
+        // Threat envelopes (detected emitters only)
+        DrawThreatCircles(mapRect);
+
+        // Site markers (visited or known)
+        DrawSiteMarkers(mapRect);
+
+        // Aircraft marker
+        DrawAircraftMarker(mapRect);
+
+        // Scale bar
+        DrawScaleBar(mapRect);
+    }
+
+    private void EnsureTerrainTexture()
+    {
+        if (_terrainTex is not null) return;
+
+        var img = Image.CreateEmpty(MapRes, MapRes, false, Image.Format.Rgb8);
+        float extent = FogOfWar.WorldExtent;
+
+        for (int py = 0; py < MapRes; py++)
+        {
+            for (int px = 0; px < MapRes; px++)
+            {
+                // Image coords → world coords (Godot: X east, Z south)
+                float worldX = (px / (float)(MapRes - 1)) * extent * 2f - extent;
+                float worldZ = (py / (float)(MapRes - 1)) * extent * 2f - extent;
+
+                float h = WorldHeight.RawAt(worldX, worldZ);
+                Color c = HeightToColor(h);
+                img.SetPixel(px, py, c);
+            }
+        }
+
+        _terrainTex = ImageTexture.CreateFromImage(img);
+    }
+
+    /// <summary>
+    /// Military-chart-style height colouring. Low ground is dark olive, high ground
+    /// is pale tan, ridges go to grey. Water would be dark blue-green but the world
+    /// has none below the floor.
+    /// </summary>
+    private static Color HeightToColor(float h)
+    {
+        // Terrain ranges roughly -10 to 300
+        float t = Mathf.Clamp((h + 10f) / 310f, 0f, 1f);
+
+        // Four-stop ramp: dark olive → olive → tan → pale grey
+        if (t < 0.25f)
+        {
+            float f = t / 0.25f;
+            return Lerp(new Color(0.12f, 0.14f, 0.08f), new Color(0.20f, 0.24f, 0.14f), f);
+        }
+        if (t < 0.5f)
+        {
+            float f = (t - 0.25f) / 0.25f;
+            return Lerp(new Color(0.20f, 0.24f, 0.14f), new Color(0.32f, 0.30f, 0.20f), f);
+        }
+        if (t < 0.75f)
+        {
+            float f = (t - 0.5f) / 0.25f;
+            return Lerp(new Color(0.32f, 0.30f, 0.20f), new Color(0.40f, 0.38f, 0.30f), f);
+        }
+        {
+            float f = (t - 0.75f) / 0.25f;
+            return Lerp(new Color(0.40f, 0.38f, 0.30f), new Color(0.52f, 0.50f, 0.44f), f);
+        }
+    }
+
+    private static Color Lerp(Color a, Color b, float t) =>
+        new(a.R + (b.R - a.R) * t, a.G + (b.G - a.G) * t, a.B + (b.B - a.B) * t);
+
+    private void UpdateFogTexture()
+    {
+        if (_fog is null) return;
+        if (_fog.RevealedCount == _lastRevealedCount && _fogTex is not null) return;
+
+        _lastRevealedCount = _fog.RevealedCount;
+
+        int fogRes = FogOfWar.GridSize;   // 128
+        _fogImage ??= Image.CreateEmpty(fogRes, fogRes, false, Image.Format.Rgba8);
+
+        var fogColor = new Color(0.03f, 0.04f, 0.03f, 0.92f);
+        var clear = new Color(0, 0, 0, 0);
+
+        for (int y = 0; y < fogRes; y++)
+            for (int x = 0; x < fogRes; x++)
+                _fogImage.SetPixel(x, y, _fog.IsRevealed(x, y) ? clear : fogColor);
+
+        if (_fogTex is null)
+            _fogTex = ImageTexture.CreateFromImage(_fogImage);
+        else
+            _fogTex.Update(_fogImage);
+    }
+
+    /// <summary>World east/south → map pixel position.</summary>
+    private Vector2 WorldToMap(Rect2 mapRect, float worldX, float worldZ)
+    {
+        float extent = FogOfWar.WorldExtent;
+        float nx = (worldX + extent) / (extent * 2f);
+        float ny = (worldZ + extent) / (extent * 2f);
+        return new Vector2(mapRect.Position.X + nx * mapRect.Size.X,
+                           mapRect.Position.Y + ny * mapRect.Size.Y);
+    }
+
+    private void DrawThreatCircles(Rect2 mapRect)
+    {
+        if (_threats is null) return;
+
+        var threatColor = new Color(0.85f, 0.25f, 0.20f, 0.18f);
+        var threatEdge = new Color(0.85f, 0.25f, 0.20f, 0.45f);
+
+        foreach (var track in _threats.Field.Tracks)
+        {
+            if (!track.EverDetected) continue;
+
+            var em = track.Emitter;
+            // Emitter position: sim north/east → Godot X=east, Z=-north (south)
+            float gx = (float)em.East;
+            float gz = (float)-em.North;
+            Vector2 centre = WorldToMap(mapRect, gx, gz);
+
+            // Engagement range as a circle
+            float pixelsPerMetre = mapRect.Size.X / (FogOfWar.WorldExtent * 2f);
+            float radius = (float)em.EngagementRange * pixelsPerMetre;
+
+            DrawCircle(centre, radius, threatColor);
+            DrawArc(centre, radius, 0, Mathf.Tau, 32, threatEdge, 1.2f);
+        }
+    }
+
+    private void DrawSiteMarkers(Rect2 mapRect)
+    {
+        Progress p = _play.Progress;
+
+        foreach (Site site in WorldMap.Sites)
+        {
+            bool visited = p.HasVisited(site.Id);
+            bool known = p.Knows($"contact.{site.Id}") || p.Knows($"site.{site.Id}");
+            if (!visited && !known) continue;
+
+            Vector2 pos = WorldToMap(mapRect, site.Position.X, site.Position.Y);
+
+            // Marker shape and colour by site kind
+            Color col = SiteColor(site.Kind);
+            float sz = SiteMarkerSize(site.Kind);
+
+            // Diamond marker
+            var pts = new Vector2[]
+            {
+                pos + new Vector2(0, -sz),
+                pos + new Vector2(sz, 0),
+                pos + new Vector2(0, sz),
+                pos + new Vector2(-sz, 0),
+            };
+            DrawColoredPolygon(pts, col);
+
+            // Label (only if map area is large enough for readability)
+            if (mapRect.Size.X > 350)
+            {
+                string label = Truncate(site.Name, 12);
+                Text(pos + new Vector2(sz + 3, 4), label, col * new Color(1, 1, 1, 0.8f), 10);
+            }
+        }
+    }
+
+    private static Color SiteColor(SiteKind kind) => kind switch
+    {
+        SiteKind.FuelCache => new Color(0.90f, 0.75f, 0.30f),
+        SiteKind.Settlement => new Color(0.63f, 0.84f, 0.60f),
+        SiteKind.Workshop => new Color(0.55f, 0.75f, 0.90f),
+        SiteKind.Wreck => new Color(0.65f, 0.55f, 0.45f),
+        SiteKind.Relay => new Color(0.80f, 0.80f, 0.80f),
+        SiteKind.Depot => new Color(0.75f, 0.60f, 0.40f),
+        SiteKind.Airfield => new Color(0.55f, 0.75f, 0.90f),
+        SiteKind.Farmstead => new Color(0.50f, 0.65f, 0.45f),
+        SiteKind.Overlook => new Color(0.70f, 0.70f, 0.65f),
+        _ => Ink,
+    };
+
+    private static float SiteMarkerSize(SiteKind kind) => kind switch
+    {
+        SiteKind.Airfield or SiteKind.Settlement => 5f,
+        SiteKind.Workshop or SiteKind.Depot => 4f,
+        _ => 3f,
+    };
+
+    private void DrawAircraftMarker(Rect2 mapRect)
+    {
+        Vector3 pos = _heli.GlobalPosition;
+        Vector2 mapPos = WorldToMap(mapRect, pos.X, pos.Z);
+
+        // Heading: sim yaw is radians from north, clockwise. On the map, north is up (-Y).
+        float yaw = (float)_heli.Sim.State.Orientation.Yaw;
+
+        // Draw a chevron pointing in the heading direction
+        float sz = 7f;
+        float cos = Mathf.Cos(yaw);
+        float sin = Mathf.Sin(yaw);
+
+        // Chevron: nose, left wing, tail notch, right wing
+        Vector2 nose = mapPos + new Vector2(sin, -cos) * sz;
+        Vector2 left = mapPos + new Vector2(-cos - sin * 0.5f, -sin + cos * 0.5f) * (sz * 0.7f);
+        Vector2 tail = mapPos + new Vector2(-sin, cos) * (sz * 0.3f);
+        Vector2 right = mapPos + new Vector2(cos - sin * 0.5f, sin + cos * 0.5f) * (sz * 0.7f);
+
+        var heliColor = new Color(0.95f, 0.95f, 0.85f);
+        DrawColoredPolygon(new[] { nose, left, tail, right }, heliColor);
+    }
+
+    private void DrawScaleBar(Rect2 mapRect)
+    {
+        float pixelsPerMetre = mapRect.Size.X / (FogOfWar.WorldExtent * 2f);
+
+        // 2 km scale bar
+        float barLen = 2000f * pixelsPerMetre;
+        float bx = mapRect.Position.X + 8;
+        float by = mapRect.End.Y - 14;
+
+        DrawLine(new Vector2(bx, by), new Vector2(bx + barLen, by), Faint, 1.5f);
+        DrawLine(new Vector2(bx, by - 3), new Vector2(bx, by + 3), Faint, 1.2f);
+        DrawLine(new Vector2(bx + barLen, by - 3), new Vector2(bx + barLen, by + 3), Faint, 1.2f);
+        Text(new Vector2(bx + barLen + 5, by + 4), "2 km", Faint, 10);
+    }
+
+    private static string Truncate(string s, int max)
+        => s.Length <= max ? s : s[..(max - 1)] + ".";
 
     // --------------------------------------------------------------- helpers
 
