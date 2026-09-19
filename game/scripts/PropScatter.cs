@@ -204,7 +204,7 @@ public sealed partial class PropScatter : Node3D
     private Transform3D[] Place(Vector2I coord, PropKind kind, int variant, float density)
     {
         ulong seed = (ulong)HashCode.Combine(Seed, coord.X, coord.Y, (int)kind, variant);
-        var rng = new RandomNumberGenerator { Seed = seed };
+        var rng = new ThreadRng(seed);
 
         int attempts = Mathf.RoundToInt(ChunkSize * ChunkSize * density);
         if (attempts <= 0) return Array.Empty<Transform3D>();
@@ -261,6 +261,40 @@ public sealed partial class PropScatter : Node3D
         }
 
         return result.ToArray();
+    }
+
+    /// <summary>
+    /// A deterministic generator that is safe to construct off the main thread.
+    ///
+    /// This replaced Godot's <c>RandomNumberGenerator</c>, which is a Godot object: building
+    /// one on a worker thread is not allowed, and it crashed the process outright with an
+    /// AccessViolationException from deep inside the binding layer. Scatter is generated on
+    /// worker threads by design, so it can never use a Godot type for this.
+    ///
+    /// The same rule already cost this project once, when <c>Godot.Collections.Array</c>
+    /// was being built on the terrain worker. Worth stating as a rule: nothing that derives
+    /// from GodotObject gets CONSTRUCTED on a worker thread.
+    ///
+    /// splitmix64, which is small, fast and has no state to share.
+    /// </summary>
+    private struct ThreadRng
+    {
+        private ulong _state;
+        public ThreadRng(ulong seed) => _state = seed == 0 ? 0x9E3779B97F4A7C15UL : seed;
+
+        private ulong Next()
+        {
+            _state += 0x9E3779B97F4A7C15UL;
+            ulong z = _state;
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+            return z ^ (z >> 31);
+        }
+
+        /// <summary>Uniform in [0, 1).</summary>
+        public float Randf() => (float)((Next() >> 11) * (1.0 / 9007199254740992.0));
+
+        public float RandfRange(float from, float to) => from + Randf() * (to - from);
     }
 
     private void ApplyReady()

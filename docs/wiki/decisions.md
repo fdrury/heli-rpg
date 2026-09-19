@@ -1063,3 +1063,21 @@ Shelter is a parameter rather than a separate mix: in the cockpit the rain is on
 side of the glass, so it is quieter *and* has its top end taken off, which is most of what
 "inside" sounds like. Measured: 0.0987 RMS outside a downpour, 0.0316 in the cockpit, and
 0.0006 on a still dry day.
+
+## D-037 — Nothing deriving from GodotObject is constructed on a worker thread
+
+**Decision.** `PropScatter` uses a small splitmix64 struct instead of Godot's
+`RandomNumberGenerator`, because scatter is generated on worker threads.
+
+**Why.** It crashed the process. `--worldreport` died with an `AccessViolationException`
+inside the binding layer, with `RandomNumberGenerator..ctor()` on the stack, called from
+`PropScatter.Place` on a thread-pool thread. Prop scatter runs during ordinary play, so this
+was a random hard crash in the shipping game, not a tooling problem.
+
+This is the **second** time this exact rule has been broken here — `Godot.Collections.Array`
+was previously being built on the terrain worker, with the same symptom. So it is worth
+stating flatly rather than rediscovering: *reading* from an already-constructed Godot object
+off-thread has been fine; **constructing** one is not.
+
+The replacement is deterministic and seeded identically, so scatter remains reproducible —
+though the layout differs from before, which for decorative scatter costs nothing.
