@@ -1574,3 +1574,41 @@ stop) is enough to carry 20 hours.
 **Reversibility:** high. This decision prescribes a pattern, not an implementation. The
 contract board is data over existing systems; the search breadcrumbs are a short authored
 sequence. Both can be changed without touching the flight model, world, or combat.
+
+## D-047 — Autorotation: three hypotheses refuted, and the radial rig that did it
+
+`MainRotor.RadialTorque` reports shaft torque banded into tenths of the radius — negative
+drives the rotor, positive drags it. With rotor speed **pinned at 100%** (letting it float
+confounds everything: at 1772 fpm it had already decayed to 67%, so those torques were
+measured at half the dynamic pressure of the others), the picture at 60 kt is:
+
+| descent | .25 | .35 | .45 | .55 | .65 | .75 | .85 | .95 | net |
+|---|---|---|---|---|---|---|---|---|---|
+| 1772 fpm | −0.3 | −0.2 | −0.2 | −0.1 | +0.2 | +1.8 | +2.2 | +3.9 | **+7.2** |
+| 3740 fpm | −0.9 | −1.1 | −1.2 | −1.3 | −1.1 | −0.6 | +1.3 | +3.4 | **−1.5** |
+
+The shape is right — an inboard driving region carrying an outboard dragging one — but **the
+outboard three bands drag about 8 kN·m almost regardless of descent rate**, roughly twice
+what blade-element theory predicts for the outer 30% (3.9 kN·m). The driving region never
+catches up, so the rotor can only be sustained by descending harder.
+
+Three candidates tested and cleared:
+
+* **Tip loss charging for lift it does not make.** Real inconsistency — `cl` was reduced by
+  tip loss *after* `cd` had been computed from the unreduced `cl`, so the tip paid induced
+  drag on lift it no longer produced. Fixed anyway, because it is simply wrong. Changed the
+  measured numbers **not at all**: tip loss only reaches the outer 4% here.
+* **Compressibility.** Tip Mach measures 0.73 against a 0.74 divergence threshold. The drag
+  rise is not active.
+* **Section lift-induced drag.** `Cd = Cd0 + K·Cl²` with K = 0.0216 adds about as much drag
+  as Cd0 itself, and blade-element theory already carries rotor induced drag in the tilted
+  lift vector — so double-counting was plausible. Sweeping K from 0.0216 to 0.0060 moved the
+  equilibrium 3879 → 3788 fpm (**2%**) while dropping hover power 9%. Not the cause.
+
+Also cleared earlier: vortex ring (severity 0.00), the inflow solution (λ matches momentum
+theory), blade loading, and radial inflow distribution (D-045).
+
+Four suspects down. What remains unexplained is the *magnitude* of outboard drag torque at
+moderate lift with no stall, no compressibility and no tip-loss effect — which now points at
+the blade-element integration itself rather than at any coefficient. The rig to attack it
+(`simlab driving`) exists and is cheap to run.

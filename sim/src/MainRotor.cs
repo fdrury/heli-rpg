@@ -42,6 +42,20 @@ public struct RotorOutput
 /// </summary>
 public sealed class MainRotor
 {
+    /// <summary>How many radial bands <see cref="RadialTorque"/> reports.</summary>
+    public const int RadialBins = 10;
+
+    /// <summary>
+    /// Shaft torque contributed by each tenth of the radius, N·m, from the last update.
+    ///
+    /// Negative bands drive the rotor, positive bands drag it. In powered flight almost
+    /// everything drags; in a steady autorotation the inboard bands must drive hard enough
+    /// to carry the outboard ones, and whether they do is the open question in D-045.
+    /// </summary>
+    public readonly double[] RadialTorque = new double[RadialBins];
+
+    private readonly double[] _radialTorque = new double[RadialBins];
+
     public RotorConfig Config { get; }
     public Inflow Inflow { get; }
 
@@ -256,7 +270,20 @@ public sealed class MainRotor
                     cfg.Blade.Coefficients(alpha, mach, out double cl, out double cd);
 
                     // Tip loss: lift vanishes outboard of B*R, drag does not.
-                    if (rBar > tipLossB) cl *= Math.Max(0.0, (1.0 - rBar) / Math.Max(1.0 - tipLossB, 1e-4));
+                    if (rBar > tipLossB)
+                    {
+                        // Tip loss takes the lift away, so it has to take the LIFT-INDUCED
+                        // DRAG with it. The airfoil computed cd as Cd0 + K*cl^2 from the
+                        // full cl a moment ago; leaving that alone while zeroing cl makes
+                        // the tip a pure drag region by construction - it pays the price of
+                        // lift it is no longer making, and stops contributing any forward
+                        // tilt at all. In an autorotation that matters: the outboard bands
+                        // were measured dragging about 8 kN.m regardless of descent rate
+                        // while the driving region could never catch up (D-045).
+                        double f = Math.Max(0.0, (1.0 - rBar) / Math.Max(1.0 - tipLossB, 1e-4));
+                        cd -= cfg.Blade.DragK * cl * cl * (1.0 - f * f);
+                        cl *= f;
+                    }
 
                     double q = halfRhoC * u2 * dr;
                     double dL = q * cl;
@@ -279,6 +306,15 @@ public sealed class MainRotor
                     // question in D-043.
                     inducedTorqueAcc += r * cosB * (dL * sinPhi) * dtSub;
                     profileTorqueAcc += r * cosB * (dD * cosPhi) * dtSub;
+
+                    // Torque banded by radius, so the DRIVING region of an autorotating
+                    // disc can be seen rather than inferred. Negative bands are driving the
+                    // rotor; positive ones are dragging it. Ten bins and one add per
+                    // element - it costs nothing and it is the only way to answer where
+                    // the autorotative drive actually comes from (D-045).
+                    int bin = (int)(rBar * RadialBins);
+                    if (bin >= 0 && bin < RadialBins)
+                        _radialTorque[bin] += r * cosB * dFt * dtSub;
                     thrustAcc += (-Vec3.Dot(dF, _zd)) * dtSub;
 
                     flapMoment += r * dFn;
@@ -376,6 +412,11 @@ public sealed class MainRotor
         outp.PowerRequired = outp.ShaftTorque * omega;
         outp.InducedPower = inducedTorqueAcc * inv * omega;
         outp.ProfilePower = profileTorqueAcc * inv * omega;
+        for (int i = 0; i < RadialBins; i++)
+        {
+            RadialTorque[i] = _radialTorque[i] * inv;
+            _radialTorque[i] = 0;
+        }
 
         return outp;
     }

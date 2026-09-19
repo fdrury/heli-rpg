@@ -21,7 +21,7 @@ public sealed class Airfoil
     /// <summary>Profile drag at zero lift.</summary>
     public double Cd0 { get; init; } = 0.0087;
     /// <summary>Induced/profile drag growth with lift, Cd += K * Cl^2.</summary>
-    public double DragK { get; init; } = 0.0216;
+    public double DragK { get; set; } = 0.0216;
     /// <summary>Drag-divergence Mach number.</summary>
     public double MachDrag { get; init; } = 0.74;
     /// <summary>Maximum Cl achieved at the stall break.</summary>

@@ -140,6 +140,176 @@ public static class EnvelopeTests
     }
 
     /// <summary>
+    /// What the section's lift-induced drag term costs, and what it buys.
+    ///
+    /// Cd = Cd0 + K·Cl². At K = 0.0216 and a working Cl, that term adds about as much drag
+    /// as Cd0 itself - it roughly DOUBLES section drag. In blade-element theory the induced
+    /// drag of the rotor is already carried by the lift vector tilting with the inflow
+    /// (dL·sinφ), so a large K here is at risk of charging for the same thing twice.
+    ///
+    /// Sweeping it against the things that must not break: hover power, cruise power, and
+    /// the autorotation equilibrium.
+    /// </summary>
+    public static string? DragKSweep()
+    {
+        Console.WriteLine("  section lift-induced drag: what it costs and what it buys");
+        Console.WriteLine("      K      hover kW   60 kt kW    Nr=100% at");
+
+        foreach (double k in new[] { 0.0216, 0.016, 0.011, 0.006 })
+        {
+            double hover = LevelPowerK(k, 0.0);
+            double cruise = LevelPowerK(k, 60.0);
+
+            double lo = 4.0, hi = 30.0;
+            for (int i = 0; i < 12; i++)
+            {
+                double mid = 0.5 * (lo + hi);
+                if (NrAtDescentK(k, 60.0, mid) < 100.0) lo = mid; else hi = mid;
+            }
+            double eq = 0.5 * (lo + hi);
+
+            Console.WriteLine($"   {k,6:F4}   {hover,7:F0}    {cruise,7:F0}     {eq * Fpm,6:F0} fpm");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("  reference: hover about 800 kW, 60 kt about 440 kW, autorotation 1700 fpm");
+        return null;
+    }
+
+    private static Airframe WithDragK(double k)
+    {
+        Airframe af = Airframe.Workhorse();
+        af.MainRotor.Blade.DragK = k;
+        return af;
+    }
+
+    private static double LevelPowerK(double k, double kt)
+    {
+        var h = new Helicopter(WithDragK(k), new FlatEnvironment()) { Fuel = 500 };
+        h.InvalidateMass();
+        h.PlaceInFlight(200);
+        h.UseInternalGroundModel = false;
+        TrimResult t = Trim.Solve(h, 200, kt / Kt);
+        if (!t.Converged) return double.NaN;
+        var att = Quat.FromEuler(t.RollRad, t.PitchRad, 0);
+        var vel = new Vec3(kt / Kt, 0, 0);
+        for (int i = 0; i < 360; i++)
+        {
+            h.State.Position = new Vec3(0, 0, -200);
+            h.State.Orientation = att;
+            h.State.Velocity = vel;
+            h.State.AngularVelocity = Vec3.Zero;
+            h.ForceActuators(t.Controls);
+            h.Step(1.0 / 240.0);
+        }
+        return h.Telemetry.PowerRequired / 1000.0;
+    }
+
+    private static double NrAtDescentK(double k, double kt, double w)
+    {
+        var h = new Helicopter(WithDragK(k), new FlatEnvironment()) { Fuel = 500 };
+        h.InvalidateMass();
+        h.PlaceInFlightTrimmed(1500, kt / Kt);
+        h.UseInternalGroundModel = false;
+        h.Sas.Enabled = false;
+        h.Engine.Fail();
+        var c = new Controls { Collective = 0.0, Throttle = 0.0 };
+        var vel = new Vec3(kt / Kt, 0, w);
+        var att = Quat.FromEuler(0, 0, 0);
+        double nr = 0; int n = 0;
+        for (int i = 0; i < 2400; i++)
+        {
+            h.State.Position = new Vec3(0, 0, -1500);
+            h.State.Orientation = att;
+            h.State.Velocity = vel;
+            h.State.AngularVelocity = Vec3.Zero;
+            h.ForceActuators(c);
+            h.Step(1.0 / 240.0);
+            if (i > 1900) { nr += h.Telemetry.RotorRpmPercent; n++; }
+        }
+        return nr / Math.Max(n, 1);
+    }
+
+    /// <summary>
+    /// Where along the blade the autorotative drive comes from.
+    ///
+    /// Negative bands drive the rotor, positive bands drag it. A healthy autorotation has a
+    /// clear inboard driving region carrying a clear outboard dragging one; if the driving
+    /// region is thin or weak, the rotor can only be sustained by descending harder, which
+    /// is exactly the symptom in D-045.
+    /// </summary>
+    public static string? DrivingRegion()
+    {
+        Console.WriteLine("  shaft torque by tenth of radius (negative drives, positive drags)");
+        Console.WriteLine("    condition            r/R:  .05  .15  .25  .35  .45  .55  .65  .75  .85  .95   net");
+
+        // Rotor speed PINNED at 100% throughout.
+        //
+        // Letting it float confounds the comparison: at 1772 fpm the rotor had already
+        // decayed to 67%, so every torque in that row was measured at half the dynamic
+        // pressure of the others and the rows were not comparable. Holding Nr fixed asks
+        // the clean question - at the speed the rotor is supposed to turn, what descent
+        // rate makes net torque zero?
+        Row("level 60 kt (powered)", 60.0, 0.0, powered: true);
+        foreach (double w in new[] { 6.0, 9.0, 12.0, 15.0, 19.0 })
+            Row($"auto 60 kt, {w * Fpm:F0} fpm", 60.0, w, powered: false);
+
+        void Row(string label, double kt, double w, bool powered)
+        {
+            Helicopter h = Fresh();
+            h.PlaceInFlightTrimmed(1500, kt / Kt);
+            h.UseInternalGroundModel = false;
+            h.Sas.Enabled = false;
+
+            Controls c;
+            if (powered)
+            {
+                TrimResult t = Trim.Solve(h, 1500, kt / Kt);
+                c = t.Controls;
+            }
+            else
+            {
+                h.Engine.Fail();
+                c = new Controls { Collective = 0.0, Throttle = 0.0 };
+            }
+
+            var vel = new Vec3(kt / Kt, 0, w);
+            var att = Quat.FromEuler(0, 0, 0);
+            var acc = new double[MainRotor.RadialBins];
+            int n = 0;
+            for (int i = 0; i < 2400; i++)
+            {
+                h.State.Position = new Vec3(0, 0, -1500);
+                h.State.Orientation = att;
+                h.State.Velocity = vel;
+                h.State.AngularVelocity = Vec3.Zero;
+                h.RotorOmega = h.Airframe.MainRotor.NominalOmega;   // pinned at 100%
+                h.ForceActuators(c);
+                h.Step(1.0 / 240.0);
+                if (i > 1900)
+                {
+                    for (int k = 0; k < MainRotor.RadialBins; k++) acc[k] += h.Rotor.RadialTorque[k];
+                    n++;
+                }
+            }
+
+            var sb = new System.Text.StringBuilder($"    {label,-22}      ");
+            double net = 0;
+            for (int k = 0; k < MainRotor.RadialBins; k++)
+            {
+                double v = acc[k] / Math.Max(n, 1) / 1000.0;      // kN·m
+                net += v;
+                sb.Append($"{v,5:F1}");
+            }
+            sb.Append($"  {net,6:F1} kN·m  tipM {h.Telemetry.TipMach:F2}" +
+                      $"  stall {h.Telemetry.StalledFraction:P0}");
+            Console.WriteLine(sb.ToString());
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// What a radial inflow gradient buys, and what it costs.
     ///
     /// For each setting: the descent rate at which the rotor can hold 100% Nr with the
