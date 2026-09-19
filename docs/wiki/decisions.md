@@ -1310,3 +1310,51 @@ it, shutting down 98 m from a site it thought it was at.
 Verified separately: a 216 m run to a point in a 17 kt wind settles to 0.1 m and stays.
 The loop test now touches down on a **0.0° slope** — the graded pad — instead of 7.3°,
 because it is finally landing at the site rather than on the hillside next to it.
+
+## D-041 — The envelope is checked against the real aircraft, and autorotation falls short
+
+**Decision.** `tools/simlab/EnvelopeTests.cs` measures level-flight performance and
+autorotation and compares both against published UH-1H figures.
+
+**Why this is possible.** The Workhorse is a UH-1H in all but name — 7.32 m rotor, 324 rpm,
+two blades, 1.30 m tail rotor, a 1400 shp turboshaft. Those are the real numbers, so the
+real aircraft's performance is a yardstick rather than a matter of taste. Nothing was asking
+whether the *whole aircraft* flew like the machine it is modelled on; the existing scenarios
+check individual mechanisms.
+
+**Level flight comes out well.** Minimum power 440 kW at 60 kt (reference: 60–70 kt), a
+textbook power curve, level flight held past 130 kt, and **505 km of still-air range against
+a published 510 km**. Best climb reads 2100 fpm against about 1600 — optimistic, but the
+right order.
+
+**Autorotation does not.** Best glide 1.99:1 at 50 kt descending 3191 fpm, against roughly
+4:1 and 1700 fpm. Twice as steep. The measurement is sound: rotor holds 100% Nr at every
+speed, figures are monotonic, averaged over five seconds of settled descent.
+
+Two clues to where it lives. The glide ratio is nearly **flat** from 40 to 90 kt where a
+real one peaks near best-glide speed — that is the signature of a descent angle set by
+something roughly proportional to speed, rather than by the balance of induced and profile
+power. And the energy books cannot be closed without power instrumentation inside
+`ComputeWrench`, which does not exist.
+
+**Not fixed, deliberately.** The repair is in the rotor's inflow in the windmill-brake
+state, which is the part of the model everything else rests on — and everything else
+currently matches the real aircraft closely. The test asserts against **regression** at the
+measured level and prints the shortfall every run, so the gap stays visible instead of
+quietly becoming the standard.
+
+## D-042 — Measure a pinned condition, not a departing one
+
+Recorded because this is now the **third** time it has bitten.
+
+The envelope test first trimmed the aircraft and then let it fly free for a second before
+reading power. The airframe is unstable, so it began departing within a few tenths of a
+second and the governor chased it — producing a fuel flow that jumped from 202 to 304 kg/h
+between 110 and 120 kt. That is a discontinuity in something the source computes as a
+constant times power, which is the giveaway that the reading was wrong rather than the
+model. Pinning the state while the engine and rotor settle fixed it.
+
+The same mistake, in three costumes: control-derivative tests that measured departure
+instead of response; audio tests that held blade loading fixed while varying torque, a
+condition no aircraft can be in; and this. **Decide what condition you are measuring, hold
+it, and only then read.**

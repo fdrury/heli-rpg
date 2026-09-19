@@ -40,6 +40,8 @@ public static class Program
         Run("trim", TrimTests.TrimSweep);
         Run("handsoff", TrimTests.HandsOff);
         Run("poshold", TrimTests.PositionHold);
+        Run("envelope", EnvelopeTests.Performance);
+        Run("autoglide", EnvelopeTests.Autorotation);
         Run("sassweep", TrimTests.SasSweep);
         Run("ratesens", TrimTests.RateSensitivity);
         Run("audiowave", AudioTests.Waveform);
