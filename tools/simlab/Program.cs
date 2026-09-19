@@ -90,6 +90,14 @@ public static class Program
         Run("loadout_full", LoadoutTests.FullLoadout);
         Run("loadout_lifecycle", LoadoutTests.BagAndInstall);
         Run("loadout_distribution", LoadoutTests.ModuleDistribution);
+        Run("salvage_catalog", SalvageTests.Catalog);
+        Run("salvage_sites", SalvageTests.SiteCharacter);
+        Run("salvage_wear", SalvageTests.ConditionCliff);
+        Run("salvage_fit", SalvageTests.FitDecision);
+        Run("salvage_weight", SalvageTests.WeightCost);
+        Run("salvage_take", SalvageTests.WhatToTake);
+        Run("salvage_tiers", SalvageTests.TierScarcity);
+        Run("salvage_determinism", SalvageTests.Determinism);
         Run("masking", ThreatTests.Masking);
         Run("altbands", ThreatTests.AltitudeBands);
         Run("countermeasures", ThreatTests.Countermeasures);
