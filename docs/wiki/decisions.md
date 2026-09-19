@@ -1414,12 +1414,54 @@ plus tail (50) plus drivetrain (11) plus a lower parasite already accounts for r
 So the model would sit near the right descent rate **if the disc were not also acting as a
 large drag device**.
 
-**Conclusion: the gap is in the rotor's retarding force in the windmill-brake state** —
-the thrust/inflow relationship when the air is coming up through the disc — not in the
-blades, not in the fuselage, and not in vortex ring. `Inflow.SolveMomentum` reports λ ≈ 0.009
-in a 19 m/s descent, which is the right answer for *forward flight* momentum theory and
-looks suspiciously small for a disc being driven backwards.
+**Conclusion (superseded by D-045 — see below, this was too confident):** the gap looked
+like the rotor's retarding force in the windmill-brake state. The energy accounting above is
+real, but it does not on its own identify a cause, and the follow-up measurement refuted the
+first hypothesis it suggested.
 
 Still not fixed, and still deliberately: it is one branch of the inflow model, but that
 branch is load-bearing for hover, climb and vortex ring as well, and the rest of the envelope
 currently matches the real aircraft to within a few per cent. It now has a precise address.
+
+## D-045 — The autorotation equilibrium, measured properly, and one hypothesis refuted
+
+**The right rig.** In a steady engine-off descent the net shaft torque is zero *by
+definition* — the driving part of the disc exactly balances the dragging part — so the
+equilibrium can be found directly by pinning the aircraft, sweeping descent rate, and
+looking for where shaft power crosses zero **with Nr at 100%**. That is `simlab
+autobalance`, and it replaces waiting for a controller to hunt its way there.
+
+It reframes the problem. The model does not descend too fast because it is draggy; it
+descends too fast because **the rotor cannot be sustained at 100% Nr any slower**:
+
+| rate of descent | Nr |
+|---|---|
+| 1181 fpm | 67% |
+| 1772 fpm | 69% |
+| 2953 fpm | 84% |
+| 3740 fpm | 97% |
+| 4528 fpm | 110% |
+
+At 1772 fpm — where the real aircraft sits — the rotor is turning at 69%. Forward speed is
+not buying what it should: at μ = 0.125 the disc has plenty of mass flow through it, and the
+model behaves almost as though it were in *vertical* autorotation, where 3000-plus fpm would
+be about right.
+
+**Hypothesis tried and refuted.** The induced inflow is uniform across the radius — the
+Drees gradient in `MainRotor` is purely azimuthal, `rBar` only ever multiplying the fore-aft
+and lateral terms. Uniform inflow is the classical simplification known to starve the
+inboard driving region, so it was the obvious suspect. `RotorConfig.RadialInflow` adds a
+triangular distribution, and `simlab radialsweep` measures what it buys:
+
+| k | Nr = 100% at | hover kW | 60 kt kW |
+|---|---|---|---|
+| 0.0 | 3879 fpm | 815 | 440 |
+| 0.9 | 3843 fpm | 721 | 432 |
+
+**A 1% improvement in the thing it was meant to fix, and an 11% drop in hover power, which
+would be a regression.** So it is not the cause. The knob stays, defaulted to 0 so nothing
+changes, because the negative result is worth more written down than rediscovered — and the
+sweep rig makes the next attempt cheap.
+
+Left open with better tools than it had, and the leading question sharpened: *why does
+forward speed not reduce the descent rate needed to sustain rotor RPM?*

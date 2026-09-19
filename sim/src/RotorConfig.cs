@@ -37,6 +37,22 @@ public sealed class RotorConfig
     public int SpinSign { get; init; } = 1;
 
     /// <summary>Nominal (100% Nr) rotor speed, rad/s.</summary>
+    /// <summary>
+    /// How triangular the induced inflow is across the radius, 0 uniform to 1 fully linear.
+    ///
+    /// A uniform induced velocity is the classical simplification, and it is the one that
+    /// under-predicts autorotation: the driving region of an autorotating disc lives
+    /// INBOARD, where the local upflow tilts the lift vector forward, and uniform inflow
+    /// gives that region far more downwash than it really sees. The measured consequence
+    /// was a rotor that could only hold 100% Nr by descending at 3700 fpm, where the real
+    /// aircraft holds it at 1700.
+    ///
+    /// Real rotors are closer to triangular - induced velocity small at the root, largest
+    /// near the tip. The shape here is (4/3)·r/R, whose area-weighted mean is 8/9, so
+    /// turning it on shifts inflow outboard without greatly changing the total.
+    /// </summary>
+    public double RadialInflow { get; set; } = 0.0;
+
     public double NominalOmega { get; init; } = 27.0;
 
     /// <summary>Forward tilt of the mast, radians. Lets the fuselage sit level in cruise.</summary>

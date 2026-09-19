@@ -140,6 +140,161 @@ public static class EnvelopeTests
     }
 
     /// <summary>
+    /// What a radial inflow gradient buys, and what it costs.
+    ///
+    /// For each setting: the descent rate at which the rotor can hold 100% Nr with the
+    /// collective down - which IS the autorotation equilibrium - against hover and cruise
+    /// power, which is what the change risks breaking.
+    /// </summary>
+    public static string? RadialInflowSweep()
+    {
+        Console.WriteLine("  radial inflow gradient: autorotation against powered flight");
+        Console.WriteLine("    k      Nr=100% at     hover kW   60 kt kW");
+
+        foreach (double k in new[] { 0.0, 0.3, 0.6, 0.9 })
+        {
+            // Descent rate that sustains 100% Nr, found by bisection on the pinned rig.
+            double lo = 4.0, hi = 30.0;
+            for (int iter = 0; iter < 12; iter++)
+            {
+                double mid = 0.5 * (lo + hi);
+                if (NrAtDescent(k, 60.0, mid) < 100.0) lo = mid; else hi = mid;
+            }
+            double equilibrium = 0.5 * (lo + hi);
+
+            double hoverKw = LevelPower(k, 0.0);
+            double cruiseKw = LevelPower(k, 60.0);
+
+            Console.WriteLine($"  {k,4:F1}   {equilibrium * Fpm,6:F0} fpm      " +
+                              $"{hoverKw,7:F0}    {cruiseKw,7:F0}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("  target: 100% Nr at about 1700 fpm, hover and cruise power unchanged");
+        return null;
+    }
+
+    private static double NrAtDescent(double k, double kt, double w)
+    {
+        Airframe af = Airframe.Workhorse();
+        af.MainRotor.RadialInflow = k;
+        var h = new Helicopter(af, new FlatEnvironment()) { Fuel = 500 };
+        h.InvalidateMass();
+        h.PlaceInFlightTrimmed(1500, kt / Kt);
+        h.UseInternalGroundModel = false;
+        h.Sas.Enabled = false;
+        h.Engine.Fail();
+
+        var c = new Controls { Collective = 0.0, Throttle = 0.0 };
+        var vel = new Vec3(kt / Kt, 0, w);
+        var att = Quat.FromEuler(0, 0, 0);
+        double nr = 0;
+        int n = 0;
+        for (int i = 0; i < 2400; i++)
+        {
+            h.State.Position = new Vec3(0, 0, -1500);
+            h.State.Orientation = att;
+            h.State.Velocity = vel;
+            h.State.AngularVelocity = Vec3.Zero;
+            h.ForceActuators(c);
+            h.Step(1.0 / 240.0);
+            if (i > 1900) { nr += h.Telemetry.RotorRpmPercent; n++; }
+        }
+        return nr / Math.Max(n, 1);
+    }
+
+    private static double LevelPower(double k, double kt)
+    {
+        Airframe af = Airframe.Workhorse();
+        af.MainRotor.RadialInflow = k;
+        var h = new Helicopter(af, new FlatEnvironment()) { Fuel = 500 };
+        h.InvalidateMass();
+        h.PlaceInFlight(200);
+        h.UseInternalGroundModel = false;
+        TrimResult t = Trim.Solve(h, 200, kt / Kt);
+        if (!t.Converged) return double.NaN;
+
+        var att = Quat.FromEuler(t.RollRad, t.PitchRad, 0);
+        var vel = new Vec3(kt / Kt, 0, 0);
+        for (int i = 0; i < 360; i++)
+        {
+            h.State.Position = new Vec3(0, 0, -200);
+            h.State.Orientation = att;
+            h.State.Velocity = vel;
+            h.State.AngularVelocity = Vec3.Zero;
+            h.ForceActuators(t.Controls);
+            h.Step(1.0 / 240.0);
+        }
+        return h.Telemetry.PowerRequired / 1000.0;
+    }
+
+    /// <summary>
+    /// Net shaft torque against descent rate, at a pinned condition.
+    ///
+    /// This is the experiment that actually settles where the autorotation equilibrium
+    /// comes from. In a steady engine-off descent the net shaft torque is zero by
+    /// definition - the driving region of the disc exactly balances the dragging region -
+    /// so sweeping descent rate and finding the zero crossing gives the equilibrium
+    /// directly, without waiting for a controller to hunt its way there. Printing the power
+    /// split alongside it shows WHICH term moves the crossing.
+    ///
+    /// Pinned rather than free, for the reason D-042 keeps having to be relearned.
+    /// </summary>
+    public static string? AutorotationBalance()
+    {
+        const double kt = 60.0;
+        const double alt = 1500;
+        Console.WriteLine($"  net shaft torque against descent rate, pinned at {kt:F0} kt");
+        Console.WriteLine("    ROD      shaft      induced   profile   parasite    Nr    stalled");
+
+        foreach (double w in new[] { 6.0, 9.0, 12.0, 15.0, 19.0, 23.0 })
+        {
+            Helicopter h = Fresh();
+            h.PlaceInFlightTrimmed(alt, kt / Kt);
+            h.UseInternalGroundModel = false;
+            h.Sas.Enabled = false;
+            h.Engine.Fail();
+
+            // Collective full down, which is where an autorotation is flown from.
+            var c = new Controls { Collective = 0.0, Throttle = 0.0 };
+            var vel = new Vec3(kt / Kt, 0, w);          // NED: +Z is down
+            var att = Quat.FromEuler(0, 0, 0);
+
+            double shaft = 0, ind = 0, prof = 0, para = 0, nr = 0, stall = 0;
+            int n = 0;
+            const double dt = 1.0 / 240.0;
+            for (int i = 0; i < 2400; i++)              // 10 s
+            {
+                h.State.Position = new Vec3(0, 0, -alt);
+                h.State.Orientation = att;
+                h.State.Velocity = vel;
+                h.State.AngularVelocity = Vec3.Zero;
+                h.ForceActuators(c);
+                h.Step(dt);
+
+                if (i > 1900)
+                {
+                    shaft += h.Telemetry.MainRotorPower;
+                    ind += h.Telemetry.InducedPower;
+                    prof += h.Telemetry.ProfilePower;
+                    para += h.Telemetry.ParasitePower;
+                    nr += h.Telemetry.RotorRpmPercent;
+                    stall += h.Telemetry.StalledFraction;
+                    n++;
+                }
+            }
+
+            Console.WriteLine($"  {w * Fpm,5:F0} fpm {shaft / n / 1000,8:F0} kW " +
+                              $"{ind / n / 1000,9:F0} {prof / n / 1000,9:F0} {para / n / 1000,9:F0} kW" +
+                              $"  {nr / n,5:F0}%  {stall / n,5:P0}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("  The equilibrium is where shaft power crosses zero with Nr at 100%.");
+        return null;
+    }
+
+    /// <summary>
     /// How far it glides with the engine gone.
     ///
     /// The number that matters to a player is the glide ratio, because it decides how much

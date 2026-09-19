@@ -235,7 +235,12 @@ public sealed class MainRotor
                     // at the rear of the disc than the front in forward flight.
                     double along = -cosPsi * flowCos + s * sinPsi * flowSin; // cos of angle from flow
                     double across = sinPsi * flowCos + s * cosPsi * flowSin;
-                    double viLocal = vInduced * (1.0 + Inflow.Kx * rBar * along + Inflow.Ky * rBar * across);
+                    // Azimuthal gradient (Drees) times a radial one. Without the radial
+                    // term the inflow is uniform across the span, which starves the
+                    // inboard driving region an autorotation depends on.
+                    double radial = 1.0 + cfg.RadialInflow * ((4.0 / 3.0) * rBar - 1.0);
+                    double viLocal = vInduced * radial
+                                   * (1.0 + Inflow.Kx * rBar * along + Inflow.Ky * rBar * across);
 
                     double uP = viLocal - Vec3.Dot(vElem, _zd);
 
