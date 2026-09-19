@@ -1465,3 +1465,35 @@ sweep rig makes the next attempt cheap.
 
 Left open with better tools than it had, and the leading question sharpened: *why does
 forward speed not reduce the descent rate needed to sustain rotor RPM?*
+
+## D-046 — An assist ladder, and the limits of measuring it
+
+**Decision.** `Stability.Set(AssistLevel)` replaces the single on/off switch with Off /
+Light / Standard / Full.
+
+**Why.** The bare airframe leaves trim in about six seconds, which is a specialist aircraft;
+full augmentation holds indefinitely, which is a different game. Everything between is where
+most people want to be, and every part was already built — only the presets were missing.
+Measured hands-off: Off 6.5 s, Light 6.6 s, Standard 22.3 s, Full never departs (22° worst
+bank in forty seconds).
+
+**Tuning by measurement, not by feel.** The first attempt at the presets produced a *Light*
+rung worse than no augmentation at all (4.7 s vs 6.5) and a *Full* rung worse than Standard
+(14.6 s vs 22.3). Both are D-021's saturation effect: at low authority a high gain turns the
+damper bang-bang, and past about 0.30 authority the rate gains hit the limit the actuator lag
+will carry. Full therefore buys **headroom, not gain** — its rate gains are identical to
+Standard's, and pushing them to 1.05 dropped it to 2.6 s.
+
+**What could not be measured, and was not faked.** Three metrics were tried for Light:
+
+* *Hands-off survival* — about levelling, which Light does not have by design.
+* *Time for a disturbance to settle* — never arrives; without levelling the aircraft keeps
+  rolling, so every level returned the same capped number.
+* *Peak roll rate for a fixed input* — **rises** with assist, because an augmented aircraft
+  answers a held stick more crisply. Better handling, worse number.
+
+All three are real properties and none is what Light is for. What it buys is how the machine
+feels over seconds of continuous correction, which is a judgement made at a stick. The
+column is printed but not asserted on, and the question is on the test machine's brief
+instead. Inventing a scalar that flattered the design would have been worse than naming the
+limit.

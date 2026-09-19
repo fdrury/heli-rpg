@@ -57,6 +57,26 @@ These are the things most likely to be wrong. Please look specifically.
 6. **Frame rate.** The per-shot line reports fps. Anything under 30 at 1600×900 is worth
    naming, with which shot.
 
+## One thing that needs a stick, not a screen
+
+`Stability` now has an assist ladder — **Off / Light / Standard / Full** (`Sas.Set(...)`).
+Three rungs are measurable and measured: Standard and Full hold trim hands-off for 22 s and
+indefinitely, against 6.5 s bare.
+
+**Light cannot be measured from here, and I stopped trying.** It is rate damping with a
+light hand on heading and deliberately *no* attitude levelling — so it cannot win on
+hands-off survival (that is levelling's job), a disturbance never "settles" because the
+aircraft keeps rolling, and peak roll rate for a fixed input actually *rises* with assist
+because an augmented aircraft answers a held stick more crisply. All three of those are real
+properties, and none of them is what Light is for.
+
+What Light is for is how the aircraft feels over seconds of continuous correction: fewer
+over-corrections, less chasing. That is a judgement someone makes at a stick.
+
+**So: fly a minute of low-level manoeuvring at each of Off, Light and Standard, and say
+whether Light earns its place** — or whether the ladder should just be Off / Standard / Full.
+A useless rung is worse than no rung, because it implies a choice that does not exist.
+
 ## How to report back
 
 Facts, with the shot name and the conditions line. "18_rain at D173 16:45, sun 26°: the

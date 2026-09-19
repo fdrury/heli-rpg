@@ -32,8 +32,91 @@ namespace Rotorwash.Sim;
 ///
 /// Reversible: delete the call in <see cref="Helicopter"/> and the airframe is bare again.
 /// </summary>
+/// <summary>How much the aircraft helps its pilot. See <see cref="Stability.Set"/>.</summary>
+public enum AssistLevel
+{
+    /// <summary>Nothing. The bare airframe, which is a genuinely difficult aircraft.</summary>
+    Off,
+    /// <summary>Rate damping only, on a short leash. Takes the edge off without flying for you.</summary>
+    Light,
+    /// <summary>Rate damping, weak levelling and heading hold. The default.</summary>
+    Standard,
+    /// <summary>Strong levelling and generous authority: it will hold an attitude for you.</summary>
+    Full,
+}
+
 public sealed class Stability
 {
+    /// <summary>
+    /// Pick an assist level.
+    ///
+    /// A ladder rather than a switch, because "on or off" is the wrong shape for this. The
+    /// bare airframe leaves trim in about six seconds, which is a specialist aircraft; full
+    /// augmentation holds for half a minute, which is a different game. Everything between
+    /// is where most people actually want to be, and the parts were all already here - only
+    /// the presets were missing.
+    /// </summary>
+    public void Set(AssistLevel level)
+    {
+        Level = level;
+        switch (level)
+        {
+            case AssistLevel.Off:
+                Enabled = false;
+                break;
+
+            case AssistLevel.Light:
+                // Rates only. It will stop a wobble turning into an attitude and do nothing
+                // else - no levelling, no heading hold - so the pilot still flies it.
+                // Gains scaled well down to match the shorter leash. D-021's sweep is the
+                // authority here: at low authority a high gain saturates, the damper turns
+                // bang-bang, and MORE gain makes things worse. The first guess at this rung
+                // used Standard-ish gains on a 0.20 leash and came out worse than no
+                // augmentation at all.
+                // Rate damping plus a light hand on heading, and NO attitude levelling -
+                // it will not hold your bank for you, which is what keeps this rung honest.
+                //
+                // The heading term is not a compromise, it is the point. Pure rate damping
+                // measured 6.6 s hands-off against the bare airframe's 6.5, because the
+                // departure is driven by the pedal trim changing with speed: damping a yaw
+                // rate slows that down without ever correcting it. Yaw is also the axis
+                // humans manage worst, which is why real rate-damping systems almost always
+                // include a heading element.
+                Enabled = true;
+                Authority = 0.26;
+                RollGain = 0.48; PitchGain = 0.54; YawGain = 0.76;
+                AttitudeGain = 0.0; HeadingGain = 0.40;
+                break;
+
+            case AssistLevel.Standard:
+                Enabled = true;
+                Authority = 0.30;
+                RollGain = 0.85; PitchGain = 0.95; YawGain = 1.35;
+                AttitudeGain = 0.30; HeadingGain = 0.55;
+                break;
+
+            case AssistLevel.Full:
+                // Close to an attitude-command system. Still limited authority, so it can
+                // still be flown past - that property is not negotiable (D-021).
+                // More authority and more damping, but only a little more ATTITUDE gain.
+                // A strong attitude term fights the actuator lag and hunts: at 0.95 this
+                // rung held worse than Standard, which is the same lesson from the other
+                // end of the ladder.
+                // Note what does NOT change: the rate gains. Standard's are already at the
+                // edge of what the actuator lag will carry - pushing them to 1.05 with more
+                // authority dropped this rung to 2.6 s, worse than the bare airframe. What
+                // Full buys is HEADROOM before saturation, and a firmer hand on attitude.
+                Enabled = true;
+                Authority = 0.40;
+                RollGain = 0.85; PitchGain = 0.95; YawGain = 1.35;
+                AttitudeGain = 0.55; HeadingGain = 0.85;
+                break;
+        }
+    }
+
+    /// <summary>The level last selected. Informational; the gains are the truth.</summary>
+    public AssistLevel Level { get; private set; } = AssistLevel.Standard;
+
     /// <summary>
     /// Off by default, and deliberately so.
     ///

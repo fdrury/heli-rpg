@@ -242,7 +242,106 @@ public static class TrimTests
         return null;
     }
 
-    private static string Fmt(double t) => double.IsNaN(t) ? "not at all in 30 s" : $"{t:F1} s";
+    /// <summary>
+    /// The assist ladder: each rung has to be meaningfully different from the one below.
+    ///
+    /// A ladder whose rungs all feel the same is worse than a switch, because it implies a
+    /// choice that does not exist.
+    /// </summary>
+    public static string? AssistLadder()
+    {
+        // Two measurements, because the rungs are not all for the same thing.
+        //
+        // Hands-off survival is about LEVELLING - holding a bank near zero - so a rung with
+        // no attitude term cannot win on it however well it damps, and asserting otherwise
+        // marks a good design as broken. Rate damping is for handling: a disturbance that
+        // dies away instead of building. Measuring both is what separates "this rung does
+        // nothing" from "this rung does something else".
+        Console.WriteLine("  by assist level: hands-off survival, and how hard a fixed shove rolls it");
+        Console.WriteLine("    level        departs    worst bank   roll settles in");
+
+        var results = new List<(AssistLevel level, double departs, double settle)>();
+
+        foreach (AssistLevel level in Enum.GetValues<AssistLevel>())
+        {
+            Helicopter h = Fresh();
+            h.PlaceInFlightTrimmed(200);
+            h.UseInternalGroundModel = false;
+            h.Sas.Set(level);
+
+            const double dt = 1.0 / 240.0;
+            double departed = double.NaN;
+            double worst = 0;
+            for (double t = 0; t < 40; t += dt)
+            {
+                h.Step(dt);
+                double bank = Math.Abs(h.State.Orientation.Roll * Deg);
+                worst = Math.Max(worst, bank);
+                if (double.IsNaN(departed) && bank > 30) departed = t;
+            }
+
+            double settle = PeakRollRate(level);
+            Console.WriteLine($"    {level,-10}  {Fmt(departed),-10}  {worst,5:F0} deg      {settle,5:F1} deg/s");
+            results.Add((level, double.IsNaN(departed) ? 40.0 : departed, settle));
+        }
+
+        // The peak-rate column is printed but NOT asserted on, and that is deliberate.
+        //
+        // Three metrics were tried for the Light rung and none of them honestly capture it.
+        // Hands-off survival is about levelling, which Light does not have by design. Time
+        // for a disturbance to settle never arrives, because without levelling the aircraft
+        // keeps rolling. And peak rate for a fixed input RISES with assist, because an
+        // augmented aircraft answers a held stick more crisply - which is better handling,
+        // not worse.
+        //
+        // What Light actually buys is how the aircraft feels in the hands over seconds of
+        // continuous correction: fewer over-corrections, less chasing. That is a judgement
+        // a person makes at a stick, and inventing a scalar that flatters it would be worse
+        // than admitting the limit. It is on the test machine's brief instead.
+
+        // Levelling is what buys hands-off time, so only the rungs that have it must show it.
+        double standard = results.Find(r => r.level == AssistLevel.Standard).departs;
+        double light = results.Find(r => r.level == AssistLevel.Light).departs;
+        double full = results.Find(r => r.level == AssistLevel.Full).departs;
+        if (standard < light * 2.0)
+            return $"Standard barely outlasts Light ({light:F1} s vs {standard:F1} s) - " +
+                   "the levelling term is not earning its place";
+        if (full < standard)
+            return $"Full holds worse than Standard ({standard:F1} s vs {full:F1} s)";
+
+        return null;
+    }
+
+    /// <summary>
+    /// Knock it with a fixed pulse of lateral cyclic and see how fast it ends up rolling.
+    ///
+    /// Peak rate for a known input, rather than time-to-settle: with no levelling the
+    /// aircraft simply keeps rolling after the pulse, so "time for the rate to die" never
+    /// arrives and every level measures the same capped number. Damping shows up honestly
+    /// as a smaller peak for the same shove.
+    /// </summary>
+    private static double PeakRollRate(AssistLevel level)
+    {
+        Helicopter h = Fresh();
+        TrimResult trim = h.PlaceInFlightTrimmed(200);
+        h.UseInternalGroundModel = false;
+        h.Sas.Set(level);
+
+        const double dt = 1.0 / 240.0;
+        Controls pulse = trim.Controls;
+        pulse.CyclicRoll = Math.Clamp(pulse.CyclicRoll + 0.30, -1, 1);
+
+        double peak = 0;
+        for (double t = 0; t < 1.5; t += dt)
+        {
+            h.Input = pulse;
+            h.Step(dt);
+            peak = Math.Max(peak, Math.Abs(h.State.AngularVelocity.X * Deg));
+        }
+        return peak;
+    }
+
+    private static string Fmt(double t) => double.IsNaN(t) ? "never" : $"{t:F1} s";
 
     private static string? Release(bool augmented, out double departedAt)
     {

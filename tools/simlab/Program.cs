@@ -44,6 +44,7 @@ public static class Program
         Run("autoglide", EnvelopeTests.Autorotation);
         Run("autobalance", EnvelopeTests.AutorotationBalance);
         Run("radialsweep", EnvelopeTests.RadialInflowSweep);
+        Run("assist", TrimTests.AssistLadder);
         Run("sassweep", TrimTests.SasSweep);
         Run("ratesens", TrimTests.RateSensitivity);
         Run("audiowave", AudioTests.Waveform);
