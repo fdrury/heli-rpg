@@ -51,6 +51,7 @@ public static class SceneMood
         root.AddChild(moon);
         root.AddChild(new SceneMoodDriver(env, sun, moon) { Name = "SceneMoodDriver" });
         root.AddChild(new WeatherEffects { Name = "WeatherEffects" });
+        root.AddChild(new WeatherAudio { Name = "WeatherAudio" });
     }
 
     private static WorldEnvironment BuildEnvironment()

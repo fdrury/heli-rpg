@@ -44,6 +44,7 @@ public static class Program
         Run("audiowave", AudioTests.Waveform);
         Run("bladepass", AudioTests.BladePass);
         Run("audiostate", AudioTests.RespondsToState);
+        Run("weatheraudio", AudioTests.WeatherAudio);
         Run("solar", WeatherTests.Solar);
         Run("weather", WeatherTests.Conditions);
         Run("windeffect", WeatherTests.WindEffect);
@@ -93,6 +94,7 @@ public static class Program
         Run("save_damage", SaveTests.DamageRoundTrip);
         Run("save_loadout", SaveTests.LoadoutRoundTrip);
         Run("save_npc", SaveTests.NpcRoundTrip);
+        Run("save_fog", SaveTests.FogRoundTrip);
         Run("save_full", SaveTests.FullRoundTrip);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);

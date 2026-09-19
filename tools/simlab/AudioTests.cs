@@ -157,6 +157,44 @@ public static class AudioTests
         return failure;
     }
 
+    /// <summary>Rain and wind have to be audible, proportionate, and silent in fair weather.</summary>
+    public static string? WeatherAudio()
+    {
+        float[] RenderWx(double rain, double wind, double gust, double shelter)
+        {
+            var w = new WeatherSynth(Rate);
+            w.Prime(rain, wind, gust, shelter);
+            var all = new float[Rate];
+            const int block = 512;
+            for (int i = 0; i < all.Length; i += block)
+            {
+                int n = Math.Min(block, all.Length - i);
+                w.Render(all.AsSpan(i, n), n, rain, wind, gust, shelter, (double)n / Rate);
+            }
+            return all;
+        }
+
+        double calm = Rms(RenderWx(0, 1.0, 0.4, 0));
+        double breezy = Rms(RenderWx(0, 12.0, 4.0, 0));
+        double downpour = Rms(RenderWx(1.0, 12.0, 4.0, 0));
+        double inside = Rms(RenderWx(1.0, 12.0, 4.0, 1.0));
+
+        Console.WriteLine($"  rms  calm {calm:F4}   breezy {breezy:F4}   " +
+                          $"downpour {downpour:F4}   downpour inside {inside:F4}");
+
+        double peak = 0;
+        foreach (float v in RenderWx(1.0, 18.0, 9.0, 0)) peak = Math.Max(peak, Math.Abs(v));
+        Console.WriteLine($"  peak in the worst of it: {peak:F3}");
+
+        if (calm > 0.012) return $"a still, dry day is not quiet: rms {calm:F4}";
+        if (breezy <= calm * 2.0) return $"wind barely registers: {calm:F4} -> {breezy:F4}";
+        if (downpour <= breezy * 1.3) return $"rain barely registers: {breezy:F4} -> {downpour:F4}";
+        if (inside >= downpour * 0.85)
+            return $"being inside makes no difference: {downpour:F4} vs {inside:F4}";
+        if (peak > 1.0) return $"clipping in heavy weather: peak {peak:F3}";
+        return null;
+    }
+
     public static string? RespondsToState()
     {
         double quiet = Rms(Render(Hover(torque: 0.25), 1.0));

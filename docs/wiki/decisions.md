@@ -1044,3 +1044,22 @@ is not a flight condition any aircraft can be in. It made the synthesiser look d
 when the real answer was that the question was impossible. The state now moves coherently —
 which is the same lesson as the control-derivative tests that measured departure instead of
 response.
+
+## D-036 — The weather has a voice of its own
+
+**Decision.** `WeatherSynth` (sim) and `WeatherAudio` (game) add rain and wind, on a
+**non-positional** player, separate from the rotor.
+
+**Why.** Separate from `RotorSynth` because the two follow different things: the rotor
+follows the aircraft's telemetry, this follows the world. Mixing them would tie the
+weather's volume to the rotor's, and the weather has to keep going when the engine is shut
+down — standing beside a cold aircraft in the rain should not be silent.
+
+Non-positional for the same reason. Weather is not somewhere; it is everywhere the player
+is. Attenuating it by distance to the helicopter would be wrong in exactly the situations
+that matter most, most obviously once the player has climbed out and walked away.
+
+Shelter is a parameter rather than a separate mix: in the cockpit the rain is on the other
+side of the glass, so it is quieter *and* has its top end taken off, which is most of what
+"inside" sounds like. Measured: 0.0987 RMS outside a downpour, 0.0316 in the cockpit, and
+0.0006 on a still dry day.
