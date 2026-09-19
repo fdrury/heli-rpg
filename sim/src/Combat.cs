@@ -202,4 +202,7 @@ public sealed class PilotHealth
     }
 
     public void Reset() => Health = MaxHealth;
+
+    /// <summary>Set health directly. Save/load only.</summary>
+    public void RestoreHealth(float h) => Health = Math.Clamp(h, 0, MaxHealth);
 }

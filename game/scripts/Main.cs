@@ -1,3 +1,4 @@
+using System.IO;
 using Godot;
 using Rotorwash.Sim;
 
@@ -411,6 +412,10 @@ public sealed partial class Main : Node3D
             return;
         }
 
+        // Save / load.
+        if (key.Keycode == Key.F5) { TrySave(); return; }
+        if (key.Keycode == Key.F9) { TryLoad(); return; }
+
         // Keys shared across both modes.
         switch (key.Keycode)
         {
@@ -642,5 +647,221 @@ public sealed partial class Main : Node3D
             $"Ct/sigma {t.BladeLoading:F4}  stalled {t.StalledFraction * 100:F0}%  tipM {t.TipMach:F2}\n" +
             $"VRS {t.VrsSeverity:F2}  engine {t.Engine}  autorot {t.Autorotating}\n" +
             $"rt {_rotorTime.Charge:P0}" + (_rotorTime.Active ? "  ROTOR TIME" : "");
+    }
+
+    // -------------------------------------------------------------- save / load
+
+    private static string SaveDir
+    {
+        get
+        {
+            string dir = Path.Combine(OS.GetUserDataDir(), "saves");
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+    }
+
+    private static string SavePath => Path.Combine(SaveDir, "save1.json");
+
+    /// <summary>Can save: parked, shut down, not in dialogue or mid-activity.</summary>
+    private bool CanSave =>
+        _landing.OnGround
+        && _heli.LinearVelocity.Length() < 1.2f
+        && _heli.Sim.Telemetry.RotorRpmPercent < 70
+        && _play.Parked is not null
+        && _play.Busy is null
+        && !_play.InDialogue;
+
+    private void TrySave()
+    {
+        if (!CanSave)
+        {
+            GD.Print("[save] cannot save — land, shut down, and park at a site first");
+            _play.Progress.Journal("Tried to save. Put down somewhere first.");
+            return;
+        }
+        var data = CaptureState();
+        string json = data.ToJson();
+        File.WriteAllText(SavePath, json);
+        GD.Print($"[save] saved to {SavePath} ({json.Length} bytes)");
+        _play.Progress.Journal("Progress recorded.");
+    }
+
+    private void TryLoad()
+    {
+        string path = SavePath;
+        if (!File.Exists(path))
+        {
+            GD.Print("[save] no save file found");
+            return;
+        }
+        string json = File.ReadAllText(path);
+        var data = SaveData.FromJson(json);
+        if (data is null)
+        {
+            GD.Print("[save] save file is corrupt");
+            return;
+        }
+        ApplyState(data);
+        GD.Print("[save] loaded");
+    }
+
+    /// <summary>Capture all game state into a SaveData DTO.</summary>
+    public SaveData CaptureState()
+    {
+        var sim = _heli.Sim;
+        Vector3 pos = _heli.GlobalPosition;
+        // Godot X = sim east, Godot -Z = sim north
+        var data = new SaveData
+        {
+            North = -pos.Z,
+            East = pos.X,
+            Altitude = pos.Y,
+            HeadingRad = sim.State.Orientation.Yaw,
+            Fuel = sim.Fuel,
+            PilotHealth = _sidearm.PilotHp.Health,
+            SidearmRounds = _sidearm.State.Rounds,
+            SidearmSpare = _sidearm.State.SpareRounds,
+            RotorTimeCharge = _rotorTime.Charge,
+            ChaffRemaining = _threats.Field.ChaffRemaining,
+            FlaresRemaining = _threats.Field.FlaresRemaining,
+        };
+
+        data.CaptureDamage(sim.Damage);
+        data.CaptureLoadout(_play.Loadout);
+        data.CaptureProgress(_play.Progress);
+
+        // NPCs
+        foreach (var (siteId, (npc, bank)) in _play.AllNpcs)
+            data.Npcs.Add(SaveData.CaptureNpc(siteId, npc, bank));
+
+        // Threat detection history
+        foreach (var track in _threats.Field.Tracks)
+            if (track.EverDetected)
+                data.DetectedEmitters.Add(track.Emitter.Id);
+
+        return data;
+    }
+
+    /// <summary>Restore all game state from a SaveData DTO.</summary>
+    public void ApplyState(SaveData data)
+    {
+        var sim = _heli.Sim;
+
+        // Board if on foot
+        if (_mode == GameMode.OnFoot) ForceBoard();
+
+        // Aircraft position: teleport with engine off
+        float gx = (float)data.East;
+        float gz = (float)-data.North;
+        float gy = (float)data.Altitude;
+        _heli.LinearVelocity = Vector3.Zero;
+        _heli.AngularVelocity = Vector3.Zero;
+        _heli.TeleportTo(new Vector3(gx, gy, gz), (float)data.HeadingRad);
+
+        // Flight state: parked, engine off, rotor stopped
+        sim.Fuel = data.Fuel;
+        sim.RotorOmega = 0;
+        sim.Engine.Reset();
+        sim.InvalidateMass();
+
+        // Damage
+        data.ApplyDamage(sim.Damage);
+
+        // Loadout: restore the sets, then re-apply physics effects
+        var oldInstalled = new System.Collections.Generic.HashSet<string>(_play.Loadout.Installed);
+        data.ApplyLoadout(_play.Loadout);
+        ReapplyLoadoutPhysics(oldInstalled);
+
+        // Progress
+        var progress = data.ApplyProgress();
+        var loadout = new Loadout();
+        data.ApplyLoadout(loadout);
+        _play.RestoreState(progress, loadout);
+
+        // NPCs
+        var restoredNpcs = new System.Collections.Generic.Dictionary<int, (NpcMind, DialogueBank)>();
+        foreach (var npcSave in data.Npcs)
+        {
+            var mind = SaveData.RestoreNpcMind(npcSave);
+            // Recreate the dialogue bank with lines from the corpus, then restore usage.
+            var site = WorldMap.SiteById(npcSave.SiteId);
+            DialogueBank bank;
+            if (site is not null && site.Kind == SiteKind.Settlement
+                && site.Region == RegionKind.Basin && IsFirstSettlement(site))
+                bank = DialogueCorpus.MattieLines();
+            else
+                bank = DialogueCorpus.SettlerLines();
+            bank.RestoreUsage(npcSave.LineUsage);
+            restoredNpcs[npcSave.SiteId] = (mind, bank);
+        }
+        _play.RestoreNpcs(restoredNpcs);
+
+        // Combat
+        _sidearm.PilotHp.RestoreHealth(data.PilotHealth);
+        _sidearm.State.Rounds = data.SidearmRounds;
+        _sidearm.State.SpareRounds = data.SidearmSpare;
+        _rotorTime.Charge = data.RotorTimeCharge;
+
+        // Threats: restore countermeasure quantities and detection history
+        _threats.Field.ChaffRemaining = data.ChaffRemaining;
+        _threats.Field.FlaresRemaining = data.FlaresRemaining;
+        var detectedSet = new System.Collections.Generic.HashSet<int>(data.DetectedEmitters);
+        foreach (var track in _threats.Field.Tracks)
+            track.EverDetected = detectedSet.Contains(track.Emitter.Id);
+
+        // Re-sync countermeasure fitted flags from loadout
+        ReapplyThreatFittings();
+    }
+
+    /// <summary>
+    /// Remove old module physics and apply the new loadout's physics. On load, the
+    /// airframe starts fresh and we re-add every installed module.
+    /// </summary>
+    private void ReapplyLoadoutPhysics(System.Collections.Generic.HashSet<string> oldInstalled)
+    {
+        var af = _heli.Sim.Airframe;
+
+        // Remove old module effects
+        foreach (string id in oldInstalled)
+        {
+            if (!Loadout.Catalog.TryGetValue(id, out var def)) continue;
+            af.Mass.Remove($"mod_{id}");
+            af.DragArea -= def.DragDelta;
+            af.FuelCapacity -= def.FuelCapacityDelta;
+        }
+
+        // Apply new module effects
+        foreach (string id in _play.Loadout.Installed)
+        {
+            if (!Loadout.Catalog.TryGetValue(id, out var def)) continue;
+            af.Mass.Add($"mod_{id}", def.Position, def.Mass);
+            af.DragArea += def.DragDelta;
+            af.FuelCapacity += def.FuelCapacityDelta;
+        }
+
+        _heli.Sim.InvalidateMass();
+
+        // SAS authority
+        _heli.SasAuthority = _play.Loadout.IsInstalled("sas") ? 1f : 0f;
+    }
+
+    /// <summary>Re-sync threat field fitted flags from the current loadout.</summary>
+    private void ReapplyThreatFittings()
+    {
+        var field = _threats.Field;
+        field.Fitted = Countermeasure.None;
+        if (_play.Loadout.IsInstalled("rwr")) field.Fitted |= Countermeasure.RadarWarning;
+        if (_play.Loadout.IsInstalled("chaff")) field.Fitted |= Countermeasure.Chaff;
+        if (_play.Loadout.IsInstalled("flares")) field.Fitted |= Countermeasure.Flares;
+        if (_play.Loadout.IsInstalled("suppressor")) field.Fitted |= Countermeasure.ExhaustSuppressor;
+    }
+
+    private bool IsFirstSettlement(Site site)
+    {
+        foreach (var s in WorldMap.Sites)
+            if (s.Kind == SiteKind.Settlement && s.Region == RegionKind.Basin)
+                return s.Id == site.Id;
+        return false;
     }
 }

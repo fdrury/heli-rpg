@@ -86,6 +86,11 @@ public static class Program
         Run("combat_attrition", CombatTests.NpcAttrition);
         Run("combat_sidearm", CombatTests.SidearmMechanics);
         Run("combat_pilot", CombatTests.PilotHealthCycle);
+        Run("save_progress", SaveTests.ProgressRoundTrip);
+        Run("save_damage", SaveTests.DamageRoundTrip);
+        Run("save_loadout", SaveTests.LoadoutRoundTrip);
+        Run("save_npc", SaveTests.NpcRoundTrip);
+        Run("save_full", SaveTests.FullRoundTrip);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 

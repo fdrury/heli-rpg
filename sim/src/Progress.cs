@@ -133,6 +133,28 @@ public sealed class Progress
         r.LastVisitedAt = Clock;
     }
 
+    // ----------------------------------------------------------- save / load
+
+    public IReadOnlyDictionary<Stock, double> AllStock => _stock;
+    public IReadOnlyDictionary<string, Knowledge> AllKnown => _known;
+    public IReadOnlyDictionary<int, SiteRecord> AllSites => _sites;
+
+    /// <summary>Set a stock amount directly, bypassing events. Save/load only.</summary>
+    public void RestoreStock(Stock kind, double amount) => _stock[kind] = amount;
+
+    /// <summary>Record knowledge without firing events or journalling. Save/load only.</summary>
+    public void RestoreKnowledge(Knowledge k) => _known[k.Id] = k;
+
+    /// <summary>Set a site record directly. Save/load only.</summary>
+    public void RestoreSite(int id, SiteRecord rec) => _sites[id] = rec;
+
+    /// <summary>Replace the journal wholesale. Save/load only.</summary>
+    public void RestoreJournal(IEnumerable<string> entries)
+    {
+        _journal.Clear();
+        _journal.AddRange(entries);
+    }
+
     // ---------------------------------------------------------------- journal
 
     /// <summary>

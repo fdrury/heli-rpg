@@ -64,6 +64,18 @@ public sealed class DamageState
 
     public void RepairAll() { for (int i = 0; i < _health.Length; i++) _health[i] = 1.0; }
 
+    // ----------------------------------------------------------- save / load
+
+    /// <summary>Set a component's health directly. Save/load only.</summary>
+    public void SetHealth(Component c, double h) => _health[(int)c] = System.Math.Clamp(h, 0.0, 1.0);
+
+    /// <summary>Replace the damage log wholesale. Save/load only.</summary>
+    public void RestoreLog(System.Collections.Generic.IEnumerable<DamageEvent> events)
+    {
+        _log.Clear();
+        _log.AddRange(events);
+    }
+
     // ---------------------------------------------------------------- effects
 
     /// <summary>

@@ -498,6 +498,59 @@ public sealed partial class SiteInteraction : Node
 
     private double _lastCarried = -1;
 
+    // ----------------------------------------------------------- save / load
+
+    /// <summary>Read the NPC registry for saving.</summary>
+    public IReadOnlyDictionary<int, (NpcMind npc, DialogueBank bank)> AllNpcs => _npcs;
+
+    /// <summary>Replace progress and loadout from a save file.</summary>
+    public void RestoreState(Progress progress, Loadout loadout)
+    {
+        // Progress: replace the backing fields through the public object.
+        // Clock, stock, knowledge, sites, journal — all handled by the caller
+        // via RestoreXxx methods on Progress already. We just need to swap the
+        // reference used for the clock tick, mass sync, and site record access.
+        //
+        // But Progress and Loadout are readonly properties (no setter). We need
+        // to mutate the existing objects in-place instead of replacing them.
+        //
+        // Copy all state from the provided progress into our Progress.
+        Progress.Clock = progress.Clock;
+
+        // Stock: clear existing and copy over.
+        foreach (Stock s in System.Enum.GetValues<Stock>())
+            Progress.RestoreStock(s, progress.Amount(s));
+
+        // Knowledge
+        foreach (var k in progress.Known)
+            Progress.RestoreKnowledge(k);
+
+        // Sites
+        foreach (var (id, rec) in progress.AllSites)
+            Progress.RestoreSite(id, new SiteRecord
+            {
+                Visited = rec.Visited, Surveyed = rec.Surveyed,
+                FuelRemaining = rec.FuelRemaining, SalvageRemaining = rec.SalvageRemaining,
+                LastVisitedAt = rec.LastVisitedAt, VisitCount = rec.VisitCount,
+            });
+
+        // Journal
+        Progress.RestoreJournal(progress.Journal_);
+
+        // Loadout
+        Loadout.Restore(loadout.Installed, loadout.Bag);
+
+        _lastCarried = -1; // force mass resync
+    }
+
+    /// <summary>Replace the NPC registry from a save file.</summary>
+    public void RestoreNpcs(Dictionary<int, (NpcMind npc, DialogueBank bank)> npcs)
+    {
+        _npcs.Clear();
+        foreach (var (siteId, entry) in npcs)
+            _npcs[siteId] = entry;
+    }
+
     // --------------------------------------------------------------- dialogue
 
     private void AddTalk(Site site)

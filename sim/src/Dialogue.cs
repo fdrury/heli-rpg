@@ -210,6 +210,16 @@ public sealed class DialogueBank
     }
 
     public void ForgetUsage() => _lastUsed.Clear();
+
+    /// <summary>Read line usage times for saving.</summary>
+    public IReadOnlyDictionary<string, double> LineUsage => _lastUsed;
+
+    /// <summary>Restore line usage times from a save. Save/load only.</summary>
+    public void RestoreUsage(IEnumerable<KeyValuePair<string, double>> usage)
+    {
+        _lastUsed.Clear();
+        foreach (var (k, v) in usage) _lastUsed[k] = v;
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -424,6 +424,12 @@ public static class WorldMap
             if (s.Position.DistanceSquaredTo(p) < range * range) yield return s;
     }
 
+    public static Site? SiteById(int id)
+    {
+        foreach (Site s in Sites) if (s.Id == id) return s;
+        return null;
+    }
+
     public static Site? Nearest(Vector2 p, SiteKind? kind = null)
     {
         Site? best = null;

@@ -75,6 +75,17 @@ public sealed class Loadout
         return def;
     }
 
+    // ----------------------------------------------------------- save / load
+
+    /// <summary>Set installed and bag contents directly. Save/load only.</summary>
+    public void Restore(IEnumerable<string> installed, IEnumerable<string> bag)
+    {
+        _installed.Clear();
+        foreach (var id in installed) _installed.Add(id);
+        _bag.Clear();
+        foreach (var id in bag) _bag.Add(id);
+    }
+
     // ---------------------------------------------------------------- catalog
 
     /// <summary>All modules that exist, in kneeboard display order.</summary>
