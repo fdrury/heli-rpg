@@ -23,7 +23,8 @@ public sealed partial class ScreenshotDirector : Node
 
     private sealed record Shot(string Name, CameraMode Mode, float Altitude, float Speed, float Heading,
                                SiteKind? Over = null, double? ClockHours = null, Vector2? At = null,
-                               float? HeadYaw = null, float? HeadPitch = null);
+                               float? HeadYaw = null, float? HeadPitch = null,
+                               bool ForceFlash = false);
 
     private readonly List<Shot> _shots = new()
     {
@@ -72,6 +73,14 @@ public sealed partial class ScreenshotDirector : Node
             HeadYaw: -1.3f),                  // ~75 deg left — out the side door
         new("25_cockpit_panel", CameraMode.Cockpit, 120f, 32f, 2.1f, null, null, null,
             HeadPitch: -0.52f),               // ~30 deg down — at the instruments
+
+        // Storm weather: pinned to clockH=704.0 which is the strongest daytime storm the
+        // model produces (badness 0.945, morning of day 29). ForceFlash fires a lightning
+        // bolt just before capture so the flash is visible in the still.
+        new("27_storm",          CameraMode.Chase,  120f, 40f, 0.8f, null, 704.0,
+            ForceFlash: true),
+        new("28_storm_cockpit",  CameraMode.Cockpit,110f, 38f, 2.4f, null, 704.0,
+            ForceFlash: true),
     };
 
     private Site? _aimedAt;
@@ -200,6 +209,12 @@ public sealed partial class ScreenshotDirector : Node
         double settle = shot.Altitude < 12f ? 26.0 : 16.0;
         if (_time > settle && !_capturing)
         {
+            // Fire a lightning flash just before capture so storm shots show the flash.
+            if (shot.ForceFlash)
+            {
+                var storm = GetTree().Root.FindChild("StormEffects", true, false) as StormEffects;
+                storm?.ForceFlash();
+            }
             _capturing = true;
             CallDeferred(nameof(Capture));
         }

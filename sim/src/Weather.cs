@@ -139,14 +139,16 @@ public sealed class Weather
         public readonly double Precipitation;
         /// <summary>Cloud cover, 0..1.</summary>
         public readonly double Cover;
+        /// <summary>How deep into storm territory, 0..1. Zero unless Sky == Storm.</summary>
+        public readonly double StormIntensity;
 
         public Conditions(SkyCondition sky, double windSpeed, double windFrom, double gust,
                           double visibility, double cloudBase, double isaDeviation,
-                          double precipitation, double cover)
+                          double precipitation, double cover, double stormIntensity = 0)
         {
             Sky = sky; WindSpeed = windSpeed; WindFromRad = windFrom; Gust = gust;
             Visibility = visibility; CloudBase = cloudBase; IsaDeviation = isaDeviation;
-            Precipitation = precipitation; Cover = cover;
+            Precipitation = precipitation; Cover = cover; StormIntensity = stormIntensity;
         }
 
         /// <summary>
@@ -214,9 +216,16 @@ public sealed class Weather
         // Warm fronts are the wet ones, so the worst weather is not the coldest.
         double isa = Wave(h, 23.9, 0.19) * 7.0 + badness * 3.0 - 1.0;
 
+        // How deep into Storm territory. Used by the game layer to scale lightning
+        // frequency and thunder volume — a storm that just crossed the threshold is
+        // not the same as one pegged at maximum.
+        double stormIntensity = sky == SkyCondition.Storm
+            ? Clamp01((badness - 0.86) / 0.14)
+            : 0;
+
         return new Conditions(sky, windSpeed, windFrom, gust,
                               Math.Max(visibility, 700), Math.Max(cloudBase, 110),
-                              isa, precipitation, cover);
+                              isa, precipitation, cover, stormIntensity);
     }
 
     /// <summary>

@@ -32,6 +32,7 @@ public sealed partial class Main : Node3D
     private RotorTime _rotorTime = null!;
     private Sidearm _sidearm = null!;
     private readonly System.Collections.Generic.List<HostileNpc> _hostileNpcs = new();
+    private StormEffects _storm = null!;
     private FogOfWar _fog = new();
     private Label _debugLabel = null!;
     private bool _showDebug;
@@ -141,6 +142,8 @@ public sealed partial class Main : Node3D
         var layer = new CanvasLayer { Name = "Hud" };
         AddChild(layer);
         _dust.AttachHaze(layer);
+        _storm = FindChild("StormEffects", true, false) as StormEffects ?? new StormEffects { Name = "StormEffects" };
+        _storm.AttachWindscreen(layer);
         _hud = new FlightHud
         {
             Name = "FlightHud",

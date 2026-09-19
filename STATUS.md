@@ -1,6 +1,6 @@
 # ROTORWASH — status
 
-*Last updated: 2026-09-20*
+*Last updated: 2026-09-19*
 
 A single-player post-apocalyptic RPG about the last helicopter pilot in the world.
 Godot 4.7.2 (.NET). `docs/wiki/00-vision.md` is what it is; `docs/wiki/decisions.md` is
@@ -119,9 +119,12 @@ and the attitude hold unit are no longer toggled with keys — they are things y
 and bolt on. The kneeboard's FITTED section reads from real loadout state, and empty
 bays show the player what to look for.
 
-**Weather & night** — dynamic weather (overcast, haze, variable visibility), a moving sun
-with dawn/dusk, full darkness with landing light and navigation lights (nav, anti-collision
-beacon, landing light). Two lighting paths (baked + realtime GI) per D-003.
+**Weather & night** — dynamic weather (overcast, haze, variable visibility, storms), a
+moving sun with dawn/dusk, full darkness with landing light and navigation lights (nav,
+anti-collision beacon, landing light). Storms darken the sky to a bruised green-grey,
+intensify rain, fire lightning flashes with synthesised thunder, and draw procedural rain
+streaks on the windscreen from inside the cockpit. Two lighting paths (baked + realtime GI)
+per D-003.
 
 **On-foot** — third-person character controller (WASD + mouse look, sprint) with
 dismount/board transitions at shut-down helicopters. Rotor Time: the vision doc's
@@ -204,17 +207,15 @@ godot --headless --path game -- --looptest
 
 ## Next
 
-1. **Storm weather.** Lightning, and rain on the windscreen. The model already produces
-   storms (D-026) and nothing distinguishes them from rain.
-2. **A benchmark pass.** Periodic comparisons against other RPGs — skill trees, story,
+1. **A benchmark pass.** Periodic comparisons against other RPGs — skill trees, story,
    graphics, audio, world size — recorded in the wiki. The last one fed D-005a; audio
    and world-feel have moved a long way since.
-3. **Mission structure.** The core loop closes but there is no arc — no reason to go
+2. **Mission structure.** The core loop closes but there is no arc — no reason to go
    anywhere except curiosity. A simple contract/task system that NPCs offer would give
    each flight a purpose.
-4. **Interior lighting.** Buildings have dark window recesses but no light comes from
+3. **Interior lighting.** Buildings have dark window recesses but no light comes from
    inside. A warm glow behind the glass at night would make settlements read as inhabited.
-5. **Autorotation glides half as far as it should.** Measured and localised, not fixed —
+4. **Autorotation glides half as far as it should.** Measured and localised, not fixed —
    `simlab autoglide`, D-041 and D-043. Best glide 1.99:1 at 3191 fpm against a real
    4:1 at 1700. Ruled out: vortex ring (severity exactly 0.00), inflow (λ 0.009, which is
    what momentum theory gives at μ 0.125), blade loading (C_T/σ 0.070). What remains is

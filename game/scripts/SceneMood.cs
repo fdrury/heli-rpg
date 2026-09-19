@@ -60,6 +60,7 @@ public static class SceneMood
         root.AddChild(new SceneMoodDriver(env, sun, moon) { Name = "SceneMoodDriver" });
         root.AddChild(new WeatherEffects { Name = "WeatherEffects" });
         root.AddChild(new WeatherAudio { Name = "WeatherAudio" });
+        root.AddChild(new StormEffects { Name = "StormEffects" });
     }
 
     private static WorldEnvironment BuildEnvironment()
@@ -196,6 +197,7 @@ public sealed partial class SceneMoodDriver : Node
 
         float day = (float)s.DaylightFraction;
         float cover = (float)c.Cover;
+        float storm = (float)c.StormIntensity;
 
         // --- Where the sun is --------------------------------------------------
         // The world uses sim north = -Z and east = +X. Light travels FROM the sun, so it
@@ -220,7 +222,7 @@ public sealed partial class SceneMoodDriver : Node
         // like, not a wet day - an overcast day is FLAT and bright, not dark.
         float clear = 1f - cover * 0.70f;
         _sun.LightColor = warm;
-        _sun.LightEnergy = 1.65f * day * clear;
+        _sun.LightEnergy = 1.65f * day * clear * (1f - storm * 0.40f);
         _sun.ShadowEnabled = _sun.LightEnergy > 0.06f;
         _sun.ShadowBlur = 1.0f + cover * 1.8f;
         _sun.Visible = _sun.LightEnergy > 0.005f;
@@ -241,8 +243,14 @@ public sealed partial class SceneMoodDriver : Node
         // --- The sky itself -----------------------------------------------------
         var skyMat = (ProceduralSkyMaterial)env.Sky.SkyMaterial;
 
-        Color dayTop = new Color(0.24f, 0.36f, 0.50f).Lerp(new Color(0.40f, 0.42f, 0.45f), cover);
-        Color dayHorizon = new Color(0.74f, 0.71f, 0.62f).Lerp(new Color(0.62f, 0.62f, 0.60f), cover);
+        // Storm cells darken the sky and shift it toward a bruised yellow-green — the
+        // colour a real cumulonimbus reflects onto the landscape beneath it.
+        var stormTop = new Color(0.18f, 0.22f, 0.20f);
+        var stormHorizon = new Color(0.38f, 0.40f, 0.32f);
+        Color dayTop = new Color(0.24f, 0.36f, 0.50f).Lerp(new Color(0.40f, 0.42f, 0.45f), cover)
+            .Lerp(stormTop, storm * 0.6f);
+        Color dayHorizon = new Color(0.74f, 0.71f, 0.62f).Lerp(new Color(0.62f, 0.62f, 0.60f), cover)
+            .Lerp(stormHorizon, storm * 0.5f);
         var duskHorizon = new Color(0.80f, 0.48f, 0.30f);
         var nightTop = new Color(0.035f, 0.047f, 0.092f);
         var nightHorizon = new Color(0.10f, 0.115f, 0.165f);
@@ -257,7 +265,9 @@ public sealed partial class SceneMoodDriver : Node
         skyMat.GroundBottomColor = new Color(0.045f, 0.048f, 0.060f)
             .Lerp(new Color(0.14f, 0.14f, 0.12f), day);
         skyMat.GroundHorizonColor = skyMat.SkyHorizonColor * 0.82f;
-        skyMat.SkyEnergyMultiplier = Mathf.Lerp(0.50f, 1.0f, day);
+        float skyEnergy = Mathf.Lerp(0.50f, 1.0f, day);
+        if (storm > 0) skyEnergy *= 1f - storm * 0.30f;
+        skyMat.SkyEnergyMultiplier = skyEnergy;
         skyMat.SunAngleMax = Mathf.Lerp(26f, 60f, cover);
         skyMat.SunCurve = Mathf.Lerp(0.12f, 0.45f, cover);
 
@@ -268,10 +278,23 @@ public sealed partial class SceneMoodDriver : Node
         env.FogLightColor = new Color(0.68f, 0.68f, 0.64f)
             .Lerp(new Color(0.64f, 0.65f, 0.66f), cover)
             .Lerp(new Color(0.05f, 0.06f, 0.09f), 1f - day);
+        // Storm fog is darker — the thick cumulonimbus overhead blocks most light,
+        // and at 3 km visibility the fog fills the entire view. Without this the dense
+        // fog + high ambient renders as pure white.
+        if (storm > 0)
+            env.FogLightColor = env.FogLightColor.Lerp(new Color(0.22f, 0.24f, 0.20f), storm * 0.60f);
         env.FogDepthBegin = Mathf.Lerp(90f, 260f, day);
 
-        env.AdjustmentSaturation = Mathf.Lerp(0.62f, 0.93f - cover * 0.11f, day);
+        env.AdjustmentSaturation = Mathf.Lerp(0.62f, 0.93f - cover * 0.11f - storm * 0.15f, day);
         env.TonemapExposure = Mathf.Lerp(1.55f, 1.0f + cover * 0.16f, day);
+        // Storm drops ambient, exposure, and the sky energy — the cloud deck is thick
+        // and blocks most sunlight. Without this the dense fog at 3 km visibility
+        // renders as a uniform white/grey wash instead of a dark, oppressive wall.
+        if (storm > 0)
+        {
+            env.AmbientLightEnergy *= 1f - storm * 0.35f;
+            env.TonemapExposure *= 1f - storm * 0.15f;
+        }
     }
 
     /// <summary>Aim a directional light along a direction of travel.</summary>

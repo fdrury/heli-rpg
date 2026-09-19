@@ -30,12 +30,25 @@ public sealed class WeatherSynth
     // Wind: a much slower low-pass, plus a gust envelope.
     private double _windLp, _windLp2, _gustPhase;
 
+    // Thunder: a sharp-attack low-frequency rumble that decays over ~2 seconds.
+    // Triggered externally by setting ThunderLevel, then decays on its own.
+    private double _thunderEnv, _thunderLp1, _thunderLp2, _thunderLp3;
+
     // Smoothed inputs, so a weather change does not step the level.
     private double _sRain, _sWind, _sGust, _sShelter;
 
     private double _dcX1, _dcY1;
 
     public WeatherSynth(int sampleRate = 44100) => SampleRate = sampleRate;
+
+    /// <summary>
+    /// Trigger a thunder crack. Call once per lightning strike; the rumble decays on its own.
+    /// Intensity 0..1 scales the loudness.
+    /// </summary>
+    public void TriggerThunder(double intensity = 1.0)
+    {
+        _thunderEnv = Math.Clamp(intensity, 0, 1);
+    }
 
     /// <summary>
     /// Render a block.
@@ -90,7 +103,20 @@ public sealed class WeatherSynth
                                        * Math.Sin(_gustPhase * Math.Tau * 1.61));
             double wind = _windLp2 * windLevel * gustEnv * 0.42;
 
-            double sample = Math.Tanh((rain + wind) * 1.2) * Volume;
+            // --- Thunder -------------------------------------------------
+            // A deep, rolling rumble: three cascaded low-pass filters on noise
+            // shaped by a decaying envelope. The cascade cuts everything above
+            // ~80 Hz, which is where real thunder lives.
+            double tn = _rng.NextDouble() * 2.0 - 1.0;
+            _thunderLp1 += (tn - _thunderLp1) * 0.025;
+            _thunderLp2 += (_thunderLp1 - _thunderLp2) * 0.018;
+            _thunderLp3 += (_thunderLp2 - _thunderLp3) * 0.012;
+            double thunder = _thunderLp3 * _thunderEnv * (1.0 - _sShelter * 0.30) * 1.8;
+            // Decay: ~2 seconds to silence, fast at first then lingering.
+            _thunderEnv *= 1.0 - dt * 2.8;
+            if (_thunderEnv < 0.001) _thunderEnv = 0;
+
+            double sample = Math.Tanh((rain + wind + thunder) * 1.2) * Volume;
 
             double blocked = sample - _dcX1 + 0.9985 * _dcY1;
             _dcX1 = sample;

@@ -102,16 +102,22 @@ public sealed partial class WeatherEffects : Node3D
 
         if (!_rain.Emitting) { _rain.Emitting = true; _rain.Visible = true; }
 
+        // Storm intensifies the rain: more drops, more opaque, longer streaks.
+        float storm = (float)c.StormIntensity;
+        float stormBoost = 1f + storm * 0.5f;   // up to 50% more drops in a storm
+
         // Only touch the particle system when the number has actually moved. Writing
         // Amount restarts the system, so driving it straight from a continuously varying
         // weather value would reset the rain every single frame and nothing would ever be
         // drawn.
-        float wanted = Mathf.Round(amount * 10f) / 10f;
+        float wanted = Mathf.Round(amount * stormBoost * 10f) / 10f;
         if (!Mathf.IsEqualApprox(wanted, _shown))
         {
             _shown = wanted;
-            _rain.Amount = Mathf.Max(64, (int)(MaxDrops * wanted));
-            _dropMat.AlbedoColor = new Color(0.72f, 0.77f, 0.85f, 0.09f + 0.15f * wanted);
+            _rain.Amount = Mathf.Max(64, (int)(MaxDrops * Mathf.Min(wanted, 1.5f)));
+            // Storm rain is denser and slightly brighter from the lightning.
+            float alpha = 0.09f + 0.15f * amount + storm * 0.06f;
+            _dropMat.AlbedoColor = new Color(0.72f, 0.77f, 0.85f, alpha);
         }
 
         // Wind blows the rain sideways, and it is the clearest visual cue the game has for

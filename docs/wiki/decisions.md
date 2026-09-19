@@ -1497,3 +1497,41 @@ feels over seconds of continuous correction, which is a judgement made at a stic
 column is printed but not asserted on, and the question is on the test machine's brief
 instead. Inventing a scalar that flattered the design would have been worse than naming the
 limit.
+
+## D-047 — Storm weather: lightning, thunder, windscreen rain · 2026-09-19
+
+**Decision.** When the weather model produces `SkyCondition.Storm` (badness ≥ 0.86), five
+visual/audio layers stack on top of the existing rain:
+
+1. **Sky darkening.** Fog colour, ambient, sun energy, sky energy, tone-map exposure and
+   saturation are all pulled down proportionally to `StormIntensity`. The sky shifts toward
+   a bruised yellow-green — the colour a real cumulonimbus casts onto the landscape.
+2. **Lightning.** `StormEffects` runs a real-time timer (wall-clock, not game-clock, because
+   the game runs at 30×). Every 1.5–12 s it fires a flash by spiking
+   `AdjustmentBrightness`, then decays over ~0.4 s.
+3. **Thunder.** `WeatherSynth.TriggerThunder` adds a deep rumble (three cascaded low-pass
+   filters on noise) that decays over ~2 s, mixed into the existing weather audio bus.
+4. **Windscreen rain.** A canvas-item shader draws procedural streaks and splash drops on
+   the windscreen, visible only in cockpit mode. Intensity tracks precipitation.
+5. **Rain intensification.** `WeatherEffects` ups particle count by 50% and increases
+   opacity during storms.
+
+**Why.** The weather model already distinguished Storm from Rain in the simulation, but
+nothing visible happened. D-026 defined the threshold; this decision fills the gap above
+it. Lightning is not deterministic (see below) because at 30× game time a 0.15 s flash
+would be a single frame. Everything else is.
+
+**Lightning timing is wall-clock, not game-clock.** The weather model's determinism
+guarantee (same seed → same weather at the same clock time) covers conditions — "is it a
+storm?" — not individual bolts. Lightning is a transient visual and audio event, and the
+exact frame it fires does not affect gameplay. The screenshot system uses `ForceFlash()` to
+guarantee a flash is visible in stills.
+
+**The fog blowout bug.** The first four renders were uniformly white. At 3 km visibility
+the fog fills the entire viewport, and the base fog colour (0.65 linear ≈ 0.83 sRGB) plus
+1.5× ambient renders as flat white. The fix is to darken fog, ambient, and exposure
+proportionally to `StormIntensity`. The Debug/Release build mismatch (Godot loads Debug by
+default, `dotnet build -c Release` does not update it) cost three additional iterations.
+
+**Reversibility:** high. All storm effects are additive layers in `StormEffects.cs` and
+`SceneMood.cs`; removing them restores the rain-equals-storm behaviour.

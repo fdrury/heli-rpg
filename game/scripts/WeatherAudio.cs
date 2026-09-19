@@ -41,6 +41,9 @@ public sealed partial class WeatherAudio : Node
         _synth = new WeatherSynth(SampleRate) { Volume = MasterVolume };
     }
 
+    /// <summary>Trigger a thunder crack from a lightning strike.</summary>
+    public void TriggerThunder(double intensity) => _synth?.TriggerThunder(intensity);
+
     public override void _Process(double delta)
     {
         if (_playback is null) return;
