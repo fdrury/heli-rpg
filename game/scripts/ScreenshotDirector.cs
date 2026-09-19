@@ -33,8 +33,8 @@ public sealed partial class ScreenshotDirector : Node
         new("07_close_orbit",    CameraMode.Orbit,   70f,   0f,  1.6f),
         new("08_brownout",       CameraMode.Orbit,    3.5f, 0f,  2.7f),
         new("09_brownout_cockpit", CameraMode.Cockpit, 3.5f, 0f, 2.7f),
-        new("10_settlement",     CameraMode.Chase,  110f,  0f,  0.4f, SiteKind.Settlement),
-        new("11_airfield",       CameraMode.Chase,  175f,  0f,  1.1f, SiteKind.Airfield),
+        new("10_settlement",     CameraMode.Chase,   70f,  0f,  0.4f, SiteKind.Settlement),
+        new("11_airfield",       CameraMode.Chase,  130f,  0f,  1.1f, SiteKind.Airfield),
         new("12_relay",          CameraMode.Orbit,   90f,  0f,  2.2f, SiteKind.Relay),
         new("13_depot_low",      CameraMode.Chase,   70f, 18f,  3.1f, SiteKind.Depot),
         new("06_high_cruise",    CameraMode.Chase,  420f,  50f,  5.1f),
@@ -66,6 +66,13 @@ public sealed partial class ScreenshotDirector : Node
         Setup(_shots[0]);
     }
 
+    private static int CountDescendants(Node n)
+    {
+        int total = 1;
+        foreach (Node c in n.GetChildren()) total += CountDescendants(c);
+        return total;
+    }
+
     private void Setup(Shot shot)
     {
         _camera.Mode = shot.Mode;
@@ -87,7 +94,17 @@ public sealed partial class ScreenshotDirector : Node
             // be close enough to sit behind it in frame.
             Site? site = WorldMap.Nearest(Vector2.Zero, kind);
             Vector2 centre = site?.Position ?? Vector2.Zero;
-            float standOff = shot.Mode == CameraMode.Orbit ? 90f : shot.Altitude * 3.4f + 60f;
+            // Tuned against what a building actually subtends rather than against the
+            // depression angle alone. At 430 m a 9 m hut is about fourteen pixels, so a
+            // village of them reads as scattered rocks - the settlement was rendering
+            // correctly the whole time and simply too far away to be recognisable.
+            float standOff = shot.Mode == CameraMode.Orbit ? 90f : shot.Altitude * 1.8f + 70f;
+
+            // Moving shots fly during the settle, so they have to start further back by
+            // exactly as far as they will travel. The depot shot cruises at 18 kt for 16 s,
+            // which is 145 m - it was arriving 14 m past the site with the depot 98 deg
+            // behind it.
+            standOff += shot.Speed * 16f;
             // PLUS, not minus. Measured: with the stand-off subtracted the subject came
             // back 162 deg off axis - i.e. squarely behind the camera - which is why
             // every site picture was a photograph of empty scenery with the settlement
@@ -157,10 +174,32 @@ public sealed partial class ScreenshotDirector : Node
             // Camera looks down -Z in Godot, so a subject in front has rel.Z < 0.
             float range = new Vector2(g.X - cam.GlobalPosition.X, g.Z - cam.GlobalPosition.Z).Length();
             float offAxis = Mathf.RadToDeg(Mathf.Atan2(new Vector2(rel.X, rel.Y).Length(), -rel.Z));
-            int built = GetTree().Root.FindChild("Sites", true, false)?.GetChildCount() ?? -1;
+            Node? sites = GetTree().Root.FindChild("Sites", true, false);
+            int built = sites?.GetChildCount() ?? -1;
+
+            // How much was built for THIS site, and whether the ground between here and
+            // there is higher than the line of sight. "46 sites built" does not
+            // distinguish a settlement that failed to generate from one sitting behind a
+            // ridge, and those want completely different fixes.
+            int parts = -1;
+            if (sites is not null)
+                foreach (Node child in sites.GetChildren())
+                    if (child.Name.ToString().StartsWith($"Site_{aim.Id}_"))
+                        parts = CountDescendants(child);
+
+            float blocked = 0;
+            for (int i = 1; i <= 24; i++)
+            {
+                float f = i / 24f;
+                Vector3 on = cam.GlobalPosition.Lerp(g, f);
+                float ground = WorldHeight.At(on.X, on.Z);
+                if (ground > on.Y) blocked = Mathf.Max(blocked, ground - on.Y);
+            }
+
             GD.Print($"[shots]     subject {aim.Name}: {range:F0} m away, " +
                      $"{(rel.Z < 0 ? "AHEAD" : "BEHIND")}, {offAxis:F0} deg off axis, " +
-                     $"{built} sites built");
+                     $"{parts} nodes in this site, {built} sites built, " +
+                     $"{(blocked > 0 ? $"TERRAIN BLOCKS by {blocked:F0} m" : "clear line of sight")}");
         }
 
         _index++;
