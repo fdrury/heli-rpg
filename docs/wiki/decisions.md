@@ -1245,3 +1245,39 @@ where it is.
 **Reversibility:** high. Head-look state is ~40 lines in ChaseCamera, input routing is
 ~30 lines in Main, padlock is ~40 lines in Main. No sim/ changes, no save/load changes,
 no new files. Remove the head-look fields and UpdateCockpit reverts to one line.
+
+## D-042 — Building variety: five archetypes · 2026-09-19
+
+**Decision.** Replace the single box-with-pitched-roof building with five residential
+archetypes — simple gable, L-plan, lean-to addition, flat-roof parapet, and porch —
+selected per-building from the site RNG. Add window depth (dark recess behind glass),
+door openings, chimneys, and industrial details (ridge vents, loading docks).
+
+**Why.** STATUS said "Settlements are boxes with pitched roofs. Silhouette variety and some
+interior suggestion would do more than texture work." From 500 m the different rooflines
+now read as different kinds of building (residential vs commercial, original vs extended),
+and from 150 m the dark window recesses and door openings suggest interiors without
+rendering any. The L-plan and lean-to break the rectangular footprint that made generated
+towns look generated.
+
+**Archetype probabilities (large residential, w≥7, d≥6):**
+
+| Archetype | Probability | What makes it recognisable |
+|---|---|---|
+| Simple gable | 25% | Classic pitched roof, the baseline |
+| L-plan | 25% | Perpendicular wing with lower roof breaks the rectangle |
+| Lean-to | 20% | Lower shed-roofed addition in a contrasting material |
+| Flat parapet | 15% | Concrete block with raised rim, reads as commercial |
+| Porch | 15% | Gable with front overhang on posts |
+
+Small buildings (w<7 or d<6, e.g. relay shacks) get simple gable or flat parapet only.
+All standing buildings get a door opening and window band. 35% get a chimney. Sheds get
+ridge vents (40%) and loading docks (30%, if w≥14). Collapsed buildings can now have a
+partial wall still standing.
+
+**What did not change.** The streaming system, collision (all new detail elements fall
+below the 2 m³ threshold), site placement, determinism, and mesh types (BoxMesh,
+PrismMesh — no new types, no textures, no UVs).
+
+**Reversibility:** high. Building() is one function; reverting the commit restores the
+original single-archetype generator. No sim/ changes, no save/load changes.

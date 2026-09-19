@@ -174,21 +174,31 @@ array, control sticks, collective levers, pedals) are now visible by looking dow
 side doors and terrain are visible by looking left/right. Two screenshot shots
 (`24_cockpit_left`, `25_cockpit_panel`) verify the feature across builds.
 
+**Building variety** — five residential archetypes (D-042): simple gable, L-plan,
+lean-to addition, flat-roof parapet, and porch. Each produces a distinct silhouette
+visible from 500 m. Windows have dark recesses behind the glass for interior suggestion.
+Door openings and chimneys (~35%) appear on standing houses. Sheds gain ridge vents and
+loading docks. Collapsed buildings can have a partial wall still standing. Small
+buildings (relay shacks) get simple gable or flat parapet only.
+
+**Airframe wear** — procedural object-space shader on the aircraft body. Sun-bleaching
+(upward-facing surfaces fade), grime (undersides darken), panel lines, dirt streaking,
+repair patches in a slightly wrong shade, and soot damage driven by the damage model.
+No UVs — the wear is computed from position and normal in object space so it stays fixed
+to the hull.
+
 ## Next
 
-The original eight are done. This list is what the game most visibly lacks now, roughly in
-order of how much each would change a player's impression.
-
-1. **Building variety.** Settlements are boxes with pitched roofs. Silhouette variety and
-   some interior suggestion would do more than texture work.
-2. **Airframe wear.** One flat olive drab. Panel lines, dirt streaks, sun-bleaching and
-   repaired patches — ideally driven by the damage model, so a patched aircraft looks
-   patched.
-3. **Storm weather.** Lightning, and rain on the windscreen. The model already produces
+1. **Storm weather.** Lightning, and rain on the windscreen. The model already produces
    storms (D-026) and nothing distinguishes them from rain.
-4. **A benchmark pass.** Periodic comparisons against other RPGs — skill trees, story,
+2. **A benchmark pass.** Periodic comparisons against other RPGs — skill trees, story,
    graphics, audio, world size — recorded in the wiki. The last one fed D-005a; audio
    and world-feel have moved a long way since.
+3. **Mission structure.** The core loop closes but there is no arc — no reason to go
+   anywhere except curiosity. A simple contract/task system that NPCs offer would give
+   each flight a purpose.
+4. **Interior lighting.** Buildings have dark window recesses but no light comes from
+   inside. A warm glow behind the glass at night would make settlements read as inhabited.
 
 ## Open questions for Fred
 

@@ -39,6 +39,7 @@ public sealed partial class ScreenshotDirector : Node
         new("11_airfield",       CameraMode.Chase,  130f,  0f,  1.1f, SiteKind.Airfield),
         new("12_relay",          CameraMode.Orbit,   90f,  0f,  2.2f, SiteKind.Relay),
         new("13_depot_low",      CameraMode.Chase,   70f, 18f,  3.1f, SiteKind.Depot),
+        new("26_settlement_close", CameraMode.Orbit,  25f,  0f,  0.4f, SiteKind.Settlement),
         new("06_high_cruise",    CameraMode.Chase,  420f,  50f,  5.1f),
 
         // Time-pinned, so the day/night model can actually be LOOKED at. Without these the
@@ -48,10 +49,10 @@ public sealed partial class ScreenshotDirector : Node
         new("15_dusk",           CameraMode.Chase,  160f,  38f,  4.6f, null, 16.4),
         new("16_night",          CameraMode.Chase,   45f,  30f,  2.2f, null, 22.0),
         new("17_night_cockpit",  CameraMode.Cockpit,120f,  32f,  2.1f, null, 22.0),
-        // 81.75 h is the first good daylight rain the weather model produces - found by
+        // +31 h from the start is the first good daylight rain the model produces - found by
         // scanning it rather than by re-rendering until something looked wet.
-        new("18_rain",           CameraMode.Chase,  120f,  40f,  0.8f, null, 81.75),
-        new("19_rain_cockpit",   CameraMode.Cockpit,110f,  38f,  2.4f, null, 81.75),
+        new("18_rain",           CameraMode.Chase,  120f,  40f,  0.8f, null, 31.00),
+        new("19_rain_cockpit",   CameraMode.Cockpit,110f,  38f,  2.4f, null, 31.00),
 
         // The high country. Every other shot in this set is taken within a couple of
         // kilometres of the origin, which is the tutorial basin and is FLAT BY DESIGN -
@@ -118,7 +119,9 @@ public sealed partial class ScreenshotDirector : Node
         // sixteen seconds of settle each advance the world by an hour and a half, and no
         // two pictures in the set are comparable.
         SceneMood.TimeScale = 0;
-        SceneMood.Clock = (shot.ClockHours ?? 9.25) * 3600.0;
+        // Hours are hours OF THE SUMMER DAY the game starts on, not hours since
+        // the epoch - otherwise every pinned shot lands in midwinter.
+        SceneMood.Clock = 172 * 86400.0 + (shot.ClockHours ?? 9.5) * 3600.0;
 
         Vector2 ground2;
         if (shot.At is Vector2 spot)

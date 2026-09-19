@@ -378,7 +378,7 @@ public static class SiteKit
 
             WindowBand(root, rng, at, w, h, d, yaw);
         }
-        else if (canComplex && roll < (canComplex ? 0.75f : 0.30f))
+        else if (canComplex && roll < 0.75f)
         {
             // PORCH: gable house with a front overhang on posts. Reads as residential
             // and suggests a threshold — somewhere you go inside.
