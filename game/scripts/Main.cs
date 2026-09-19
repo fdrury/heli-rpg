@@ -3,6 +3,8 @@ using Rotorwash.Sim;
 
 namespace Rotorwash;
 
+public enum GameMode { Flying, OnFoot }
+
 /// <summary>
 /// Builds the flight test world in code.
 ///
@@ -25,8 +27,15 @@ public sealed partial class Main : Node3D
     private FlightHud _hud = null!;
     private DialoguePanel _dialogue = null!;
     private CodaServer _codaServer = null!;
+    private PilotController _pilot = null!;
+    private RotorTime _rotorTime = null!;
     private Label _debugLabel = null!;
     private bool _showDebug;
+    private GameMode _mode = GameMode.Flying;
+
+    /// <summary>Current game mode, read by HUD and other systems.</summary>
+    public GameMode Mode => _mode;
+    public RotorTime RotorTimeSystem => _rotorTime;
 
     public override void _Ready()
     {
@@ -74,6 +83,15 @@ public sealed partial class Main : Node3D
         _camera = new ChaseCamera { Name = "Camera", TargetPath = _heli.GetPath() };
         AddChild(_camera);
 
+        _pilot = new PilotController { Name = "Pilot" };
+        _pilot.Visible = false;
+        AddChild(_pilot);
+        _camera.SetPilot(_pilot);
+
+        _rotorTime = new RotorTime { Name = "RotorTime" };
+        _rotorTime.SetHelicopter(_heli);
+        AddChild(_rotorTime);
+
         _landing = new LandingController { Name = "Landing", HelicopterPath = _heli.GetPath() };
         AddChild(_landing);
 
@@ -120,6 +138,7 @@ public sealed partial class Main : Node3D
             ThreatWorldPath = _threats.GetPath(),
         };
         layer.AddChild(_hud);
+        _hud.SetRotorTime(_rotorTime);
 
         _kneeboard = new Kneeboard
         {
@@ -182,6 +201,15 @@ public sealed partial class Main : Node3D
                 WorldReport.Run();
                 GetTree().Quit(0);
                 return;
+            }
+            if (arg == "--foottest")
+            {
+                GD.Print("[main] running the on-foot test");
+                _hud.Visible = false;
+                _threats.Disabled = true;
+                AddChild(new FootTest(this, _heli, _play, _landing, _sites, _pilot, _rotorTime)
+                { Name = "FootTest" });
+                break;
             }
             if (arg == "--screenshot")
             {
@@ -310,6 +338,32 @@ public sealed partial class Main : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        // Mouse motion: on foot it drives the camera; in flight it is ignored.
+        if (@event is InputEventMouseMotion motion && _mode == GameMode.OnFoot)
+        {
+            _pilot.ApplyMouseMotion(motion.Relative);
+            return;
+        }
+
+        // Mouse button: right mouse activates/deactivates Rotor Time in both modes.
+        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Right } mb)
+        {
+            if (mb.Pressed)
+            {
+                if (_rotorTime.TryActivate())
+                    GD.Print("[rt] ROTOR TIME active");
+            }
+            else
+            {
+                if (_rotorTime.Active)
+                {
+                    _rotorTime.Deactivate();
+                    GD.Print("[rt] Rotor Time off");
+                }
+            }
+            return;
+        }
+
         if (@event is not InputEventKey { Pressed: true, Echo: false } key) return;
 
         // While dialogue is open, route input there instead of to the rest of the game.
@@ -325,6 +379,56 @@ public sealed partial class Main : Node3D
             return; // swallow all other keys during dialogue
         }
 
+        // F key: transition between flying and on foot.
+        if (key.Keycode == Key.F)
+        {
+            if (_mode == GameMode.Flying) TryDismount();
+            else TryBoard();
+            return;
+        }
+
+        // Keys shared across both modes.
+        switch (key.Keycode)
+        {
+            case Key.Tab:
+                _kneeboard.Toggle();
+                return;
+            case Key.E:
+                if (_kneeboard.Visible) _kneeboard.NextPage();
+                return;
+            case Key.F1:
+                _showDebug = !_showDebug;
+                _debugLabel.Visible = _showDebug;
+                if (_mode == GameMode.Flying)
+                    foreach (string line in FlightInput.DescribeDevices()) GD.Print("[input] " + line);
+                return;
+            case Key.Escape:
+                if (_mode == GameMode.OnFoot && Input.MouseMode == Input.MouseModeEnum.Captured)
+                {
+                    Input.MouseMode = Input.MouseModeEnum.Visible;
+                    return;
+                }
+                GetTree().Quit();
+                return;
+        }
+
+        // Site actions work in both modes — the pilot can trigger them from outside too.
+        switch (key.Keycode)
+        {
+            case Key.Key1: _play.Trigger(0); return;
+            case Key.Key2: _play.Trigger(1); return;
+            case Key.Key3: _play.Trigger(2); return;
+            case Key.Key4: _play.Trigger(3); return;
+        }
+
+        // Mode-specific keys.
+        if (_mode == GameMode.Flying)
+            HandleFlightKey(key);
+        // On foot: WASD is handled by PilotController.Move() in _PhysicsProcess, not here.
+    }
+
+    private void HandleFlightKey(InputEventKey key)
+    {
         switch (key.Keycode)
         {
             case Key.C:
@@ -335,21 +439,6 @@ public sealed partial class Main : Node3D
                 _heli.Respawn();
                 GD.Print("[main] respawned");
                 break;
-            case Key.F1:
-                _showDebug = !_showDebug;
-                _debugLabel.Visible = _showDebug;
-                foreach (string line in FlightInput.DescribeDevices()) GD.Print("[input] " + line);
-                break;
-            case Key.Tab:
-                _kneeboard.Toggle();
-                break;
-            case Key.E:
-                if (_kneeboard.Visible) _kneeboard.NextPage();
-                break;
-            case Key.Key1: _play.Trigger(0); break;
-            case Key.Key2: _play.Trigger(1); break;
-            case Key.Key3: _play.Trigger(2); break;
-            case Key.Key4: _play.Trigger(3); break;
             case Key.Z:
                 if (!_threats.DispenseChaff()) GD.Print("[threat] no chaff");
                 break;
@@ -367,15 +456,103 @@ public sealed partial class Main : Node3D
                     GD.Print("[heli] no attitude hold unit installed");
                 }
                 break;
-            case Key.Escape:
-                GetTree().Quit();
-                break;
+        }
+    }
+
+    // ------------------------------------------------------- mode transitions
+
+    /// <summary>Can the pilot get out? Settled, shut down, on the ground.</summary>
+    private bool CanDismount =>
+        _mode == GameMode.Flying
+        && _landing.OnGround
+        && _heli.LinearVelocity.Length() < 1.2f
+        && _heli.Sim.Telemetry.RotorRpmPercent < 70;
+
+    private void TryDismount()
+    {
+        if (!CanDismount)
+        {
+            GD.Print("[main] cannot dismount — land and shut down first");
+            return;
+        }
+        _mode = GameMode.OnFoot;
+        _pilot.SpawnAtDoor(_heli);
+        _pilot.Visible = true;
+        _camera.SetOnFoot(true);
+        Input.MouseMode = Input.MouseModeEnum.Captured;
+        _hud.SetOnFoot(true);
+        GD.Print("[main] dismounted — on foot");
+    }
+
+    /// <summary>Dismount driven by code (for tests). Bypasses CanDismount check.</summary>
+    public void ForceDismount()
+    {
+        _mode = GameMode.OnFoot;
+        _pilot.SpawnAtDoor(_heli);
+        _pilot.Visible = true;
+        _camera.SetOnFoot(true);
+        _hud.SetOnFoot(true);
+    }
+
+    private void TryBoard()
+    {
+        if (_mode != GameMode.OnFoot) return;
+        float dist = _pilot.DistanceTo(_heli.GlobalPosition);
+        if (dist > 8f)
+        {
+            GD.Print($"[main] too far from Hugh to board ({dist:F1} m)");
+            return;
+        }
+        _mode = GameMode.Flying;
+        _pilot.Visible = false;
+        _camera.SetOnFoot(false);
+        Input.MouseMode = Input.MouseModeEnum.Visible;
+        _hud.SetOnFoot(false);
+        GD.Print("[main] boarded — back in the cockpit");
+    }
+
+    /// <summary>Board driven by code (for tests). Bypasses distance check.</summary>
+    public void ForceBoard()
+    {
+        _mode = GameMode.Flying;
+        _pilot.Visible = false;
+        _camera.SetOnFoot(false);
+        _hud.SetOnFoot(false);
+    }
+
+    // -------------------------------------------------------------- per-frame
+
+    public override void _PhysicsProcess(double delta)
+    {
+        // Rotor Time: charge from flight, drain when active.
+        if (_mode == GameMode.Flying)
+            _rotorTime.UpdateCharge(delta);
+        _rotorTime.UpdateDrain(delta);
+
+        // FOV tracks Rotor Time zoom smoothly.
+        _camera.Fov = _rotorTime.CurrentFov(_camera.Fov, (float)delta);
+
+        // On foot: move the character. BeginFrame resets the per-frame guard so that
+        // either Move (player input) or WalkToward (test script) runs, but not both.
+        if (_mode == GameMode.OnFoot)
+        {
+            _pilot.BeginFrame();
+            _pilot.Move(delta);
         }
     }
 
     public override void _Process(double delta)
     {
         if (!_showDebug) return;
+        if (_mode == GameMode.OnFoot)
+        {
+            _debugLabel.Text =
+                $"fps {Engine.GetFramesPerSecond()}   mode ON FOOT\n" +
+                $"pos {_pilot.GlobalPosition}\n" +
+                $"rt charge {_rotorTime.Charge:P0}  active {_rotorTime.Active}\n" +
+                $"timescale {Engine.TimeScale:F2}";
+            return;
+        }
         var t = _heli.Sim.Telemetry;
         var s = _heli.Sim;
         _debugLabel.Text =
@@ -387,6 +564,7 @@ public sealed partial class Main : Node3D
             $"thrust {t.Thrust:F0} N  power {t.PowerRequired / 1000:F0}/{t.PowerAvailable / 1000:F0} kW\n" +
             $"coning {t.Coning * 57.3:F2}  a1 {t.FlapBack * 57.3:F2}  b1 {t.FlapSide * 57.3:F2}\n" +
             $"Ct/sigma {t.BladeLoading:F4}  stalled {t.StalledFraction * 100:F0}%  tipM {t.TipMach:F2}\n" +
-            $"VRS {t.VrsSeverity:F2}  engine {t.Engine}  autorot {t.Autorotating}";
+            $"VRS {t.VrsSeverity:F2}  engine {t.Engine}  autorot {t.Autorotating}\n" +
+            $"rt {_rotorTime.Charge:P0}" + (_rotorTime.Active ? "  ROTOR TIME" : "");
     }
 }

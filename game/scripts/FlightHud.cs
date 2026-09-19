@@ -27,8 +27,10 @@ public sealed partial class FlightHud : Control
     private LandingController? _landing;
     private SiteInteraction? _play;
     private ThreatWorld? _threats;
+    private RotorTime? _rotorTime;
     private Font _font = null!;
     private double _warnBlink;
+    private bool _onFoot;
 
     private static readonly Color Dim = new(0.62f, 0.72f, 0.66f, 0.85f);
     private static readonly Color Bright = new(0.80f, 0.94f, 0.84f, 0.95f);
@@ -47,6 +49,9 @@ public sealed partial class FlightHud : Control
         SetAnchorsPreset(LayoutPreset.FullRect);
     }
 
+    public void SetRotorTime(RotorTime rt) => _rotorTime = rt;
+    public void SetOnFoot(bool onFoot) => _onFoot = onFoot;
+
     public override void _Process(double delta)
     {
         _warnBlink += delta;
@@ -56,9 +61,21 @@ public sealed partial class FlightHud : Control
     public override void _Draw()
     {
         if (_heli is null) return;
+        Vector2 size = Size;
+
+        // Rotor Time bar is always visible in both modes.
+        DrawRotorTimeBar(new Vector2(size.X * 0.5f - 100, size.Y - 52));
+
+        if (_onFoot)
+        {
+            DrawCrosshair(size);
+            DrawSitePanel(new Vector2(size.X * 0.5f - 250, size.Y - 300));
+            DrawFooterOnFoot(size);
+            return;
+        }
+
         var t = _heli.Sim.Telemetry;
         var sim = _heli.Sim;
-        Vector2 size = Size;
 
         DrawAttitude(size, sim);
         DrawLeftPanel(new Vector2(28, size.Y * 0.30f), t, sim);
@@ -453,9 +470,62 @@ public sealed partial class FlightHud : Control
     private void DrawFooter(Vector2 size)
     {
         string help = "W/S or throttle: collective   arrows or stick: cyclic   A/D: pedals   " +
-                      "C: camera   TAB: kneeboard   1-4: actions   Z/X: chaff/flares   R: respawn";
+                      "C: camera   TAB: kneeboard   1-4: actions   Z/X: chaff/flares   F: dismount   R: respawn";
         DrawString(_font, new Vector2(20, size.Y - 16), help, HorizontalAlignment.Left, -1, 12,
                    Dim * new Color(1, 1, 1, 0.55f));
+    }
+
+    private void DrawFooterOnFoot(Vector2 size)
+    {
+        string help = "WASD: move   Shift: sprint   Mouse: look   RMB: Rotor Time   " +
+                      "TAB: kneeboard   F: board Hugh";
+        DrawString(_font, new Vector2(20, size.Y - 16), help, HorizontalAlignment.Left, -1, 12,
+                   Dim * new Color(1, 1, 1, 0.55f));
+    }
+
+    // ---------------------------------------------------------- rotor time
+
+    private static readonly Color RtFill = new(0.65f, 0.88f, 0.72f, 0.90f);
+    private static readonly Color RtActive = new(0.98f, 0.74f, 0.25f, 0.95f);
+
+    private void DrawRotorTimeBar(Vector2 origin)
+    {
+        if (_rotorTime is null) return;
+        float charge = _rotorTime.Charge;
+        if (charge < 0.005f && !_rotorTime.Active) return;
+
+        float width = 200f;
+        float height = 8f;
+        var bg = new Rect2(origin, new Vector2(width, height));
+        DrawRect(bg, new Color(0, 0, 0, 0.40f));
+
+        Color fill = _rotorTime.Active ? RtActive : RtFill;
+        DrawRect(new Rect2(origin.X, origin.Y, width * Mathf.Clamp(charge, 0, 1), height), fill);
+
+        // Activation threshold tick.
+        float threshX = origin.X + width * _rotorTime.ActivationThreshold;
+        DrawLine(new Vector2(threshX, origin.Y - 2), new Vector2(threshX, origin.Y + height + 2),
+                 Dim * new Color(1, 1, 1, 0.6f), 1.0f);
+
+        string label = _rotorTime.Active ? "ROTOR TIME" : "RT";
+        Label(origin + new Vector2(width + 8, height), label,
+              _rotorTime.Active ? RtActive : Dim, 11);
+    }
+
+    private void DrawCrosshair(Vector2 size)
+    {
+        Vector2 c = size * 0.5f;
+        Color col = _rotorTime is { Active: true } ? RtActive : Dim;
+        float len = _rotorTime is { Active: true } ? 14f : 8f;
+        float gap = 4f;
+
+        DrawLine(c + new Vector2(-len - gap, 0), c + new Vector2(-gap, 0), col, 1.4f, true);
+        DrawLine(c + new Vector2(gap, 0), c + new Vector2(len + gap, 0), col, 1.4f, true);
+        DrawLine(c + new Vector2(0, -len - gap), c + new Vector2(0, -gap), col, 1.4f, true);
+        DrawLine(c + new Vector2(0, gap), c + new Vector2(0, len + gap), col, 1.4f, true);
+
+        if (_rotorTime is { Active: true })
+            DrawCircle(c, 2f, col);
     }
 
     // --------------------------------------------------------------- helpers

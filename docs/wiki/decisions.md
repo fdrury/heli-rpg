@@ -812,3 +812,67 @@ the streamer synchronous, and it degrades safely: if collision never appears the
 released anyway with a warning, rather than hanging in the air forever.
 
 **Reversible.** One flag and one early return.
+
+## D-032 — On-foot: analytical terrain, not physics collision · 2026-09-19
+
+**Decision.** The pilot's `CharacterBody3D` does not use `MoveAndSlide` for terrain floor
+detection. Instead, `WorldHeight.At` provides the floor analytically. Movement is applied
+by direct `GlobalPosition` modification, and `SnapToTerrain` clamps Y to the ground.
+The collision mask is set to 0.
+
+**Why.** `CharacterBody3D.MoveAndSlide` does not work with `ConcavePolygonShape3D` in
+Godot 4.7. The trimesh terrain collision works perfectly for `RigidBody3D` (the helicopter
+stops on it, verified by the selftest terrain-drop test), but `MoveAndSlide` passes
+straight through. BackfaceCollision had no effect. This is the same class of bug as D-029
+— raycasts hit the shape correctly, but the kinematic sweep test ignores it.
+
+Since the world has an exact height function (`WorldHeight.At`, which includes site pads),
+using it directly is both simpler and guaranteed correct. MoveAndSlide would have been an
+approximation of the same function sampled on a grid.
+
+At settlements, site buildings create collision bodies above the terrain. The pilot spawns
+at the helicopter's ground level (the higher of terrain height and the helicopter's resting
+altitude minus its skid offset), and `_siteFloor` remembers this height so the pilot stays
+on the correct surface while walking around the site.
+
+**Regression tests.** `--foottest` exercises the full cycle: fly to a site, land, shut down,
+dismount, walk 8 m, activate Rotor Time, drain it, walk back, board. Validated that the
+pilot stays on the ground and does not fall through the world.
+
+**Reversible.** Medium. If a future Godot release fixes CharacterBody3D on ConcavePolygon,
+the analytical floor can be replaced with MoveAndSlide by restoring the collision mask and
+removing the SnapToTerrain/ApplyVelocity calls.
+
+## D-033 — Rotor Time charges from flight, drains on activation · 2026-09-19
+
+**Decision.** Rotor Time is a single resource that charges during flight (proportional to
+airspeed and attitude) and drains when activated. It slows `Engine.TimeScale` to 0.3x and
+zooms the FOV to 45° while active. Activation requires >= 15% charge and on-foot mode.
+Charge caps at 1.0 and drains at a rate that gives about 6 seconds of real-time slowdown
+from a full charge.
+
+**Why.** The vision doc specifies Rotor Time as "one mechanic in two contexts" — slow-motion
+for placed shots in the air and called shots on foot. The charging from committed flight
+ties it to the flying, so the pilot and the helicopter are the same person mechanically:
+you earn on-foot power by flying well.
+
+The drain rate and slow factor (0.3x) were chosen so the effect is impactful but brief.
+Six seconds of game time at 0.3x is about two seconds of real time — enough to aim a
+called shot, not enough to trivialise encounters.
+
+**Reversible.** High. One class, two integration points in Main.
+
+## D-034 — Terrain physics material: zero bounce · 2026-09-19
+
+**Decision.** Every terrain collision `StaticBody3D` gets `PhysicsMaterial { Friction = 1.0,
+Bounce = 0.0 }`.
+
+**Why.** The looptest's helicopter bounced on initial touchdown and cascaded into dynamic
+rollover on a 4° slope. The default physics material has zero bounce in theory, but with
+the ConcavePolygonShape3D trimesh the solver produced measurable restitution — enough for a
+0.14 m/s touchdown to bounce, land harder, bounce higher, and tip over.
+
+The explicit material eliminated the effect completely: the same 4° slope now produces a
+clean touchdown with no bounce.
+
+**Reversible.** One property on the StaticBody3D constructor.

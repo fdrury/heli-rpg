@@ -1,6 +1,6 @@
 # ROTORWASH — status
 
-*Last updated: 2026-09-18*
+*Last updated: 2026-09-19*
 
 A single-player post-apocalyptic RPG about the last helicopter pilot in the world.
 Godot 4.7.2 (.NET). `docs/wiki/00-vision.md` is what it is; `docs/wiki/decisions.md` is
@@ -105,10 +105,23 @@ and the attitude hold unit are no longer toggled with keys — they are things y
 and bolt on. The kneeboard's FITTED section reads from real loadout state, and empty
 bays show the player what to look for.
 
+**Weather & night** — dynamic weather (overcast, haze, variable visibility), a moving sun
+with dawn/dusk, full darkness with landing light and navigation lights (nav, anti-collision
+beacon, landing light). Two lighting paths (baked + realtime GI) per D-003.
+
+**On-foot** — third-person character controller (WASD + mouse look, sprint) with
+dismount/board transitions at shut-down helicopters. Rotor Time: the vision doc's
+slow-motion mechanic charges during committed flight and drains on activation, slowing
+the world to 0.3x for called shots while the pilot moves at full speed. `F` to
+dismount/board, `Q` to activate RT. Terrain floor detection is analytical (WorldHeight.At)
+because CharacterBody3D.MoveAndSlide does not work with ConcavePolygonShape3D in
+Godot 4.7. The foottest exercises the full cycle: fly, land, shut down, dismount, walk,
+activate/drain Rotor Time, walk back, board.
+
 ## Next
 
-5. On-foot: third person, Rotor Time
-6. Weather, night, and the flying that goes with them
+7. On-foot combat: called shots with Rotor Time targeting
+8. Save / load
 
 ## Open questions for Fred
 

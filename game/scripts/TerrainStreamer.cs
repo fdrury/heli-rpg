@@ -393,6 +393,7 @@ public sealed partial class TerrainStreamer : Node3D
                 {
                     Name = $"Body_{build.Coord.X}_{build.Coord.Y}",
                     Position = new Vector3(build.Coord.X * ChunkSize, 0, build.Coord.Y * ChunkSize),
+                    PhysicsMaterialOverride = new PhysicsMaterial { Friction = 1.0f, Bounce = 0.0f },
                 };
                 body.AddChild(new CollisionShape3D { Shape = shape });
                 AddChild(body);
