@@ -155,6 +155,23 @@ public static class Program
         Run("salvage_hours", SalvageTests.FlightHours);
         Run("salvage_cargo", SalvageTests.CargoWeighs);
         Run("salvage_cargosave", SalvageTests.CargoSurvivesSave);
+        Run("dialogue_long", DialogueTests.LongSession);
+        Run("dialogue_generic", DialogueTests.GenericRegister);
+        Run("dialogue_voices", DialogueTests.Voices);
+        Run("dialogue_knowledge", DialogueTests.KnowledgeGating);
+        Run("dialogue_premise", DialogueTests.PremiseGuard);
+        Run("governor_droop", GovernorTests.Droop);
+        Run("governor_degraded", GovernorTests.Degraded);
+        Run("governor_manual", GovernorTests.ManualThrottle);
+        Run("governor_cold", GovernorTests.ColdStart);
+        Run("governor_hot", GovernorTests.HotStart);
+        Run("governor_density", GovernorTests.DensityAltitude);
+        Run("radio_reception", RadioTests.Reception);
+        Run("radio_plays", RadioTests.KeepsPlaying);
+        Run("radio_volume", RadioTests.VolumeStaysSet);
+        Run("radio_playlist", RadioTests.Playlist);
+        Run("radio_ducking", RadioTests.Ducking);
+        Run("radio_equipment", RadioTests.AsEquipment);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 

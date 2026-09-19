@@ -25,7 +25,7 @@ map, and active jobs.
 # the game
 tools/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe --path game
 
-# 49 headless tests (flight + loadout + combat + save + contract + fog) - no engine needed
+# headless tests (flight + loadout + combat + encounter + save + contract + fog) - no engine needed
 dotnet run --project tools/simlab -c Release -- all
 
 # render a 126 s sortie to builds/audio/sortie.wav and listen to it
@@ -147,6 +147,17 @@ text all draw in the existing HUD aesthetic. The combattest exercises the full c
 fly, land, shut down, dismount, spawn NPC, hip fire, aimed torso shot, Rotor Time
 headshot, reload, pilot damage, board.
 
+**Hostile site encounters** — combat integrated into the world (D-056). Wrecks, depots
+and airfields in tier 1+ have a seed-based chance of being guarded by scavengers;
+farmsteads join the hostile pool at tier 2+. Tier 0 (the Basin) is always safe —
+settlements, workshops, relays and overlooks are never hostile. Dismounting at an
+uncleared hostile site spawns 1–4 NPCs in a ring around the site; downing all of them
+clears the site permanently. The HUD site panel shows "HOSTILE" or "CLEARED" next to the
+site kind, and the kneeboard map marks hostile sites with a red diamond outline (grey when
+cleared). Cleared state persists through save/load. `Encounter` lives in sim/ as a pure
+.NET class; six simlab tests verify tier-0 safety, safe kinds, hostile rate, NPC counts,
+determinism, and cleared round-trip.
+
 **Save / load** — F5 saves, F9 loads. JSON via `System.Text.Json`, single slot,
 human-readable. Save is gated: on ground, shut down, at a site, not in dialogue. The
 save captures everything that matters — fuel, damage, loadout (installed + bag), progress
@@ -251,6 +262,11 @@ Six agents are working in parallel right now on: salvage integration, the coning
 lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, and water.
 **Do not start any of those.** These are the things nobody is holding:
 
+0. **`SiteInteraction.cs` is the bottleneck — clear it first.** Four finished, tested
+   systems are waiting on hooks in that one file: salvage yields, the 430 lines of named
+   NPC dialogue, the richer generic register, and knowledge-on-search. All four are written
+   out precisely at the top of `docs/wiki/integration-debt.md`. Do them in one pass. The
+   salvage one in particular is the *only* thing between a complete economy and the game.
 1. **Wire `StoryPlaces` into `SiteInteraction`.** The role→site bindings resolve (16/16) and
    nothing consults them. `StoryPlaces.For(site.Id)` gives `NpcId`/`NpcName` for
    `GetOrCreateNpc`, and `GrantsOnSearch` for `AddSalvage`. The patch is written out at the

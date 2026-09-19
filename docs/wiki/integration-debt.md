@@ -57,6 +57,49 @@ which modules. `Salvage` uses a fixed integer mix for exactly that reason.
 
 ---
 
+## ⚠ `SiteInteraction.cs` is the bottleneck — four systems wait on one file
+
+Salvage, the nine NPC voices, the authored story sites and search-knowledge grants **all**
+need hooks in `game/scripts/SiteInteraction.cs`, and every one of them is finished and
+tested on the other side. Whoever next holds that file should do all four in one pass; they
+are a few lines each and they interlock.
+
+**1. Salvage yields.** `AddSalvage` (line ~278) still rolls its own `switch` on `SiteKind`
+with its own RNG, so found parts arrive as `Stock.Parts` at a nominal 6.5 kg and nothing ever
+enters `Progress.Cargo`. Replace with `Salvage.SearchesAt` / `Salvage.Search` using
+`(SalvageSiteKind)(int)site.Kind` and `site.Tier` — the two enums are kept in the same
+declaration order so the cast is valid. **This is the only thing between the salvage economy
+and the game.** Everything downstream already works: mass (a 200 kg haul costs 625 m of
+hover ceiling), fitting, wear (unairworthy at 53 flight hours) and the save.
+
+**2. Named NPCs.** `GetOrCreateNpc` (line ~679) hands everyone the same generic bank. The
+nine named characters now have 430 authored lines between them:
+`DialogueCorpus.Named(storySite.NpcId)` where `StoryPlaces.For(site.Id)` returns a
+`StorySite`.
+
+**3. The richer generic register.** For everyone else, one line:
+`DialogueCorpus.Settler(site.Id, site.Name, (DialogueCorpus.RegionTag)(int)site.Region, (SiteKindTag)(int)site.Kind)`
+plus the matching `SettlerLines(...)`. `RegionTag` mirrors `RegionKind` in declaration order
+for exactly that cast. Generic people currently sound identical in an Ashfield fuel cache and
+a Basin farmstead.
+
+**4. Knowledge on search.** `StoryPlaces.For(site.Id)?.GrantsOnSearch` should be granted when
+a story site is searched — that is how the search thread advances from places rather than
+from visit counts.
+
+---
+
+## `AlertState` → nothing drives it
+
+`sim/src/Alert.cs` gives every region a readiness that rises while the player is detected,
+jumps when they are engaged, and decays with a six-hour half-life; `DetectionScale` and
+`ReactionScale` are meant to feed the threat envelopes. **Nothing calls any of it.** It needs
+driving from wherever threats update, persisting in the save, and a line on the kneeboard
+(`AlertState.Describe` returns the phrase). The radio announcer is being written to gossip
+about which regions have seen the aircraft, so this also has a second consumer waiting.
+
+---
+
 ## Story spine → the engine (from `c67607d`)
 
 `docs/wiki/story.md` specifies places that must mean particular things. `SiteKit.Build`
