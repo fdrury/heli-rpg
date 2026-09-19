@@ -28,6 +28,7 @@ $Log     = Join-Path $Here 'autopilot.log'
 $Lock    = Join-Path $Here 'RUNNING.lock'
 $Stop    = Join-Path $Here 'STOP'
 $Retry   = Join-Path $Here 'retry-after.txt'
+$Pause   = Join-Path $Here 'pause-until.txt'
 $Transcript = Join-Path $Here 'last-run.txt'
 
 function Write-Log($msg) {
@@ -52,6 +53,7 @@ if ($Verify) {
     Check "autopilot dir writable"           (Test-Path $Here)
     Check "scheduled task registered"        ((schtasks /Query /TN 'RotorwashAutopilot' 2>&1) -match 'RotorwashAutopilot')
     Check "not currently paused by STOP"     (-not (Test-Path $Stop))
+    Check "no interactive session holding it" (-not (Test-Path $Pause))
     Check "no stale lock"                    (-not (Test-Path $Lock))
     if ($ok) { "ALL PLUMBING OK" } else { "SOMETHING IS WRONG" }
     exit $(if ($ok) { 0 } else { 1 })
@@ -59,6 +61,20 @@ if ($Verify) {
 
 # --- Kill switch -----------------------------------------------------------
 if (Test-Path $Stop) { exit 0 }
+
+# --- Yield to a live interactive session -----------------------------------
+# Two sessions editing the same repo will collide. An interactive session writes a
+# timestamp here and refreshes it while it works; the autopilot stays out of the way
+# until it lapses, and then takes over on its own. Better than a STOP file, which has
+# to be remembered - this one forgets itself.
+if (Test-Path $Pause) {
+    try {
+        $until = [datetime]::Parse((Get-Content $Pause -Raw).Trim())
+        if ((Get-Date) -lt $until) { exit 0 }
+        Write-Log "interactive pause lapsed, taking over"
+        Remove-Item $Pause -Force -ErrorAction SilentlyContinue
+    } catch { Remove-Item $Pause -Force -ErrorAction SilentlyContinue }
+}
 
 # --- Do not stack runs -----------------------------------------------------
 # A build-and-verify cycle can take a long time. If one is still going, leave it alone.

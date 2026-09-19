@@ -33,3 +33,4 @@ tools/autopilot/last-run.txt
 tools/autopilot/RUNNING.lock
 tools/autopilot/retry-after.txt
 tools/autopilot/STOP
+tools/autopilot/pause-until.txt
