@@ -1663,3 +1663,36 @@ flares-plus-RWR came out *worse* than flares alone (18.80 against 14.24): the re
 the crew about radar threats, they spent flares that do nothing to a radar missile, and had
 none left for the one that mattered. Realistic as a pilot error, useless as a measurement of
 the fit — the same lesson as D-042, one layer up.
+
+## D-050 — CORRECTION: the search target cannot be another helicopter pilot
+
+**Status: must be fixed before `sim/src/SearchThread.cs` is relied on.** Flagged while the
+file was still uncommitted and in flight, so it is recorded here rather than edited from
+under whoever is writing it.
+
+`SearchThread.cs` makes the object of the search **"Kara Morrow, a pilot who vanished flying
+east"**, describes "the aircraft description", and ends on *"Two pilots, two aircraft. Get
+everything out of the valley."*
+
+That contradicts **D-008**, which is marked **LOCKED-IN BY FRED** and reads: *"No other
+helicopter pilots exist... air threats are ground-based AA, drones, tethered balloons and
+weather — never rival helicopters. Reversibility: low, by design. It is a pillar."*
+
+It is not a cosmetic clash. **D-010 rests on it**: air defence works as the gate on the
+world precisely because *"everyone defends against the one aircraft that exists"*. A second
+flyable helicopter in the fiction undercuts the reason the whole threat layout is shaped the
+way it is, and the final beat — two aircraft lifting a load together — is the premise
+inverted rather than bent.
+
+**The correction is content, not structure.** The beat machinery, the knowledge ids, the
+staging and the save format are all sound and should be kept exactly as they are. What has
+to change is who the target is: someone who is *not* a pilot and has *no* aircraft.
+`docs/wiki/story.md` proposes Sera Wray, the flight engineer who kept Hugh flying before the
+collapse — which fits the beats almost unchanged (a name, a frequency, a route, cargo, a
+destination) and gives the search a reason to end in something the player cannot simply
+scavenge.
+
+**A note on process, since this is the second time.** A locked decision was contradicted by
+work that never read it. Anything proposing *who or what exists in the world* has to be
+checked against D-008 and D-012 first; those two are premise, not preference. The cost here
+was small only because it was caught before the file was committed.
