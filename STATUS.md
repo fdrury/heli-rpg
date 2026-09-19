@@ -187,6 +187,21 @@ repair patches in a slightly wrong shade, and soot damage driven by the damage m
 No UVs — the wear is computed from position and normal in object space so it stays fixed
 to the hull.
 
+## Where things get verified
+
+This repo is developed on a laptop that cannot comfortably render it. **Headless checks run
+here; anything that has to be looked at runs on the test machine.** The brief for that is
+`docs/wiki/visual-check.md` — what to run, what each shot is for, and the specific questions
+that cannot be answered without a screen.
+
+Headless, always run before committing:
+
+```
+dotnet run --project tools/simlab -c Release -- all
+godot --headless --path game -- --selftest
+godot --headless --path game -- --looptest
+```
+
 ## Next
 
 1. **Storm weather.** Lightning, and rain on the windscreen. The model already produces
