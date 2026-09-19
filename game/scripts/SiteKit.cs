@@ -268,8 +268,17 @@ public static class SiteKit
         {
             // A collapsed building is a different SILHOUETTE, which is the point: from
             // 150 m the player can tell at a glance which places still have roofs.
-            h *= rng.RandfRange(0.25f, 0.55f);
-            Add(root, Box(w, h, d), wall, at + Vector3.Up * (h * 0.5f), yaw);
+            float ch = h * rng.RandfRange(0.25f, 0.55f);
+            Add(root, Box(w, ch, d), wall, at + Vector3.Up * (ch * 0.5f), yaw);
+            // Partial wall still standing on some ruins — reads as "was taller" from 150 m.
+            if (rng.Randf() < 0.4f)
+            {
+                float pw = w * rng.RandfRange(0.3f, 0.6f);
+                float ph = h * rng.RandfRange(0.5f, 0.85f);
+                int face = rng.Randf() < 0.5f ? 1 : -1;
+                Vector3 wallOff = new Vector3(rng.RandfRange(-0.2f, 0.2f) * w, 0, face * d * 0.48f).Rotated(Vector3.Up, yaw);
+                Add(root, Box(pw, ph, 0.3f), wall, at + wallOff + Vector3.Up * (ph * 0.5f), yaw);
+            }
             for (int i = 0; i < 5; i++)
             {
                 var slab = Box(rng.RandfRange(1.5f, 4f), 0.25f, rng.RandfRange(1.5f, 4f));
@@ -280,22 +289,150 @@ public static class SiteKit
             return;
         }
 
-        Add(root, Box(w, h, d), wall, at + Vector3.Up * (h * 0.5f), yaw);
-
-        // Roof: flat for sheds, pitched for houses. The pitch is most of what tells you
-        // from the air whether you are looking at somewhere people lived or worked.
         if (shed)
         {
+            // Industrial sheds: flat roof, large door opening, optional ridge vent.
+            Add(root, Box(w, h, d), wall, at + Vector3.Up * (h * 0.5f), yaw);
             Add(root, Box(w * 1.06f, 0.3f, d * 1.06f), Materials.Rust, at + Vector3.Up * (h + 0.15f), yaw);
+            if (rng.Randf() < 0.4f)
+                Add(root, Box(0.2f, 0.6f, d * 0.7f), Materials.Metal, at + Vector3.Up * (h + 0.6f), yaw);
+            if (w >= 14f && rng.Randf() < 0.3f)
+            {
+                Vector3 dOff = new Vector3(0, 0, d * 0.5f + 1.5f).Rotated(Vector3.Up, yaw);
+                Add(root, Box(w * 0.5f, 1.0f, 3.0f), Materials.Concrete, at + dOff + Vector3.Up * 0.5f, yaw);
+            }
+            DoorOpening(root, at, h, d, yaw, 2.5f, h * 0.55f);
+            return;
+        }
+
+        // ---- Residential: pick an archetype by silhouette ----
+        // The variety here is what the STATUS line says the game most visibly lacks.
+        // Five shapes, each recognisable from 500 m as a different kind of structure.
+        float roofH = rng.RandfRange(1.4f, 2.6f);
+        bool canComplex = w >= 7f && d >= 6f;
+        float roll = rng.Randf();
+
+        if (canComplex && roll < 0.25f)
+        {
+            // L-PLAN: main body + perpendicular wing. Breaks the rectangular footprint
+            // that makes a generated town read as generated.
+            float wingW = w * rng.RandfRange(0.4f, 0.6f);
+            float wingD = d * rng.RandfRange(0.5f, 0.8f);
+            float wingH = h * rng.RandfRange(0.7f, 0.95f);
+            float wingRoofH = roofH * 0.8f;
+
+            Add(root, Box(w, h, d), wall, at + Vector3.Up * (h * 0.5f), yaw);
+            Add(root, new PrismMesh { Size = new Vector3(w * 1.08f, roofH, d * 1.08f) },
+                Materials.Dark, at + Vector3.Up * (h + roofH * 0.5f), yaw);
+
+            float wingSign = rng.Randf() < 0.5f ? 1f : -1f;
+            Vector3 wingOff = new Vector3(w * 0.5f + wingW * 0.5f - 1f, 0,
+                                          wingSign * d * 0.2f).Rotated(Vector3.Up, yaw);
+            float wingYaw = yaw + Mathf.Pi * 0.5f;
+            Add(root, Box(wingW, wingH, wingD), wall, at + wingOff + Vector3.Up * (wingH * 0.5f), wingYaw);
+            Add(root, new PrismMesh { Size = new Vector3(wingW * 1.08f, wingRoofH, wingD * 1.08f) },
+                Materials.Dark, at + wingOff + Vector3.Up * (wingH + wingRoofH * 0.5f), wingYaw);
+
+            WindowBand(root, rng, at, w, h, d, yaw);
+            WindowBand(root, rng, at + wingOff, wingW, wingH, wingD, wingYaw);
+        }
+        else if (canComplex && roll < 0.45f)
+        {
+            // LEAN-TO: main body + lower extension on one side. Common in rural buildings
+            // where a workshop or store was added after the house was built.
+            Add(root, Box(w, h, d), wall, at + Vector3.Up * (h * 0.5f), yaw);
+            Add(root, new PrismMesh { Size = new Vector3(w * 1.08f, roofH, d * 1.08f) },
+                Materials.Dark, at + Vector3.Up * (h + roofH * 0.5f), yaw);
+
+            float leanH = h * rng.RandfRange(0.45f, 0.65f);
+            float leanD = rng.RandfRange(2.5f, 4.0f);
+            int side = rng.Randf() < 0.5f ? 1 : -1;
+            Vector3 leanOff = new Vector3(0, 0, side * (d * 0.5f + leanD * 0.5f)).Rotated(Vector3.Up, yaw);
+            Material leanWall = wall == Materials.Timber ? Materials.Concrete : Materials.Timber;
+            Add(root, Box(w * 0.85f, leanH, leanD), leanWall,
+                at + leanOff + Vector3.Up * (leanH * 0.5f), yaw);
+            Add(root, Box(w * 0.9f, 0.15f, leanD * 1.1f), Materials.Rust,
+                at + leanOff + Vector3.Up * (leanH + 0.08f), yaw);
+
+            WindowBand(root, rng, at, w, h, d, yaw);
+        }
+        else if (roll < (canComplex ? 0.60f : 0.30f))
+        {
+            // FLAT ROOF WITH PARAPET. Concrete block, more urban, reads as commercial or
+            // institutional from the air — a school, a shop, a clinic.
+            Add(root, Box(w, h, d), Materials.Concrete, at + Vector3.Up * (h * 0.5f), yaw);
+            float parapetH = 0.6f;
+            for (int f = -1; f <= 1; f += 2)
+            {
+                Vector3 pOff = new Vector3(0, 0, f * d * 0.5f).Rotated(Vector3.Up, yaw);
+                Add(root, Box(w, parapetH, 0.25f), Materials.Concrete,
+                    at + pOff + Vector3.Up * (h + parapetH * 0.5f), yaw);
+            }
+            for (int f = -1; f <= 1; f += 2)
+            {
+                Vector3 pOff = new Vector3(f * w * 0.5f, 0, 0).Rotated(Vector3.Up, yaw);
+                Add(root, Box(0.25f, parapetH, d), Materials.Concrete,
+                    at + pOff + Vector3.Up * (h + parapetH * 0.5f), yaw);
+            }
+            roofH = parapetH;  // for chimney placement
+
+            WindowBand(root, rng, at, w, h, d, yaw);
+        }
+        else if (canComplex && roll < (canComplex ? 0.75f : 0.30f))
+        {
+            // PORCH: gable house with a front overhang on posts. Reads as residential
+            // and suggests a threshold — somewhere you go inside.
+            Add(root, Box(w, h, d), wall, at + Vector3.Up * (h * 0.5f), yaw);
+            Add(root, new PrismMesh { Size = new Vector3(w * 1.08f, roofH, d * 1.08f) },
+                Materials.Dark, at + Vector3.Up * (h + roofH * 0.5f), yaw);
+
+            float porchD = rng.RandfRange(2.0f, 3.5f);
+            float porchH = h * 0.7f;
+            Vector3 porchOff = new Vector3(0, 0, d * 0.5f + porchD * 0.5f).Rotated(Vector3.Up, yaw);
+            Add(root, Box(w * 0.95f, 0.15f, porchD), Materials.Rust,
+                at + porchOff + Vector3.Up * porchH, yaw);
+            for (int pi = 0; pi < 2; pi++)
+            {
+                float px = (pi == 0 ? -1 : 1) * w * 0.42f;
+                Vector3 postOff = new Vector3(px, 0, d * 0.5f + porchD * 0.85f).Rotated(Vector3.Up, yaw);
+                Add(root, Box(0.15f, porchH, 0.15f), Materials.Timber,
+                    at + postOff + Vector3.Up * (porchH * 0.5f), yaw);
+            }
+
+            WindowBand(root, rng, at, w, h, d, yaw);
         }
         else
         {
-            float roofH = rng.RandfRange(1.4f, 2.6f);
-            var roof = new PrismMesh { Size = new Vector3(w * 1.08f, roofH, d * 1.08f) };
-            Add(root, roof, Materials.Dark, at + Vector3.Up * (h + roofH * 0.5f), yaw);
+            // SIMPLE GABLE — the original archetype, kept as the most common shape.
+            Add(root, Box(w, h, d), wall, at + Vector3.Up * (h * 0.5f), yaw);
+            Add(root, new PrismMesh { Size = new Vector3(w * 1.08f, roofH, d * 1.08f) },
+                Materials.Dark, at + Vector3.Up * (h + roofH * 0.5f), yaw);
+            WindowBand(root, rng, at, w, h, d, yaw);
         }
 
-        // Window band. Cheap, and it is the difference between a box and a building.
+        // Common residential details
+        DoorOpening(root, at, h, d, yaw, 1.2f, h * 0.44f);
+
+        // Chimney — the one detail that breaks a roofline from 500 m.
+        if (rng.Randf() < 0.35f)
+        {
+            float cH = rng.RandfRange(1.2f, 2.5f);
+            Vector3 cOff = new Vector3(rng.RandfRange(-0.15f, 0.15f) * w, 0,
+                                       rng.RandfRange(-0.25f, 0.25f) * d).Rotated(Vector3.Up, yaw);
+            Add(root, Box(0.6f, cH, 0.6f),
+                wall == Materials.Concrete ? Materials.Concrete : Materials.Rust,
+                at + cOff + Vector3.Up * (h + roofH + cH * 0.5f - 0.3f), yaw);
+        }
+    }
+
+    /// <summary>
+    /// Windows on one face, with a dark recess behind the glass. The recess is what makes
+    /// a window read as an opening into a room rather than a reflective sticker — it is
+    /// cheap and it is the single biggest "interior suggestion" trick at this polygon budget.
+    /// </summary>
+    private static void WindowBand(Node3D root, RandomNumberGenerator rng, Vector3 at,
+                                   float w, float h, float d, float yaw)
+    {
         int windows = Mathf.Max(1, (int)(w / 2.4f));
         for (int i = 0; i < windows; i++)
         {
@@ -303,8 +440,21 @@ public static class SiteKit
             float t = (i + 0.5f) / windows - 0.5f;
             Vector3 local = new(t * w * 0.82f, h * 0.55f, d * 0.5f + 0.06f);
             Vector3 rotated = local.Rotated(Vector3.Up, yaw);
+            // Dark recess: slightly larger than the glass, set into the wall.
+            Vector3 recessLocal = new(t * w * 0.82f, h * 0.55f, d * 0.5f - 0.08f);
+            Vector3 recessRotated = recessLocal.Rotated(Vector3.Up, yaw);
+            Add(root, Box(1.1f, 1.2f, 0.2f), Materials.Dark, at + recessRotated, yaw);
             Add(root, Box(1.0f, 1.1f, 0.05f), Materials.Glass, at + rotated, yaw);
         }
+    }
+
+    /// <summary>Dark rectangle on the front face — a door. Suggests entry, habitation, interior.</summary>
+    private static void DoorOpening(Node3D root, Vector3 at, float h, float d, float yaw,
+                                    float doorW, float doorH)
+    {
+        Vector3 doorLocal = new(0, doorH * 0.5f, d * 0.5f + 0.06f);
+        Vector3 doorRotated = doorLocal.Rotated(Vector3.Up, yaw);
+        Add(root, Box(doorW, doorH, 0.05f), Materials.Dark, at + doorRotated, yaw);
     }
 
     private static void Tank(Node3D root, RandomNumberGenerator rng, Vector3 at, float radius, float height)
