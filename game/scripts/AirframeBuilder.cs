@@ -71,15 +71,13 @@ public static class AirframeBuilder
     {
         return new Materials
         {
-            // Worn olive drab. Roughness high and non-uniform is what stops a painted
-            // metal aircraft looking like injection-moulded plastic.
-            Body = new StandardMaterial3D
-            {
-                AlbedoColor = liveryColour,
-                Roughness = 0.68f,
-                Metallic = 0.10f,
-                MetallicSpecular = 0.35f,
-            },
+            // Worn olive drab, as a shader rather than a flat colour.
+            //
+            // The airframe has no UVs - it is lofted and boxed together here with no SetUV
+            // anywhere - so the wear is computed in object space from position and normal.
+            // Object space rather than world space matters: it fixes the weathering to the
+            // aircraft instead of letting it swim past as the machine flies.
+            Body = BodyMaterial(liveryColour),
             Glass = new StandardMaterial3D
             {
                 // Alpha was 0.62, which is a welding visor. You are meant to be able to
@@ -235,6 +233,24 @@ public static class AirframeBuilder
 
         st.GenerateNormals();
         return st.Commit();
+    }
+
+    /// <summary>Paint, weathered. See <c>game/assets/airframe/airframe.gdshader</c>.</summary>
+    private static ShaderMaterial BodyMaterial(Color livery)
+    {
+        var mat = new ShaderMaterial
+        {
+            Shader = GD.Load<Shader>("res://assets/airframe/airframe.gdshader"),
+        };
+        // Converted to linear by hand. StandardMaterial3D.AlbedoColor does this for you;
+        // a raw shader uniform does not, so passing the same numbers straight through
+        // renders them as if they were already linear and the aircraft comes out pale
+        // grey-green instead of olive drab. That is what happened on the first try.
+        mat.SetShaderParameter("livery", livery.SrgbToLinear());
+        mat.SetShaderParameter("bleach", new Color(0.62f, 0.62f, 0.53f).SrgbToLinear());
+        mat.SetShaderParameter("wear", 0.55f);
+        mat.SetShaderParameter("damage", 0.0f);
+        return mat;
     }
 
     private static MeshInstance3D Mesh(string name, ArrayMesh mesh, Material mat) =>
