@@ -1958,3 +1958,48 @@ pillar-adjacent decision and changing it late would mean rewriting every line.
 **Licensing:** per Fred's original brief, free assets are fine including copyleft and
 attribution-required, but **every one must be tracked** in case the game is ever shared.
 `docs/wiki/attribution.md` is the register.
+
+## D-059 — The world is an archipelago · **[FRED'S IDEA]**
+
+The map becomes several islands separated by open water, rather than a single continuous
+land mass ending at an invisible envelope.
+
+**The problem it solves.** The aircraft has roughly 500 km of still-air range and three hours
+of endurance. The content envelope is 13 km across — it crosses the entire world in about
+four minutes. Range is wildly disproportionate to the map, which is a version of a question
+Fred raised early on ("if helicopter range is too big for map size should we spread POIs with
+sparser fill in between?"). The two obvious answers are both bad: padding the map with sites
+dilutes them, and growing the map costs streaming and content nobody has authored.
+
+**Why water is the right answer, and the mechanism that matters.** Water makes distance
+meaningful without making it long. Over land an engine failure is an autorotation into a
+field and a walk home; over water it is a swim and the aircraft is gone. A 10 km crossing is
+nothing in terms of range and is a real decision in terms of consequence. The lever is
+**risk, not kilometres** — and that is a lever the flight model already supplies for free,
+since `simlab autoglide` puts best glide near 2:1, so from 500 m the aircraft reaches about
+1 km. A gap wider than it can glide is a committed crossing.
+
+Three things fall out of it:
+
+* **Empty legs stop needing content.** An over-water leg is allowed to be empty, because
+  crossing it *is* the activity. That answers the density problem directly rather than
+  papering over it.
+* **Fuel becomes the boundary.** Not a wall, not a warning — the thing the whole game is
+  already about (D-004). Fuel is salvaged in small amounts, so the player rarely has a full
+  tank, and a crossing with 120 kg aboard is a genuine commitment.
+* **The world edge is diegetic.** No invisible wall, no turn-back message. A coastline needs
+  no explanation.
+
+**Explicitly rejected: auto-turnaround at the map edge.** Fred floated it as an option.
+Taking the controls away is the wrong instinct in a game about being a pilot, and it converts
+a decision into a cutscene. The player may fly out to sea and may run out of fuel doing it.
+What they get instead is **facts** (D-005a): fuel remaining against fuel required to return.
+"40 min remaining, 45 min to the coast" tells a pilot everything and instructs them in
+nothing.
+
+**Also enabled:** water bucketing as a payload and mission type (Fred's request), which needs
+open water to dip from — see the underslung-load work.
+
+**Reversibility:** medium. The height function and the region layout both move, and site
+placement follows terrain, so it has to be re-verified against `--worldreport` (shortfalls
+currently zero, remote country 7%). Nothing above it depends on land being continuous.

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Rotorwash.Sim;
 
 namespace Rotorwash.SimLab;
@@ -18,8 +19,14 @@ public static class Program
         string scenario = args.Length > 0 ? args[0] : "all";
         var failures = new List<string>();
 
+        var registered = new HashSet<string>();
+
         void Run(string name, Func<string?> test)
         {
+            // Record what has been registered, so the sweep at the bottom can prove that
+            // nothing has been written and then quietly forgotten.
+            registered.Add($"{test.Method.DeclaringType?.Name}.{test.Method.Name}");
+
             if (scenario != "all" && scenario != name) return;
             Console.WriteLine();
             Console.WriteLine($"=== {name} ".PadRight(74, '='));
@@ -125,6 +132,12 @@ public static class Program
         Run("combat_attrition", CombatTests.NpcAttrition);
         Run("combat_sidearm", CombatTests.SidearmMechanics);
         Run("combat_pilot", CombatTests.PilotHealthCycle);
+        Run("encounter_tier0", EncounterTests.Tier0Safe);
+        Run("encounter_safe", EncounterTests.SafeKinds);
+        Run("encounter_hostile", EncounterTests.HostilesExist);
+        Run("encounter_counts", EncounterTests.NpcCounts);
+        Run("encounter_determ", EncounterTests.Determinism);
+        Run("encounter_cleared", EncounterTests.ClearedRoundTrip);
         Run("contract_gen", ContractTests.Generation);
         Run("contract_complete", ContractTests.Completion);
         Run("contract_payout", ContractTests.Payout);
@@ -139,8 +152,44 @@ public static class Program
         Run("save_npc", SaveTests.NpcRoundTrip);
         Run("save_fog", SaveTests.FogRoundTrip);
         Run("save_full", SaveTests.FullRoundTrip);
+        Run("salvage_hours", SalvageTests.FlightHours);
+        Run("salvage_cargo", SalvageTests.CargoWeighs);
+        Run("salvage_cargosave", SalvageTests.CargoSurvivesSave);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
+
+        // --- Has anything been written and not wired up? ----------------------
+        //
+        // A test nobody runs is worse than no test: it looks like cover and provides none.
+        // With several agents adding scenarios at once this stopped being hypothetical -
+        // ten of them were sitting in the tree unregistered at one point, including the
+        // entire salvage wear suite. Reflection over what EXISTS, checked against what was
+        // registered above, makes that impossible to miss rather than something somebody
+        // has to remember.
+        if (scenario == "all")
+        {
+            var orphans = new List<string>();
+            foreach (Type t in typeof(Program).Assembly.GetTypes())
+            {
+                if (!t.IsAbstract || !t.IsSealed) continue;              // static classes only
+                if (t == typeof(Program)) continue;
+                foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                {
+                    if (m.ReturnType != typeof(string) || m.GetParameters().Length != 0) continue;
+                    if (m.Name is "ToString") continue;
+                    string id = $"{t.Name}.{m.Name}";
+                    if (!registered.Contains(id)) orphans.Add(id);
+                }
+            }
+
+            if (orphans.Count > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"=== unregistered ".PadRight(74, '='));
+                foreach (string o in orphans) Console.WriteLine($"  never runs: {o}");
+                failures.Add($"{orphans.Count} scenario(s) exist but are not registered in Program.cs");
+            }
+        }
 
         Console.WriteLine();
         Console.WriteLine(new string('=', 74));
