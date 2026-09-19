@@ -940,3 +940,14 @@ Three things worth keeping:
 rainy morning rendered as a bright sky over near-black ground, which is what night looks
 like. An overcast day is *flat and bright*, not dark: the cut is now 0.70, ambient rises
 further with cover, and exposure lifts slightly under a heavy deck.
+
+## D-033 — A rotor strike is an event, not a state
+
+**Decision.** `LandingController` latches the rotor strike, re-arming only once the disc is
+clear of the ground again.
+
+**Why.** The geometric test that detects a strike stays true for as long as the wreck lies
+there, so an unlatched check re-fires every frame. The new drop phase in the bridge
+self-test logged **1141 identical strikes from one impact**, each re-applying full damage and
+each one worth a journal entry. Now one. A second strike on a second bounce is still a
+second strike, because the latch clears when the disc is clear.

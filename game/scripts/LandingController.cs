@@ -38,6 +38,9 @@ public sealed partial class LandingController : Node
     public event Action<TouchdownReport>? Touchdown;
     public event Action<string>? RotorStrike;
 
+    /// <summary>Latch, so one impact is one strike rather than one per frame.</summary>
+    private bool _rotorStruck;
+
     private double _now;
 
     public override void _Ready()
@@ -64,11 +67,26 @@ public sealed partial class LandingController : Node
         Brownout = Mathf.Lerp(Brownout, target, Mathf.Clamp((float)delta * rate * 3f, 0, 1));
 
         // --- Rotor strike -----------------------------------------------------
-        if (agl < sim.Airframe.MainRotor.Radius * 1.5f && CheckRotorStrike(out string what))
+        // Latched. Striking the ground is an EVENT - the rotor is destroyed and that is
+        // the end of the story - but the geometric test that detects it stays true for as
+        // long as the wreck lies there, so an unlatched check re-fires every frame. The
+        // bridge self-test's drop phase logged eleven hundred identical strikes from one
+        // impact, each one re-applying full damage and each one worth a journal entry.
+        //
+        // It re-arms only once the disc is clear of the ground again, so a second strike
+        // on a second bounce is still a second strike.
+        string what = string.Empty;
+        bool striking = agl < sim.Airframe.MainRotor.Radius * 1.5f && CheckRotorStrike(out what);
+        if (striking && !_rotorStruck)
         {
+            _rotorStruck = true;
             sim.Damage.Apply(Component.MainRotor, 0.85, DamageCause.RotorStrike, what);
             sim.Damage.Apply(Component.Transmission, 0.35, DamageCause.RotorStrike, what);
             RotorStrike?.Invoke(what);
+        }
+        else if (!striking && agl > sim.Airframe.MainRotor.Radius * 1.8f)
+        {
+            _rotorStruck = false;
         }
 
         // --- Touchdown --------------------------------------------------------
