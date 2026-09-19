@@ -1154,3 +1154,52 @@ round-trip through JSON, verify cell-by-cell match. All existing tests continue 
 
 **Reversibility:** high. One file in sim/ (FogOfWar.cs), one kneeboard page, one
 `byte[]` property on SaveData, three lines in Main. Nothing depends on it.
+
+## D-040 — Water, woodland and roads · 2026-09-19
+
+**Decision.** Three ground-cover systems fill the landscape between rocks and terrain
+shape:
+
+1. **Water** — flat shader planes at `WaterLevel` (-5 m) streamed alongside terrain
+   chunks. The shader paints stagnant, murky water with value-noise colour variation
+   and subtle TIME-based drift.
+2. **Woodland** — green trees (trunk + noise-deformed icosphere canopy) as a fourth
+   `PropKind` in PropScatter, driven by a separate forest-noise field (Perlin, freq
+   0.00065, 3 octaves) so patches cluster naturally rather than scattering uniformly.
+   Six mesh variants, placed on lower wetter ground (slope > 0.72, h < 240 m,
+   h > WaterLevel).
+3. **Roads** — batched triangle-strip mesh connecting 80 "roaded" sites (settlements,
+   workshops, airfields, depots, fuel caches, farmsteads). Each site links to its 3
+   nearest neighbours within 3.5 km, producing 153 road segments and 18 190 verts in
+   a single draw call.
+
+**Why.**
+
+The STATUS.md Next list identified roads, water and woodland as the remaining gaps in
+the terrain item. Rock faces and strata were done in D-038; this finishes the set.
+Water fills the deepest valleys (terrain min is -13.2 m, WaterLevel is -5 m); woodland
+puts living trees on lower, wetter slopes where hardier species hold on; roads connect
+the places people drove to before the collapse.
+
+**Key choices.**
+
+- *WaterLevel = -5 m.* Valley floors range from -8 to -24 m. Setting the level at -5 m
+  fills deep valleys without flooding basin settlements (placed at raw height > 6 m).
+  Reversible: change one constant.
+- *Forest noise separate from clump noise.* Woodland should cluster differently from
+  scrub — large contiguous stands, not the patchy fields that the existing clump noise
+  produces. A second Perlin field at a lower frequency (0.00065 vs 0.0014) gives wide
+  forest belts that follow valleys.
+- *Road-worthy site kinds.* Wrecks, relays and overlooks are excluded because nobody
+  drove to those — they were accessed by air or on foot. This is a lore decision.
+- *3 nearest neighbours within 3.5 km.* Produces natural clusters within regions and
+  sparse links between them, without an explicit graph-theory algorithm.
+- *SurfaceTool format.* The GreenTree mesh shares a SurfaceTool between trunk (via
+  `AddTaperedSegment`/`Quad`, which do not set normals) and canopy. The trunk establishes
+  the vertex format without normals, so the canopy must also omit manual normals and
+  use `GenerateNormals()` for the whole mesh. This was discovered as a runtime
+  SurfaceTool error that spammed stderr and was invisible in the Release build.
+
+**Reversibility:** high for all three. Water: remove one shader file, a few blocks in
+TerrainStreamer, and one constant. Woodland: remove GreenTree from ProceduralProps and
+PropScatter. Roads: remove Roads.cs and one line in Main.

@@ -79,7 +79,9 @@ already computes. A 55% engine with a 70% gearbox cannot hold an out-of-ground-e
 hover. Losing the tail rotor is two full turns in six seconds.
 
 **World** — 16.4 km of streamed terrain at four levels of detail, LOD seams fixed by edge
-stitching rather than skirts; procedural rocks, dead trees and scrub; 144 named places
+stitching rather than skirts; procedural rocks, dead trees and scrub; green woodland
+on lower wetter ground driven by forest noise; 153 road segments connecting 80 sites
+in a single batched mesh; water surfaces in the deepest valleys; 144 named places
 across 8 regions, placed against the terrain so relays sit on ridges and settlements sit
 on flat sheltered ground.
 
@@ -166,25 +168,18 @@ the game layer generates terrain and fog textures and draws markers via `_Draw()
 The original eight are done. This list is what the game most visibly lacks now, roughly in
 order of how much each would change a player's impression.
 
-1. **Rock faces and ground cover, not terrain shape.** *Re-scoped after measuring.* The
-   world is not flat: `--worldreport` gives median slope 15°, p90 43°, p99 65° and peaks at
-   425 m, and shots 20–22 in the high country show real hills, steep sides and valleys.
-   Relief is scaled by the continental field, so the starting basin is flat **by design**
-   and every screenshot before now was taken in it. What is genuinely missing is *material*
-   on steep ground — everything is rounded and grassed, with no exposed rock, scree faces
-   or cliff banding — plus roads, water and woodland.
-2. **Look-around.** The cockpit has instruments that the fixed forward view cannot see
+1. **Look-around.** The cockpit has instruments that the fixed forward view cannot see
    (D-034). A hat switch / head-look, and a padlock on the last thing of interest.
-3. **Building variety.** Settlements are boxes with pitched roofs. Silhouette variety and
+2. **Building variety.** Settlements are boxes with pitched roofs. Silhouette variety and
    some interior suggestion would do more than texture work.
-4. **Airframe wear.** One flat olive drab. Panel lines, dirt streaks, sun-bleaching and
+3. **Airframe wear.** One flat olive drab. Panel lines, dirt streaks, sun-bleaching and
    repaired patches — ideally driven by the damage model, so a patched aircraft looks
    patched.
-5. **Storm weather.** Lightning, and rain on the windscreen. The model already produces
+4. **Storm weather.** Lightning, and rain on the windscreen. The model already produces
    storms (D-026) and nothing distinguishes them from rain.
-6. **A benchmark pass.** Fred asked for periodic comparisons against other RPGs — skill
-   trees, story, graphics, audio, world size — recorded in the wiki. The last one fed
-   D-005a; audio and world-feel have moved a long way since.
+5. **A benchmark pass.** Periodic comparisons against other RPGs — skill trees, story,
+   graphics, audio, world size — recorded in the wiki. The last one fed D-005a; audio
+   and world-feel have moved a long way since.
 
 ## Open questions for Fred
 
