@@ -428,6 +428,26 @@ public sealed partial class Kneeboard : Control
             };
             DrawColoredPolygon(pts, col);
 
+            // Hostile indicator: red ring for uncleared hostile sites, dimmed for cleared.
+            bool hostile = Encounter.IsHostile(site.Id, (int)site.Kind, site.Tier);
+            if (hostile && visited)
+            {
+                var rec = p.Record(site.Id);
+                Color ring = rec.Cleared
+                    ? new Color(0.50f, 0.55f, 0.50f, 0.6f)
+                    : new Color(0.95f, 0.30f, 0.25f, 0.9f);
+                float rr = sz + 3;
+                var hostPts = new Vector2[]
+                {
+                    pos + new Vector2(0, -rr),
+                    pos + new Vector2(rr, 0),
+                    pos + new Vector2(0, rr),
+                    pos + new Vector2(-rr, 0),
+                    pos + new Vector2(0, -rr), // close the shape
+                };
+                DrawPolyline(hostPts, ring, 1.4f);
+            }
+
             // Label (only if map area is large enough for readability)
             if (mapRect.Size.X > 350)
             {

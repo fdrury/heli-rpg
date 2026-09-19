@@ -562,6 +562,78 @@ public sealed partial class Main : Node3D
         return npc;
     }
 
+    // ------------------------------------------------------- hostile encounters
+
+    /// <summary>
+    /// If the player dismounts at a hostile site that has not been cleared, spawn
+    /// the encounter. NPCs are placed in a ring around the site centre at plausible
+    /// guard positions.
+    /// </summary>
+    private void TrySpawnEncounter()
+    {
+        var site = _play.Parked;
+        if (site is null) return;
+
+        if (!Encounter.IsHostile(site.Id, (int)site.Kind, site.Tier)) return;
+
+        var rec = _play.Progress.Record(site.Id);
+        if (rec.Cleared) return;
+
+        int count = Encounter.NpcCount(site.Id, (int)site.Kind);
+        GD.Print($"[encounter] {site.Name} is hostile — spawning {count} hostiles");
+
+        // Place NPCs in a ring around the site, facing inward.
+        var sitePos = site.Ground;
+        float baseAngle = (site.Id * 1.618f) % (Mathf.Pi * 2); // golden-ratio offset per site
+        for (int i = 0; i < count; i++)
+        {
+            float angle = baseAngle + i * (Mathf.Pi * 2f / count);
+            float dist = site.Radius * 0.5f + 8f; // inside the site perimeter
+            var offset = new Vector3(Mathf.Sin(angle) * dist, 0, Mathf.Cos(angle) * dist);
+            var pos = sitePos + offset;
+            float yaw = angle + Mathf.Pi; // face inward
+            SpawnHostileNpc(pos, yaw);
+        }
+
+        _play.Notice?.Invoke("HOSTILE SITE");
+        _play.Progress.Journal($"Hostiles at {site.Name}. {count} of them.");
+    }
+
+    /// <summary>
+    /// Check whether all encounter NPCs are down. If so, clear the site.
+    /// Called each physics frame while on foot.
+    /// </summary>
+    private void CheckEncounterCleared()
+    {
+        if (_hostileNpcs.Count == 0) return;
+
+        bool allDown = true;
+        foreach (var npc in _hostileNpcs)
+        {
+            if (!npc.Health.IsDown) { allDown = false; break; }
+        }
+        if (!allDown) return;
+
+        var site = _play.Parked;
+        if (site is null) return;
+
+        var rec = _play.Progress.Record(site.Id);
+        if (rec.Cleared) return;
+
+        rec.Cleared = true;
+        _play.Progress.Journal($"Cleared {site.Name}. Nobody left standing.");
+        _play.Notice?.Invoke($"{site.Name} cleared");
+        GD.Print($"[encounter] {site.Name} cleared");
+    }
+
+    /// <summary>Remove all hostile NPCs from the scene. Called when boarding.</summary>
+    private void DespawnEncounter()
+    {
+        foreach (var npc in _hostileNpcs)
+            npc.QueueFree();
+        _hostileNpcs.Clear();
+    }
+
     private void HandleOnFootKey(InputEventKey key)
     {
         switch (key.Keycode)
@@ -605,6 +677,8 @@ public sealed partial class Main : Node3D
         Input.MouseMode = Input.MouseModeEnum.Captured;
         _hud.SetOnFoot(true);
         GD.Print("[main] dismounted — on foot");
+
+        TrySpawnEncounter();
     }
 
     /// <summary>Dismount driven by code (for tests). Bypasses CanDismount check.</summary>
@@ -631,6 +705,7 @@ public sealed partial class Main : Node3D
         _camera.SetOnFoot(false);
         Input.MouseMode = Input.MouseModeEnum.Visible;
         _hud.SetOnFoot(false);
+        DespawnEncounter();
         GD.Print("[main] boarded — back in the cockpit");
     }
 
@@ -641,6 +716,7 @@ public sealed partial class Main : Node3D
         _pilot.Visible = false;
         _camera.SetOnFoot(false);
         _hud.SetOnFoot(false);
+        DespawnEncounter();
     }
 
     // -------------------------------------------------------------- per-frame
@@ -669,6 +745,7 @@ public sealed partial class Main : Node3D
         {
             _pilot.BeginFrame();
             _pilot.Move(delta);
+            CheckEncounterCleared();
         }
     }
 

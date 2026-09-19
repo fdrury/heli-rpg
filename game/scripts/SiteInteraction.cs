@@ -37,6 +37,8 @@ public sealed partial class SiteInteraction : Node
     public Progress Progress { get; } = Progress.NewGame();
     public Loadout Loadout { get; } = new();
 
+    /// <summary>Raised when a module is found during salvage.</summary>
+    public event Action<ModuleDef>? ModuleFound;
     /// <summary>Raised when a module is installed. Main wires the system-specific effects.</summary>
     public event Action<ModuleDef>? ModuleInstalled;
     /// <summary>Raised when a module is removed. Main wires the system-specific effects.</summary>
@@ -620,7 +622,7 @@ public sealed partial class SiteInteraction : Node
         foreach (var (id, rec) in progress.AllSites)
             Progress.RestoreSite(id, new SiteRecord
             {
-                Visited = rec.Visited, Surveyed = rec.Surveyed,
+                Visited = rec.Visited, Surveyed = rec.Surveyed, Cleared = rec.Cleared,
                 FuelRemaining = rec.FuelRemaining, SalvageRemaining = rec.SalvageRemaining,
                 LastVisitedAt = rec.LastVisitedAt, VisitCount = rec.VisitCount,
             });

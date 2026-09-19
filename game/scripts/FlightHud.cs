@@ -382,9 +382,17 @@ public sealed partial class FlightHud : Control
 
         DrawString(_font, origin + new Vector2(16, 24), site.Name.ToUpperInvariant(),
                    HorizontalAlignment.Left, -1, 15, Bright);
-        var kindSize = _font.GetStringSize(site.Kind.ToString(), HorizontalAlignment.Left, -1, 12);
-        DrawString(_font, origin + new Vector2(484 - kindSize.X, 24), site.Kind.ToString(),
-                   HorizontalAlignment.Left, -1, 12, Dim);
+
+        // Hostile/cleared tag next to the site kind.
+        bool hostile = Encounter.IsHostile(site.Id, (int)site.Kind, site.Tier);
+        bool cleared = hostile && _play.Progress.Record(site.Id).Cleared;
+        string kindTag = hostile
+            ? (cleared ? $"{site.Kind}  CLEARED" : $"{site.Kind}  HOSTILE")
+            : site.Kind.ToString();
+        Color kindColor = hostile && !cleared ? Danger : Dim;
+        var kindSize = _font.GetStringSize(kindTag, HorizontalAlignment.Left, -1, 12);
+        DrawString(_font, origin + new Vector2(484 - kindSize.X, 24), kindTag,
+                   HorizontalAlignment.Left, -1, 12, kindColor);
 
         float y = origin.Y + 46;
         for (int i = 0; i < actions.Count; i++)

@@ -256,7 +256,12 @@ public sealed partial class PropScatter : Node3D
             bool keep = kind switch
             {
                 PropKind.Scrub => slope > 0.80f && h > WorldHeight.WaterLevel && h < 210f && clump > 0.44f,
-                PropKind.Rock => slope > 0.40f && (slope < 0.92f || clump > 0.62f),
+                // The only rule here that had no waterline test, which stopped mattering
+                // the moment the world gained a sea: without it every ocean chunk spends
+                // its whole scatter budget placing boulders on the sea bed, where they are
+                // invisible under an opaque water surface and still cost a draw call.
+                PropKind.Rock => h > WorldHeight.WaterLevel - 1f
+                                 && slope > 0.40f && (slope < 0.92f || clump > 0.62f),
                 PropKind.Tree => slope > 0.88f && h > WorldHeight.WaterLevel && h < 180f && clump > 0.56f,
                 PropKind.GreenTree => slope > 0.72f && h > WorldHeight.WaterLevel && h < 240f && forest > 0.46f,
                 _ => false,

@@ -2003,3 +2003,51 @@ open water to dip from — see the underslung-load work.
 **Reversibility:** medium. The height function and the region layout both move, and site
 placement follows terrain, so it has to be re-verified against `--worldreport` (shortfalls
 currently zero, remote country 7%). Nothing above it depends on land being continuous.
+
+---
+
+### D-056 — Hostile site encounters
+
+**Date:** 2026-09-19
+
+**What:** Some salvage sites are guarded by scavengers who shoot at you when you dismount.
+The combat system (D-016) existed but was only exercised in the combattest — nothing in the
+regular game world was hostile. This bridges that gap.
+
+**Rules:**
+
+* **Tier 0 is safe.** The Basin is the tutorial; nobody shoots you there.
+* **Tier 1+:** Wrecks, depots and airfields have a ~35–55% chance of being hostile
+  (seed-based, deterministic, rising with tier).
+* **Tier 2+:** Farmsteads join the hostile pool at ~30–35%.
+* **Never hostile:** Settlements (where you trade), workshops (where you repair), fuel caches,
+  relays, and overlooks.
+* **NPC count:** 1–2 at small sites (wrecks, farmsteads), 2–4 at large ones (airfields).
+* **Clearing is permanent.** Down all hostiles and the site is safe on every future visit.
+  Cleared state persists through save/load.
+* **HUD:** The site panel shows "HOSTILE" in danger-red or "CLEARED" in dim, next to the site
+  kind label.
+* **Map:** The kneeboard draws a red diamond outline around uncleared hostile sites (grey when
+  cleared).
+
+**Why this design:**
+
+The game already has three layers of danger in the air (SAMs, guns, seekers) and none on the
+ground. The flight loop gates the map by tier, but once you land the site is safe — which
+means the decision to dismount costs nothing except time. Making some sites hostile means the
+player weighs ammo and health before landing, Rotor Time has a purpose in normal play, and
+the revolver's 18-round budget (exactly enough for one careful encounter, not two) creates
+real resource tension rather than just being an interesting number.
+
+**Why seed-based, not random:** The same world is hostile in the same places on every load,
+which means a player can learn the map. A site that was safe yesterday is safe tomorrow.
+This matches the threat emitter placement (also deterministic) and the module distribution.
+
+**Why settlements are exempt:** The player needs somewhere safe to trade, repair, and take
+contracts. A hostile settlement is a dead loop — you cannot get the payout for clearing it
+because the payout comes from the settlement.
+
+**Reversibility:** high. `Encounter.IsHostile` is a pure function in sim/ with no Godot
+dependency; removing it restores the pre-D-056 behaviour with no other changes needed.
+The `Cleared` field in `SiteRecord` is additive and ignored when the encounter system is
+absent. Six simlab tests cover the rules.

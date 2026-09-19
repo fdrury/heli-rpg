@@ -220,6 +220,17 @@ public sealed partial class LandingController : Node
     /// </summary>
     public static SurfaceKind SurfaceAt(float x, float z, float height, float slopeDeg)
     {
+        // Water first, and before the slope test, because a submerged bank is still water
+        // however steep it is. This is the one surface that is not a landing: Landing
+        // scores it zero whatever the attitude and reports the verdict as "water", and the
+        // brownout model turns it into spray, which blinds a pilot exactly as well as dust
+        // does. The world now has rivers, a drowned wetland and an ocean around the whole
+        // island, so this is no longer a case that cannot happen.
+        if (height < WorldHeight.WaterLevel) return SurfaceKind.Water;
+        // The strand: wet silt and shingle where the water has just been. Not dusty -
+        // wet ground is the one place a helicopter does not brown itself out - but not
+        // ground you want to sit a skid on either.
+        if (height < WorldHeight.WaterLevel + 2.5f) return SurfaceKind.Hardpack;
         if (slopeDeg > 34f) return SurfaceKind.Rock;
         if (height > 150f) return SurfaceKind.Loose;      // bare high ground, gravel
         if (height < 2f) return SurfaceKind.Hardpack;     // dry basin floor

@@ -71,6 +71,13 @@ public sealed partial class HelicopterAudio : Node3D
         _player.Play();
         _playback = (AudioStreamGeneratorPlayback)_player.GetStreamPlayback();
         _synth = new RotorSynth(SampleRate) { Volume = MasterVolume };
+
+        // The caution and warning system hangs off here rather than off the scene builder,
+        // and the reason is ownership rather than taste: this node is the aircraft-side
+        // node that the warning work owns, and Main is assembled by another process. The
+        // panel finds the aircraft, the landing controller and its own canvas layer for
+        // itself, so this is the whole of the wiring - see WarningPanel.Attach.
+        WarningPanel.Attach(this);
     }
 
     public override void _Process(double delta)

@@ -77,6 +77,28 @@ uniform float dead_amount = 0.55;
 
 uniform float normal_strength = 1.1;
 
+// --- Water, shore and the green line -------------------------------------
+//
+// The world drains to ONE level, so "how wet is this ground" is a pure function of how
+// far it is above that level, and it can be answered here without knowing anything about
+// where the rivers are.
+//
+// This matters more than it sounds. The water surface itself is a flat quad the streamer
+// drops in at water_level; what makes a river READ from 300 m is not the water, it is the
+// three bands of ground around it - black silt under the surface, wet mud at the edge,
+// and then the only living green left in a landscape that has otherwise dried out. A
+// pilot navigating without map markers is following that green line, not the water.
+//
+// Default matches WorldHeight.WaterLevel. It is a uniform so a future material can set it
+// rather than have two files disagree about where the sea is.
+uniform float water_level = -5.0;
+uniform float wet_band = 2.6;        // metres above the water that still read as wet mud
+uniform float riparian_band = 17.0;  // metres above it that anything still grows
+
+uniform vec3 silt_color : source_color = vec3(0.055, 0.061, 0.048);
+uniform vec3 mud_color : source_color = vec3(0.118, 0.104, 0.080);
+uniform vec3 riparian_color : source_color = vec3(0.196, 0.247, 0.128);
+
 varying vec3 world_pos;
 varying vec3 world_normal;
 varying vec2 surface_flags;   // x = true surface slope at this column
@@ -199,6 +221,37 @@ void fragment() {
     }
 
     col = desaturate(col, saturation) * grade_tint;
+
+    // --- Water, shore and the green line ----------------------------------
+    // After the grade, because these are the bands the eye navigates by and they should
+    // not be desaturated along with everything else. That is the whole point of them: in
+    // a landscape pushed toward dead olive and ochre, the one place with any colour left
+    // is the one place with water in it.
+    float above = world_pos.y - water_level;
+
+    // Under the surface. Mostly hidden by the water plane the streamer drops in, but only
+    // chunks that measure themselves as having water get one, and the coarse levels of
+    // detail can miss a narrow channel entirely - so the bed has to read as a river bed
+    // rather than as dry ground with a hole in it.
+    float submerged = 1.0 - smoothstep(-0.4, 1.2, above);
+
+    // The strand. Ground the water has had recently: dark, smooth, and far less rough
+    // than anything dry, so it catches the sun differently from the bank above it. This
+    // is the single strongest cue at altitude that a line on the ground is a river and
+    // not a road.
+    float wetness = 1.0 - smoothstep(0.0, wet_band, above);
+
+    // And the green. What still grows in a country that has dried out is whatever has its
+    // feet in the water, so this band IS the map - a pilot with no markers follows it.
+    // Keyed on height alone, which works because the whole world drains to one level:
+    // ground within seventeen metres of the waterline is riverbank, lake shore or dune,
+    // and there is nowhere else on the island that low.
+    float green = (1.0 - smoothstep(wet_band, riparian_band, above)) * (1.0 - submerged);
+
+    col = mix(col, riparian_color * (0.80 + patch * 0.50), green * 0.62 * (1.0 - rock_w));
+    col = mix(col, mud_color * (0.75 + patch * 0.60), wetness * 0.85);
+    col = mix(col, silt_color, submerged);
+    rgh = mix(rgh, 0.26, max(wetness, submerged) * 0.9);
     col *= mix(0.80, 1.14, fbm(uv * 0.00026));   // very large scale brightness drift
 
     ALBEDO = clamp(col, vec3(0.0), vec3(1.0));

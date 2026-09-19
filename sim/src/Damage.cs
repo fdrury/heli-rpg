@@ -425,7 +425,10 @@ public sealed class DamageState
         double rotorFrac = System.Math.Clamp(load.RotorFraction, 0, 1.5);
         double torqueFrac = System.Math.Max(0, load.TorqueFraction);
         double shaftPower = System.Math.Max(0, load.ShaftPowerW);
-        double powerFrac = System.Math.Clamp(load.PowerFraction, 0, 1.2);
+        // Clamped at 2.5, not 1.2. In flight nothing can exceed 1 - you cannot deliver more
+        // power than the engine has - but during a start this is fuel over airflow, and the
+        // whole of the hot-start failure mode lives above 1.
+        double powerFrac = System.Math.Clamp(load.PowerFraction, 0, 4.0);
         double ambient = load.AmbientTempC;
         _lastRotorFraction = rotorFrac;
 
@@ -613,8 +616,17 @@ public sealed class DamageState
         return hours;
     }
 
-    private static double TotTargetC(double powerFrac, double ambientC)
-        => ambientC + 250.0 + 340.0 * System.Math.Clamp(powerFrac, 0, 1.15);
+    /// <summary>
+    /// Turbine outlet temperature for a given fraction of the engine's work, deg C.
+    ///
+    /// Public, and clamped well above 1, because a start is the one time this fraction is
+    /// not "how much power am I making". On the start schedule the fuel is roughly fixed
+    /// and the airflow is whatever the starter has managed, so the ratio can be two or
+    /// three - which is exactly a hot start, and the gauge has to be able to show it.
+    /// <c>Powerplant</c> uses this same function so the needle and the damage agree.
+    /// </summary>
+    public static double TotTargetC(double powerFrac, double ambientC)
+        => ambientC + 250.0 + 340.0 * System.Math.Clamp(powerFrac, 0, 4.0);
 
     /// <summary>
     /// Heat the gearbox can shed at this temperature, W/K.
@@ -806,6 +818,21 @@ public sealed class DamageState
     public double EnginePowerFactor
         => (0.25 + 0.75 * Health(Component.Engine))
            * (0.75 + 0.25 * System.Math.Clamp(Health(Component.FuelSystem) / 0.40, 0, 1));
+
+    /// <summary>
+    /// How much governor is left, 0..1.
+    ///
+    /// The fuel control and its droop compensator are bolted to the engine and fed by the
+    /// fuel system, so they go the way those go - but they go <i>first</i>, and that is the
+    /// point of the curve. Governing is gone by the time the engine is at 0.35 health,
+    /// while the engine itself is still making half its power and is serviceable until
+    /// <see cref="EngineFloor"/>. The band between them is an aircraft that still flies and
+    /// whose rotor speed is suddenly the pilot's job, which is a far more interesting
+    /// failure than one more multiplier on power.
+    /// </summary>
+    public double GovernorAuthority
+        => System.Math.Clamp((Health(Component.Engine) - 0.35) / 0.40, 0, 1)
+           * System.Math.Clamp(Health(Component.FuelSystem) / 0.50, 0, 1);
 
     /// <summary>
     /// Transmission torque limit. A damaged gearbox cannot take what it used to, so the

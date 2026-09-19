@@ -1,5 +1,10 @@
 # Attributions
 
+> **Moved.** The canonical register is now **[`docs/wiki/attribution.md`](docs/wiki/attribution.md)**,
+> which adds music, fonts and the credits text that attribution-required licences oblige
+> us to print. Add new rows there. This file is left in place because other documents link
+> to it, and it will be trimmed to a pointer once they stop.
+
 Everything third-party used in this project, with its licence. Kept current because the
 project may eventually be shared, and reconstructing provenance after the fact is
 miserable. Nothing here is commercial-licensed; nothing here requires payment.

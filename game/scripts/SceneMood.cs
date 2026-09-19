@@ -61,6 +61,12 @@ public static class SceneMood
         root.AddChild(new WeatherEffects { Name = "WeatherEffects" });
         root.AddChild(new WeatherAudio { Name = "WeatherAudio" });
         root.AddChild(new StormEffects { Name = "StormEffects" });
+        // The cockpit radio (D-058). Added here rather than in the scene assembly for the
+        // same reason WeatherAudio is: it is a voice that belongs to the world rather than
+        // to the aircraft, it finds everything it needs by walking the tree, and a node
+        // that needs edits to three other files in order to exist is a node that cannot be
+        // added without a merge conflict.
+        root.AddChild(new CockpitRadio { Name = "CockpitRadio" });
     }
 
     private static WorldEnvironment BuildEnvironment()

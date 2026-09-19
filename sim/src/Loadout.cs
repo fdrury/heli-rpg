@@ -21,9 +21,9 @@ public sealed record ModuleDef(
 /// <summary>
 /// What is bolted to Hugh, and what is in the bag waiting to be.
 ///
-/// This is the refit system promised by D-011. Eight bays, each holding one specific
-/// module. The kneeboard shows all eight whether or not they are filled, because you
-/// cannot want a thing you do not know exists (D-005a).
+/// This is the refit system promised by D-011. One bay per module, each holding one
+/// specific module. The kneeboard shows every bay whether or not it is filled, because
+/// you cannot want a thing you do not know exists (D-005a).
 ///
 /// Every module has mass and a position, so the flight model feels it. The exhaust
 /// suppressor adds drag. The long-range tank adds fuel capacity and weight. None of this
@@ -124,6 +124,16 @@ public sealed class Loadout
         new("hoist",        "Rescue hoist",
             "Reach people without landing.",
             40, new Vec3(0.8, -1.3, -0.5),    Vec3.Zero,           0,     3),
+
+        // A receiver and a cassette deck in the console, and nothing about it is a special
+        // case (D-058). It is a module like any other: mass on the airframe, a bay on the
+        // kneeboard, parts to fit it, and it runs off the avionics stack - so a hit that
+        // takes the navigation takes the music with it, because it is the same stack.
+        // Nine kilos is a period set and its bracket; the point of D-011 is that even this
+        // is weight the aircraft has to carry.
+        new("radio",        "Cockpit radio",
+            "A receiver and a tape deck. Runs off the avionics bus.",
+            9,  new Vec3(1.9, -0.35, -0.30),  Vec3.Zero,           0,     1),
     };
 
     public static readonly IReadOnlyDictionary<string, ModuleDef> Catalog;

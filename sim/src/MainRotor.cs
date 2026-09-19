@@ -45,6 +45,12 @@ public sealed class MainRotor
     /// <summary>How many radial bands <see cref="RadialTorque"/> reports.</summary>
     public const int RadialBins = 10;
 
+    // TEMPORARY diagnostic switch (ROTORWASH_FULLBETA=1) - remove before shipping.
+    internal static readonly bool DebugFullBeta =
+        System.Environment.GetEnvironmentVariable("ROTORWASH_FULLBETA") == "1";
+    internal static readonly double DebugConing =
+        double.TryParse(System.Environment.GetEnvironmentVariable("ROTORWASH_CONING"), out var _dc) ? _dc : double.NaN;
+
     /// <summary>
     /// Shaft torque contributed by each tenth of the radius, N·m, from the last update.
     ///
@@ -291,7 +297,7 @@ public sealed class MainRotor
                     // Measured on the six-DOF autorotation trim: 2475 -> 2319 fpm at 70 kt
                     // (2.86:1 -> 3.06:1) with hover power unchanged at 814 kW. See D-051.
                     double uR = Vec3.Dot(vElem, er);
-                    double kCone = cfg.ConingInflow;
+                    double kCone = double.IsNaN(DebugConing) ? cfg.ConingInflow : DebugConing;
                     // Use the mean CONING angle, not the instantaneous flap angle, for the
                     // sinB and cosB factors. The coning effect (air through a cone) depends
                     // on the disc's cone geometry, not on where the cyclic tilts it. Using
@@ -300,7 +306,9 @@ public sealed class MainRotor
                     // — reversing lateral control through the bridge. The mean coning angle
                     // keeps the μ·β₀·cos(ψ) term that helps autorotation and drops the
                     // cross-terms that caused the divergence. See D-054.
-                    double sBc = sinCone * kCone, cBc = 1.0 + (cosCone - 1.0) * kCone;
+                    double sBc, cBc;
+                    if (DebugFullBeta) { sBc = sinB * kCone; cBc = 1.0 + (cosB - 1.0) * kCone; }
+                    else { sBc = sinCone * kCone; cBc = 1.0 + (cosCone - 1.0) * kCone; }
                     double uP = viLocal * cBc - (cBc * Vec3.Dot(vElem, _zd) + sBc * uR);
 
                     double u2 = uT * uT + uP * uP;

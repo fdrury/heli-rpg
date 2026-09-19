@@ -145,6 +145,17 @@ public sealed class Helicopter
     /// <summary>Enable the simple spring-damper ground model (headless use only).</summary>
     public bool UseInternalGroundModel { get; set; } = true;
 
+    /// <summary>
+    /// Whatever is hanging on the cargo hook, or null.
+    ///
+    /// It is deliberately NOT part of <see cref="Airframe"/>'s mass, because a load on a
+    /// line is a second body and not a heavier aircraft: it swings, it lags, and what the
+    /// airframe feels is cable tension at the hook. Stepped from inside
+    /// <see cref="ComputeWrench"/> so no caller can advance the aircraft and leave the load
+    /// behind. See <see cref="SlingLoad"/>.
+    /// </summary>
+    public IExternalLoad? Hook { get; set; }
+
     private Vec3 _lastAccelBody;
     private double _pMain, _pTail, _pDrive, _pPara, _pInduced, _pProfile;
     private double _cachedMass;
@@ -273,6 +284,10 @@ public sealed class Helicopter
         Engine.SetRunning();
         RotorOmega = Airframe.MainRotor.NominalOmega;
         SeedRotorForWeight();
+        // And re-hang anything on the hook, for exactly the same reason: a load left
+        // swinging from the previous evaluation makes the residual a function of
+        // evaluation order, and the solver measures drift instead of gradient.
+        Hook?.Reset(this);
     }
 
     /// <summary>Seed the rotor inflow and coning for a rotor already carrying the aircraft.</summary>
@@ -341,7 +356,11 @@ public sealed class Helicopter
         // makes the aircraft depart the moment anybody touches the pedals.
         double tailPitch = pedalCentre - cmd.Pedal * pedalHalf * cfg.SpinSign;
 
+        // The throttle is two controls in one lever, and which one it is depends on whether
+        // there is a governor listening. Governed, it is a switch: flight or idle. With the
+        // governor out of the loop it is the fuel control, and the pilot is holding it.
         Engine.FlightIdle = cmd.Throttle < 0.5;
+        Engine.ThrottleLever = cmd.Throttle;
 
         // --- Rotors ----------------------------------------------------------
         var mr = Rotor.Update(vAirBody, omega, RotorOmega, collective, cyclicFwd, cyclicRight,
@@ -381,8 +400,17 @@ public sealed class Helicopter
         double loadTorque = mr.ShaftTorque + tailTorqueAtMain + losses;
 
         double densityRatio = rho / Atmosphere.SeaLevelDensity;
+        double oatC = atmo.TemperatureAt(altitude) - 273.15;
         var pp = Engine.Update(RotorOmega, cfg.NominalOmega, loadTorque, densityRatio, dt,
-                               Damage.EnginePowerFactor, Damage.TransmissionFactor);
+                               Damage.EnginePowerFactor, Damage.TransmissionFactor,
+                               Damage.GovernorAuthority, oatC);
+
+        // A start that cooked the turbine is charged here, once, on the step the start
+        // ends. The powerplant knows a start is happening and how hot it got; the damage
+        // model knows what that is worth. Neither needs a reference to the other.
+        if (pp.HotStartDamage > 0)
+            Damage.Apply(Component.Engine, pp.HotStartDamage, DamageCause.Heat,
+                         "turbine overtemperature during start");
 
         double brakeTorque = cmd.Brake * 4000.0 * Math.Sign(RotorOmega);
         double netTorque = pp.ShaftTorque - loadTorque - brakeTorque;
@@ -445,6 +473,17 @@ public sealed class Helicopter
 
         // --- Damping from air on the fuselage in rotation ---------------------
         moment += new Vec3(-omega.X * 900.0, -omega.Y * 2200.0, -omega.Z * 1500.0) * (0.3 + densityRatio);
+
+        // --- Anything on the hook ---------------------------------------------
+        //
+        // Last of the force contributors and before the wrench is published, so the trim
+        // solver (which reads LastForceBody) balances the aircraft WITH the load on it.
+        if (Hook is not null)
+        {
+            Hook.Update(this, dt, out Vec3 hookForce, out Vec3 hookMoment);
+            forceBody += hookForce;
+            moment += hookMoment;
+        }
 
         momentBody = moment;
         LastForceBody = forceBody;
@@ -524,9 +563,14 @@ public sealed class Helicopter
             RotorFraction: RotorOmega / Math.Max(cfg.NominalOmega, 1e-6),
             TorqueFraction: pp.TorquePercent,
             ShaftPowerW: Math.Max(pp.PowerDelivered, 0),
-            PowerFraction: pp.PowerDelivered / Math.Max(pp.PowerAvailable, 1.0),
-            AmbientTempC: atmo.TemperatureAt(altitude) - 273.15,
-            EngineRunning: Engine.State == EngineState.Running), dt);
+            // Not delivered-over-available, which is only the same thing while the engine
+            // is running. During a start it is fuel over airflow, and it is the only way a
+            // hot start reaches the TOT gauge the pilot is supposed to be watching.
+            PowerFraction: pp.TotFraction,
+            AmbientTempC: oatC,
+            // Combustion, not the state machine: an engine that lit ten seconds ago and is
+            // still coming up to idle is burning fuel and making heat.
+            EngineRunning: Engine.Lit || Engine.State == EngineState.Running), dt);
     }
 
     /// <summary>Move the actual control positions toward the pilot demand at a finite rate.</summary>
