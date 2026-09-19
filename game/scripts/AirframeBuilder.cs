@@ -133,6 +133,7 @@ public static class AirframeBuilder
         parent.AddChild(Mesh("CockpitShell", BuildCockpitShell(), mats.Interior));
         parent.AddChild(Mesh("CockpitFittings", BuildCockpitFittings(), mats.Metal));
         parent.AddChild(CockpitFill());
+        parent.AddChild(new AircraftLights { Name = "Lights" });
         parent.AddChild(Mesh("Skids", BuildSkids(), mats.Metal));
         parent.AddChild(Mesh("Mast", BuildMast(), mats.Metal));
 

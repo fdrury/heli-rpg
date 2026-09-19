@@ -44,7 +44,7 @@ public sealed partial class ScreenshotDirector : Node
         // for weeks without anyone noticing.
         new("14_dawn",           CameraMode.Chase,  160f,  38f,  1.3f, null,  7.7),
         new("15_dusk",           CameraMode.Chase,  160f,  38f,  4.6f, null, 16.4),
-        new("16_night",          CameraMode.Chase,  160f,  38f,  2.2f, null, 22.0),
+        new("16_night",          CameraMode.Chase,   45f,  30f,  2.2f, null, 22.0),
         new("17_night_cockpit",  CameraMode.Cockpit,120f,  32f,  2.1f, null, 22.0),
     };
 

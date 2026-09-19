@@ -727,3 +727,30 @@ the gradient paints behind it — so the sun rendered as a **dark circular hole*
 the horizon. The gradient sells a sunset better than a disc does.
 
 **Reversible.** Both are single constants.
+
+## D-028 — The aircraft has lights
+
+**Decision.** `AircraftLights` adds navigation lights (red left, green right, white tail),
+a flashing anti-collision beacon, and a landing light on **L**, auto-on in the dark until
+the pilot touches the switch.
+
+**Why.** Added the moment night became flyable, because a night with no lights on the
+aircraft is a night where you cannot tell which way you are pointing. The nav arrangement is
+genuinely useful rather than decorative — a glance along the boom tells you your own
+orientation.
+
+Only two are real lights. The beacon gets an omni because a red glow washing over the boom
+is the whole point of it, and the landing light is a spot because it has to illuminate
+ground. The nav lights are emissive geometry with no light attached: they exist to be seen,
+not to light anything, and three more omnis on every aircraft buys nothing.
+
+Two bugs, both found by looking rather than reasoning:
+
+* The lenses were `ShadingMode.Unshaded`, which writes albedo straight out and **ignores
+  emission entirely** — so they never exceeded 1.0, never bloomed, and were invisible at
+  night, which is the only time they matter.
+* The auto-on rule read the clock once in `_Ready` and got the wrong answer every time,
+  because the aircraft is built before anything has decided what time it is. It is a
+  per-frame rule now, which is better behaviour regardless.
+
+**Reversible.** One node, added in one line of `AirframeBuilder.Build`.
