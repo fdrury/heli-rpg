@@ -396,6 +396,42 @@ the budget for a 1.7B at the measured latency. By the third visit it reads:
 **Reversibility:** high. The corpus is data, the coda is strictly additive, and the whole
 thing degrades to the baked layer if the model is absent, slow or wrong.
 
+### D-018 — Dialogue wired into the game · 2026-09-18
+Built to D-006a and D-015. Six files, three new.
+
+**NPC roster.** Mattie (the tutorial NPC from D-015) is placed at the first Basin
+settlement, determined by scanning the site list at startup — deterministic, no editor
+data. Every other settlement gets a generic settler created lazily from a seeded RNG:
+20 names, 5 persona templates that mention the site name, shared dialogue bank of 25
+lines covering first meeting, returning visits, fuel/damage/standing states, partings
+and talk. The settler factory lives in `DialogueCorpus` next to Mattie, so both are
+tested by the same sim test suite.
+
+**CodaServer.** A `Node` that manages `llama-server.exe` as a subprocess on localhost.
+Finds a free port at startup so multiple instances do not collide. Held in a Windows
+Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`) so an unhandled Godot crash kills
+the server automatically. If the binary or model is absent, `ModelAvailable` stays
+false and the game runs on baked lines — process isolation *is* the graceful
+degradation, per D-006a.
+
+**DialoguePanel.** Conversation UI drawn with `_Draw()` to match the HUD aesthetic:
+dark panel, pale green text, same colour palette as the instruments. Text reveals
+word by word at half the estimated speaking rate — fast enough that reading never
+feels held back, slow enough that the coda latency (0.52 s on a 1080) is invisible
+behind even a short line. The coda appends in a warm accent colour after the baked
+line finishes. State machine: Closed → Speaking → Options → Speaking/Farewell → Closed.
+Hard coda abandon at 4 seconds.
+
+**Integration.** `SiteInteraction` gains a lazy NPC registry and a Talk action at
+settlements. First contact learns a `Contact` knowledge entry. `Main` routes input:
+number keys to dialogue options, Escape to close, Space to skip reveal, all other
+keys swallowed while the panel is open. `FlightHud` hides the site action panel
+during dialogue to avoid visual overlap.
+
+**Reversibility:** high. The panel is a single `Control` node, the server is a single
+`Node`, and the NPC registry is a dictionary in `SiteInteraction`. Removing dialogue
+is removing three nodes and a dictionary.
+
 ### D-016 — Mesh winding was backwards everywhere · 2026-09-18 · **[FRED SPOTTED IT]**
 Godot treats **clockwise** as front-facing. Every hand-built mesh in this project used the
 textbook counter-clockwise convention, which is the wrong one here.

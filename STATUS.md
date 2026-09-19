@@ -8,10 +8,13 @@ every choice and why; `docs/wiki/benchmarks/` is where it was measured against t
 
 ## Where it is now
 
-**The core loop closes.** You can fly a physically simulated Huey across a streamed
-16 km world, find a named place, put it down on a slope, shut down, and take the fuel
-that is there — and the log will tell you it was the last of it. Verified end to end,
-headless, every build.
+**The core loop closes, and people talk.** You can fly a physically simulated Huey
+across a streamed 16 km world, find a named settlement, put it down, shut down, and
+talk to whoever lives there. Mattie waits at the first Basin settlement; everyone else
+is a settler with a name and a persona generated from the site. The conversation UI
+draws in the HUD aesthetic, reveals text word by word, and the local-model coda
+appends seamlessly when the binary is present — or the baked line ends naturally and
+nothing is lost.
 
 60 fps at 1600x900 on a GTX 1650 Ti, which is well under the GTX 1080 target.
 
@@ -84,8 +87,9 @@ RWR logs every emitter that paints you, so the sortie that nearly killed you pay
 specific match, plus the local-model coda contract: gated on whether the spoken line covers
 the measured latency, committed a whole sentence at a time, and validated against invented
 quests, questions and anachronisms. NPCs remember across visits, which the research found is
-where the perceived magic actually lives. No model wired up yet — the contract and the
-guardrails are, and everything degrades to the baked layer without one.
+where the perceived magic actually lives. The llama-server subprocess is wired up behind a
+Windows Job Object for crash safety, the conversation UI draws in the HUD aesthetic with
+word-by-word reveal, and everything degrades to the baked layer when the model is absent.
 
 **Play** — refuel, repair, salvage, survey, tune a relay, ask around. Carried load is real
 mass and is felt in the hover. The kneeboard records facts, not inferences, and shows the
@@ -93,8 +97,6 @@ empty bays.
 
 ## Next
 
-1. Wire dialogue into the game: NPCs at settlements, the conversation UI, and the
-   llama-server subprocess behind the coda (D-006a names the runtime and the flags)
 4. The refit system — modules on real hardpoints (D-011)
 5. On-foot: third person, Rotor Time
 6. Weather, night, and the flying that goes with them

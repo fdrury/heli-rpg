@@ -1,13 +1,14 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
 using Rotorwash.Sim;
+using HttpClient = System.Net.Http.HttpClient;
+using StringContent = System.Net.Http.StringContent;
 
 namespace Rotorwash;
 
