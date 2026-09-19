@@ -32,6 +32,10 @@ public sealed partial class AircraftLights : Node3D
     private MeshInstance3D _beaconLens = null!;
     private MeshInstance3D[] _nav = new MeshInstance3D[3];
     private StandardMaterial3D _beaconMat = null!;
+    private StandardMaterial3D _panelMat = null!;
+    private OmniLight3D _panelFlood = null!;
+    private readonly OmniLight3D[] _fill = new OmniLight3D[2];
+    private readonly System.Collections.Generic.List<MeshInstance3D> _panel = new();
 
     private double _t;
     private bool _keyHeld;
@@ -64,6 +68,54 @@ public sealed partial class AircraftLights : Node3D
         _nav[2] = Lens(new Vector3(0, 0.92f, NoseZ + 11.4f), 0.13f,
                        Emissive(new Color(1.0f, 0.96f, 0.90f), 7.0f));
         foreach (MeshInstance3D m in _nav) AddChild(m);
+
+        // --- Cockpit skylight fill ---------------------------------------------
+        // Standing in for the sky bounce the renderer does not model at this quality tier.
+        // It belongs here rather than in the airframe because it has to DIM: it represents
+        // daylight finding its way in through the glass, and at night there is none. Built
+        // as part of the airframe it stayed at full strength after dark, and the cockpit
+        // sat brightly lit inside a black world.
+        _fill[0] = Fill("FillLower", new Vector3(0, 0.15f, NoseZ + 2.00f), 3.6f);
+        _fill[1] = Fill("FillUpper", new Vector3(0, 0.62f, NoseZ + 1.55f), 2.8f);
+        foreach (OmniLight3D f in _fill) AddChild(f);
+
+        // --- Instrument faces and panel flood ----------------------------------
+        // Dials you can read in the dark, and a wash of warm light over the console. The
+        // colour is the traditional one for a reason: it is dim enough not to wreck night
+        // vision and it reads instantly as "instrument" rather than "warning".
+        _panelMat = Emissive(new Color(1.0f, 0.52f, 0.20f), 1.0f);
+        for (int i = 0; i < 2; i++)
+        {
+            float x = i == 0 ? -0.62f : 0.62f;
+            for (int r = 0; r < 2; r++)
+            {
+                for (int c = 0; c < 3; c++)
+                {
+                    var face = new MeshInstance3D
+                    {
+                        Mesh = new QuadMesh { Size = new Vector2(0.115f, 0.115f) },
+                        Position = new Vector3(x - 0.20f + c * 0.20f, -0.34f - r * 0.22f, NoseZ + 1.23f),
+                        MaterialOverride = _panelMat,
+                        CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                    };
+                    // Quads face +Z by default, which is aft - toward the pilot. Correct.
+                    _panel.Add(face);
+                    AddChild(face);
+                }
+            }
+        }
+
+        _panelFlood = new OmniLight3D
+        {
+            Name = "PanelFlood",
+            Position = new Vector3(0, -0.02f, NoseZ + 1.55f),
+            LightColor = new Color(1.0f, 0.58f, 0.26f),
+            OmniRange = 1.9f,
+            OmniAttenuation = 1.8f,
+            ShadowEnabled = false,
+            LightEnergy = 0f,
+        };
+        AddChild(_panelFlood);
 
         // --- Landing light -----------------------------------------------------
         // Under the nose, aimed down the approach path rather than straight ahead: a
@@ -119,6 +171,23 @@ public sealed partial class AircraftLights : Node3D
         foreach (MeshInstance3D m in _nav) m.Visible = Powered;
 
         _landing.Visible = LandingLightOn && Powered;
+
+        // Panel lighting follows the outside light, the way a pilot would turn it up as
+        // the day goes. Full dark is not full brightness: instrument lighting that outshines
+        // the world outside is how you lose the horizon.
+        float day = (float)SceneMood.SunNow.DaylightFraction;
+        float dark = 1f - day;
+
+        // Skylight fill follows the daylight, with a small floor so the interior never goes
+        // completely black even with the panel lights off.
+        _fill[0].LightEnergy = 0.10f + 1.40f * day;
+        _fill[1].LightEnergy = 0.06f + 1.04f * day;
+        float lit = Powered ? Mathf.SmoothStep(0f, 1f, dark) : 0f;
+        // Restrained. Instrument lighting that outshines the world is how you lose the
+        // horizon, and the first attempt blew the glareshield to white.
+        _panelMat.EmissionEnergyMultiplier = 0.10f + lit * 0.85f;
+        _panelFlood.LightEnergy = lit * 0.30f;
+        _panelFlood.Visible = _panelFlood.LightEnergy > 0.01f;
     }
 
     // ------------------------------------------------------------------- helpers
@@ -136,6 +205,18 @@ public sealed partial class AircraftLights : Node3D
         // A nav light is a point source in reality; a two-sided lens is the cheapest way to
         // stop it vanishing at grazing angles.
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+    };
+
+    private static OmniLight3D Fill(string name, Vector3 at, float range) => new()
+    {
+        Name = name,
+        Position = at,
+        LightColor = new Color(0.80f, 0.84f, 0.92f),
+        LightEnergy = 0f,
+        OmniRange = range,
+        OmniAttenuation = 1.1f,
+        ShadowEnabled = false,
+        LightSpecular = 0.25f,
     };
 
     private static MeshInstance3D Lens(Vector3 at, float radius, Material mat) => new()

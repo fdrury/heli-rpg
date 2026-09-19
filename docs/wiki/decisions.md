@@ -1000,3 +1000,21 @@ loads, and verifies fourteen properties survived.
 **Reversibility:** high. `SaveData` is one file with no dependents outside the save system.
 The restore methods on `Progress`, `Damage`, `Loadout`, `DialogueBank`, `PilotHealth` are
 each one or two lines. The game-layer save/load is ~150 lines in Main.
+
+## D-034 — Cockpit lighting belongs to the lights, not the airframe
+
+**Decision.** The cockpit skylight fill moved from `AirframeBuilder` into `AircraftLights`,
+and instrument faces plus a panel flood were added, all driven by the sun's elevation.
+
+**Why.** The fill stands in for sky bounce the renderer does not model at this tier, so it
+has to **dim** — it is daylight finding its way in through the glass. Built as part of the
+airframe it was a constant, and after dark the cockpit sat brightly lit inside a black
+world, which is exactly backwards.
+
+Two more, both visible only in a render:
+
+* The instrument bezels were at `NoseZ + 0.97`, the *forward* face of a panel spanning 0.98
+  to 1.18 — every instrument was mounted facing out of the nose, where only the weather
+  could read them.
+* The first panel lighting pass blew the glareshield to white. Instrument lighting that
+  outshines the world outside is how you lose the horizon; it is much more restrained now.

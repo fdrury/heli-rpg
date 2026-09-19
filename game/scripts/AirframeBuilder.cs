@@ -132,7 +132,6 @@ public static class AirframeBuilder
         parent.AddChild(Mesh("Stabiliser", BuildStabiliser(), mats.Body));
         parent.AddChild(Mesh("CockpitShell", BuildCockpitShell(), mats.Interior));
         parent.AddChild(Mesh("CockpitFittings", BuildCockpitFittings(), mats.Metal));
-        parent.AddChild(CockpitFill());
         parent.AddChild(new AircraftLights { Name = "Lights" });
         parent.AddChild(Mesh("Skids", BuildSkids(), mats.Metal));
         parent.AddChild(Mesh("Mast", BuildMast(), mats.Metal));
@@ -140,37 +139,6 @@ public static class AirframeBuilder
         BuildRotorHub(parent, airframe, mats);
         BuildTailRotor(parent, airframe, mats);
     }
-
-    /// <summary>
-    /// Bounced skylight inside the cockpit.
-    ///
-    /// The engine gives the interior nothing: the sun is blocked by the airframe and the
-    /// sky contribution that would bounce around a real cabin is not modelled at this
-    /// quality tier. One soft omni standing in for it is what almost every flight sim
-    /// does, and it costs one light.
-    /// </summary>
-    private static Node3D CockpitFill()
-    {
-        // Two, not one. A single source low between the seats leaves the roof and the
-        // overhead console unlit, because everything up there faces away from it - and an
-        // unlit box in the top of frame reads as a hole in the aircraft.
-        var root = new Node3D { Name = "CockpitFill" };
-        root.AddChild(Fill("Lower", new Vector3(0, 0.15f, NoseZ + 2.00f), 1.5f, 3.6f));
-        root.AddChild(Fill("Upper", new Vector3(0, 0.62f, NoseZ + 1.55f), 1.1f, 2.8f));
-        return root;
-    }
-
-    private static OmniLight3D Fill(string name, Vector3 at, float energy, float range) => new()
-    {
-        Name = name,
-        Position = at,
-        LightColor = new Color(0.80f, 0.84f, 0.92f),
-        LightEnergy = energy,
-        OmniRange = range,
-        OmniAttenuation = 1.1f,
-        ShadowEnabled = false,
-        LightSpecular = 0.25f,
-    };
 
     // ---------------------------------------------------------------- cockpit
 
@@ -254,11 +222,15 @@ public static class AirframeBuilder
             AddBox(st, new Vector3(x - 0.16f, -1.00f, NoseZ + 1.52f), new Vector3(0.15f, 0.07f, 0.26f));
             AddBox(st, new Vector3(x + 0.16f, -1.00f, NoseZ + 1.52f), new Vector3(0.15f, 0.07f, 0.26f));
 
-            // Instrument bezels, proud of the panel so they catch a highlight.
+            // Instrument bezels, proud of the panel on the side the PILOT is on.
+            //
+            // They were at NoseZ + 0.97, which is the forward face of a panel spanning 0.98
+            // to 1.18 - so every instrument was mounted facing out of the nose, where only
+            // the weather could read them.
             for (int r = 0; r < 2; r++)
                 for (int c = 0; c < 3; c++)
-                    AddBox(st, new Vector3(x - 0.20f + c * 0.20f, -0.34f - r * 0.22f, NoseZ + 0.97f),
-                                new Vector3(0.15f, 0.15f, 0.04f));
+                    AddBox(st, new Vector3(x - 0.20f + c * 0.20f, -0.34f - r * 0.22f, NoseZ + 1.20f),
+                                new Vector3(0.15f, 0.15f, 0.05f));
         }
 
         st.GenerateNormals();
