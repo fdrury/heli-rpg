@@ -112,7 +112,7 @@ public static class WorldHeight
     /// identical. Relief is not decoration here - it is the terrain-masking mechanic that
     /// D-010 depends on.
     /// </summary>
-    public static float At(float x, float z)
+    public static float RawAt(float x, float z)
     {
         float wx = Warp.GetNoise2D(x, z) * 1100f;
         float wz = Warp.GetNoise2D(x + 4000f, z - 2500f) * 1100f;
@@ -173,6 +173,15 @@ public static class WorldHeight
 
         return h - 30f;
     }
+
+    /// <summary>
+    /// Terrain height including the graded pads under every named place.
+    ///
+    /// Everything except site placement itself calls this. Placement uses
+    /// <see cref="RawAt"/>, because the pads are defined in terms of where the sites are
+    /// and asking this function during placement would be circular.
+    /// </summary>
+    public static float At(float x, float z) => SitePads.Apply(x, z, RawAt(x, z));
 
     /// <summary>Surface normal by central difference.</summary>
     public static Vector3 NormalAt(float x, float z, float e = 2.0f)

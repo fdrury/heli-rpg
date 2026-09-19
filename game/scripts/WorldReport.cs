@@ -128,11 +128,18 @@ public static class WorldReport
         distances.Sort();
         float P(float pct) => distances[Mathf.Clamp((int)(distances.Count * pct), 0, distances.Count - 1)];
 
+        // Remoteness: how much of the country is genuinely away from anything. A map with
+        // none of this has no journeys in it, only errands.
+        int remote2 = 0, remote4 = 0;
+        foreach (float d in distances) { if (d > 2000) remote2++; if (d > 4000) remote4++; }
+
         float area = Mathf.Pow(half * 2 / 1000f, 2);
         GD.Print($"coverage over {area:F0} km2");
         GD.Print($"  site density              {WorldMap.Sites.Count / area:F2} per km2");
         GD.Print($"  distance to nearest site  median {P(0.5f):F0} m   p90 {P(0.9f):F0} m   worst {P(0.999f):F0} m");
         GD.Print($"  at 55 m/s cruise          median {P(0.5f) / 55:F0} s   p90 {P(0.9f) / 55:F0} s");
+        GD.Print($"  remote country            {remote2 * 100.0 / distances.Count:F0} % is over 2 km from anywhere, " +
+                 $"{remote4 * 100.0 / distances.Count:F0} % is over 4 km");
         GD.Print("  (Skyrim-calibrated target, and CD Projekt Red's stated rule: one every ~40-48 s)");
     }
 }

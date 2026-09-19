@@ -251,8 +251,13 @@ public sealed partial class TerrainStreamer : Node3D
                 for (int i = 0; i < res - 1; i++)
                 {
                     int a = j * res + i, b = a + 1, c2 = (j + 1) * res + i + 1, d = (j + 1) * res + i;
-                    indices.Add(a); indices.Add(d); indices.Add(c2);
-                    indices.Add(a); indices.Add(c2); indices.Add(b);
+                    // Wound CLOCKWISE, which is what Godot treats as front-facing.
+                    // Verified with --windingtest. The original order was the textbook
+                    // counter-clockwise one and it inverted the lighting on every single
+                    // surface in the game - the world looked muddy and dark for days and
+                    // it was repeatedly mistaken for a palette problem.
+                    indices.Add(a); indices.Add(c2); indices.Add(d);
+                    indices.Add(a); indices.Add(b); indices.Add(c2);
                 }
             }
 

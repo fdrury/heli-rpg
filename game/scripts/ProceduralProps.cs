@@ -60,7 +60,9 @@ public static class ProceduralProps
         {
             Vector3 a = verts[tris[i]], b = verts[tris[i + 1]], c = verts[tris[i + 2]];
             Vector3 nrm = (b - a).Cross(c - a).Normalized();
-            foreach (Vector3 v in new[] { a, b, c })
+            // Godot treats CLOCKWISE as front-facing, so the emission order is reversed
+            // relative to the outward normal computed above. Measured with --windingtest.
+            foreach (Vector3 v in new[] { a, c, b })
             {
                 st.SetNormal(nrm);
                 st.SetUV(new Vector2(v.X * 0.35f + 0.5f, v.Z * 0.35f + 0.5f));
@@ -146,15 +148,20 @@ public static class ProceduralProps
         }
     }
 
+    /// <summary>
+    /// A quad wound for Godot, which treats CLOCKWISE as front-facing. The vertices are
+    /// given in outward-normal (counter-clockwise) order and emitted reversed, so callers
+    /// can keep thinking in normals rather than in winding.
+    /// </summary>
     private static void Quad(SurfaceTool st, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
     {
-        st.SetUV(new Vector2(0, 0)); st.AddVertex(a);
+        st.SetUV(new Vector2(1, 1)); st.AddVertex(c);
         st.SetUV(new Vector2(1, 0)); st.AddVertex(b);
-        st.SetUV(new Vector2(1, 1)); st.AddVertex(c);
-
         st.SetUV(new Vector2(0, 0)); st.AddVertex(a);
-        st.SetUV(new Vector2(1, 1)); st.AddVertex(c);
+
         st.SetUV(new Vector2(0, 1)); st.AddVertex(d);
+        st.SetUV(new Vector2(1, 1)); st.AddVertex(c);
+        st.SetUV(new Vector2(0, 0)); st.AddVertex(a);
     }
 
     // ------------------------------------------------------------------ scrub
@@ -277,13 +284,13 @@ public static class ProceduralProps
 
             // V runs 0 at the hub to 1 at the tip so the material can fade the disc out
             // toward the centre, where a real rotor is mostly empty air.
-            st.SetNormal(Vector3.Up); st.SetUV(new Vector2(i / (float)segments, 0)); st.AddVertex(a);
+            st.SetNormal(Vector3.Up); st.SetUV(new Vector2((i + 1) / (float)segments, 1)); st.AddVertex(c);
             st.SetNormal(Vector3.Up); st.SetUV(new Vector2((i + 1) / (float)segments, 0)); st.AddVertex(b);
-            st.SetNormal(Vector3.Up); st.SetUV(new Vector2((i + 1) / (float)segments, 1)); st.AddVertex(c);
-
             st.SetNormal(Vector3.Up); st.SetUV(new Vector2(i / (float)segments, 0)); st.AddVertex(a);
-            st.SetNormal(Vector3.Up); st.SetUV(new Vector2((i + 1) / (float)segments, 1)); st.AddVertex(c);
+
             st.SetNormal(Vector3.Up); st.SetUV(new Vector2(i / (float)segments, 1)); st.AddVertex(d);
+            st.SetNormal(Vector3.Up); st.SetUV(new Vector2((i + 1) / (float)segments, 1)); st.AddVertex(c);
+            st.SetNormal(Vector3.Up); st.SetUV(new Vector2(i / (float)segments, 0)); st.AddVertex(a);
         }
 
         st.GenerateTangents();

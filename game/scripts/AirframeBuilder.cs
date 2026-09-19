@@ -516,16 +516,23 @@ public static class AirframeBuilder
     private static void AddQuad(SurfaceTool st, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
         => AddQuad(st, a, b, c, d, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1));
 
+    /// <summary>
+    /// Vertices are passed in outward-normal (counter-clockwise) order, as every geometry
+    /// textbook writes them, and emitted REVERSED - because Godot treats clockwise as
+    /// front-facing. Measured with --windingtest rather than assumed; getting this wrong
+    /// does not hide the model, it silently inverts every normal GenerateNormals derives,
+    /// and the whole thing just looks inexplicably dark.
+    /// </summary>
     private static void AddQuad(SurfaceTool st, Vector3 a, Vector3 b, Vector3 c, Vector3 d,
                                 Vector2 ua, Vector2 ub, Vector2 uc, Vector2 ud)
     {
-        st.SetUV(ua); st.AddVertex(a);
+        st.SetUV(uc); st.AddVertex(c);
         st.SetUV(ub); st.AddVertex(b);
-        st.SetUV(uc); st.AddVertex(c);
-
         st.SetUV(ua); st.AddVertex(a);
-        st.SetUV(uc); st.AddVertex(c);
+
         st.SetUV(ud); st.AddVertex(d);
+        st.SetUV(uc); st.AddVertex(c);
+        st.SetUV(ua); st.AddVertex(a);
     }
 
     private static void AddQuadBoth(SurfaceTool st, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
@@ -536,8 +543,8 @@ public static class AirframeBuilder
 
     private static void AddTri(SurfaceTool st, Vector3 a, Vector3 b, Vector3 c)
     {
-        st.SetUV(new Vector2(0, 0)); st.AddVertex(a);
-        st.SetUV(new Vector2(1, 0)); st.AddVertex(b);
         st.SetUV(new Vector2(1, 1)); st.AddVertex(c);
+        st.SetUV(new Vector2(1, 0)); st.AddVertex(b);
+        st.SetUV(new Vector2(0, 0)); st.AddVertex(a);
     }
 }

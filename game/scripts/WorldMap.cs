@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 
 namespace Rotorwash;
@@ -66,18 +67,116 @@ public static class WorldMap
     {
         // Laid out by hand rather than generated: the shape of the country is the one
         // thing that should not be random. Tier rises with distance from the start.
+        // Smaller and further apart than the first layout, which gave regions of
+        // 1900-2600 m across a 13 km envelope - covering roughly three quarters of it, so
+        // nowhere was ever remote. Measured, you were within 3.1 km of something from ANY
+        // point on the map. These are tighter, and the country between them is meant to be
+        // empty: that emptiness is what turns a leg into a journey.
         return new List<Region>
         {
-            new(RegionKind.Basin,      "The Pan",          new Vector2(   0,  1400), 2300, 0),
-            new(RegionKind.Farmland,   "Long Acre",        new Vector2(-2600,  -200), 2400, 0),
-            new(RegionKind.Exurb,      "Fenmoor",          new Vector2( 2400,  -600), 2100, 1),
-            new(RegionKind.Wetland,    "The Drowning",     new Vector2(-1200,  4200), 2200, 1),
-            new(RegionKind.Upland,     "Cold Shoulder",    new Vector2( 1200, -3800), 2600, 2),
-            new(RegionKind.Industrial, "Sawtooth Works",   new Vector2(-4200, -2800), 2000, 2),
-            new(RegionKind.City,       "Ashmount",         new Vector2( 4100,  2600), 2500, 3),
-            new(RegionKind.Ashfield,   "The Scald",        new Vector2(-3400,  3600), 1900, 3),
+            new(RegionKind.Basin,      "The Pan",          new Vector2(  200,  1100), 1500, 0),
+            new(RegionKind.Farmland,   "Long Acre",        new Vector2(-3100,  -500), 1600, 0),
+            new(RegionKind.Exurb,      "Fenmoor",          new Vector2( 3000, -1400), 1400, 1),
+            new(RegionKind.Wetland,    "The Drowning",     new Vector2(-1600,  4700), 1400, 1),
+            new(RegionKind.Upland,     "Cold Shoulder",    new Vector2( 1500, -4400), 1700, 2),
+            new(RegionKind.Industrial, "Sawtooth Works",   new Vector2(-4800, -3300), 1300, 2),
+            new(RegionKind.City,       "Ashmount",         new Vector2( 4600,  3100), 1800, 3),
+            new(RegionKind.Ashfield,   "The Scald",        new Vector2(-4000,  4300), 1200, 3),
         };
     }
+
+    /// <summary>
+    /// Where people actually settled inside a region.
+    ///
+    /// Scattering sites uniformly across a region gives a map where nowhere is remote -
+    /// measured, the old layout put you within 3.1 km of something from ANY point on the
+    /// map, so no leg was ever a journey. Real settlement is lumpy: a few places to live,
+    /// with genuinely empty country between them.
+    ///
+    /// So human infrastructure clusters around a handful of anchors per region, and the
+    /// gaps are left to the things that end up wherever they end up - a wreck, a mast on
+    /// a hill, a survey point.
+    /// </summary>
+    private static List<Vector2> AnchorsFor(Region region)
+    {
+        if (_anchors.TryGetValue(region.Kind, out List<Vector2>? cached)) return cached;
+
+        var rng = new RandomNumberGenerator { Seed = (ulong)(region.Kind.GetHashCode() * 7919 + 31) };
+        int count = region.Radius > 2300 ? 3 : 2;
+        var list = new List<Vector2>();
+
+        for (int i = 0; i < count; i++)
+        {
+            Vector2 best = region.Centre;
+            float bestScore = -1;
+            // Pick the candidate furthest from the anchors already placed, so clusters do
+            // not end up on top of each other and the empty ground between them is real.
+            for (int attempt = 0; attempt < 40; attempt++)
+            {
+                float a = rng.Randf() * Mathf.Tau;
+                float r = Mathf.Sqrt(rng.Randf()) * region.Radius * 0.66f;
+                var c = region.Centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+                if (Mathf.Abs(c.X) > ContentHalfExtent || Mathf.Abs(c.Y) > ContentHalfExtent) continue;
+
+                // Prefer ground people would actually build on.
+                float slope = RawSlope(c.X, c.Y, 10f);
+                if (slope > 11f) continue;
+
+                float score = list.Count == 0 ? rng.Randf()
+                    : list.Min(x => x.DistanceTo(c));
+                if (score > bestScore) { bestScore = score; best = c; }
+            }
+            list.Add(best);
+        }
+
+        _anchors[region.Kind] = list;
+        return list;
+    }
+
+    private static readonly Dictionary<RegionKind, List<Vector2>> _anchors = new();
+    private static readonly Dictionary<RegionKind, List<Vector2>> _incidents = new();
+
+    /// <summary>
+    /// Where things ended up that nobody chose - crash sites, vehicle jams, the line of a
+    /// road that stopped working.
+    ///
+    /// These get anchors too, and that is the correction that made the map feel large.
+    /// Scattering wrecks and masts uniformly meant 58 of 127 sites were spread evenly over
+    /// the whole envelope, and they filled in every gap the settlement clusters left. Real
+    /// wrecks come in fields: several in one place because several aircraft were going the
+    /// same way, and then nothing for miles.
+    /// </summary>
+    private static List<Vector2> IncidentsFor(Region region)
+    {
+        if (_incidents.TryGetValue(region.Kind, out List<Vector2>? cached)) return cached;
+
+        var rng = new RandomNumberGenerator { Seed = (ulong)(region.Kind.GetHashCode() * 104729 + 17) };
+        var list = new List<Vector2>();
+        int count = 1;
+        for (int i = 0; i < count; i++)
+        {
+            float a = rng.Randf() * Mathf.Tau;
+            // Well outside the settled ground: these are places people pass through, or
+            // used to.
+            float r = region.Radius * rng.RandfRange(1.3f, 2.6f);
+            var c = region.Centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+            c = new Vector2(Mathf.Clamp(c.X, -ContentHalfExtent, ContentHalfExtent),
+                            Mathf.Clamp(c.Y, -ContentHalfExtent, ContentHalfExtent));
+            list.Add(c);
+        }
+        _incidents[region.Kind] = list;
+        return list;
+    }
+
+    /// <summary>
+    /// Whether this kind of place belongs to a settlement cluster or ends up on its own.
+    /// People build near people; a wreck is where it came down.
+    /// </summary>
+    private static bool Clusters(SiteKind kind) => kind switch
+    {
+        SiteKind.Wreck or SiteKind.Overlook or SiteKind.Relay => false,
+        _ => true,
+    };
 
     public static Region RegionAt(Vector2 p)
     {
@@ -104,14 +203,14 @@ public static class WorldMap
         // reason to go anywhere; workshops are rare because repair should be a journey.
         var plan = new Dictionary<RegionKind, (int fuel, int settle, int shop, int wreck, int relay, int depot, int field, int farm, int look)>
         {
-            [RegionKind.Basin]      = (5, 2, 1, 3, 1, 0, 1, 4, 2),
-            [RegionKind.Farmland]   = (4, 3, 1, 3, 1, 0, 1, 7, 2),
-            [RegionKind.Exurb]      = (4, 3, 2, 4, 1, 1, 1, 3, 2),
-            [RegionKind.Wetland]    = (3, 2, 1, 4, 1, 1, 0, 3, 2),
-            [RegionKind.Upland]     = (3, 1, 1, 3, 2, 1, 0, 2, 4),
-            [RegionKind.Industrial] = (3, 2, 2, 4, 1, 3, 1, 1, 1),
-            [RegionKind.City]       = (4, 3, 2, 5, 2, 3, 1, 0, 2),
-            [RegionKind.Ashfield]   = (3, 1, 0, 5, 1, 1, 0, 1, 2),
+            [RegionKind.Basin]      = (6, 3, 2, 3, 1, 0, 1, 5, 1),
+            [RegionKind.Farmland]   = (5, 4, 2, 3, 1, 0, 1, 8, 1),
+            [RegionKind.Exurb]      = (5, 4, 2, 4, 1, 2, 1, 4, 1),
+            [RegionKind.Wetland]    = (4, 2, 1, 4, 1, 1, 0, 4, 1),
+            [RegionKind.Upland]     = (4, 2, 1, 3, 1, 1, 0, 3, 1),
+            [RegionKind.Industrial] = (4, 2, 3, 4, 1, 4, 1, 2, 0),
+            [RegionKind.City]       = (5, 4, 3, 5, 1, 4, 1, 1, 1),
+            [RegionKind.Ashfield]   = (3, 1, 0, 5, 1, 2, 0, 2, 1),
         };
 
         foreach (Region region in Regions)
@@ -153,17 +252,46 @@ public static class WorldMap
     private static bool TryPlace(RandomNumberGenerator rng, Region region, SiteKind kind,
                                  List<Site> placed, out Vector2 pos)
     {
-        for (int attempt = 0; attempt < 120; attempt++)
+        List<Vector2> anchors = AnchorsFor(region);
+        bool clustered = Clusters(kind);
+
+        for (int attempt = 0; attempt < 160; attempt++)
         {
             float a = rng.Randf() * Mathf.Tau;
-            float r = Mathf.Sqrt(rng.Randf()) * region.Radius;
-            pos = region.Centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+
+            if (clustered)
+            {
+                // Tight around a settlement anchor. A few of these deliberately sit
+                // further out - an outlying farm or a fuel dump on the road - so the
+                // cluster has an edge rather than a boundary.
+                Vector2 anchor = anchors[rng.RandiRange(0, anchors.Count - 1)];
+                float spread = rng.Randf() < 0.20f ? 1100f : 640f;
+                float r = Mathf.Sqrt(rng.Randf()) * spread;
+                pos = anchor + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+            }
+            else if (kind is SiteKind.Relay or SiteKind.Overlook)
+            {
+                // High ground, wherever it is. These are the landmarks you navigate by,
+                // so they should be spread - but there are deliberately few of them.
+                float r = Mathf.Sqrt(rng.Randf()) * region.Radius * 1.7f;
+                pos = region.Centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+            }
+            else
+            {
+                // Wreck fields: several together, then nothing for miles.
+                List<Vector2> incidents = IncidentsFor(region);
+                Vector2 anchor = incidents[rng.RandiRange(0, incidents.Count - 1)];
+                float r = Mathf.Sqrt(rng.Randf()) * 560f;
+                pos = anchor + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+            }
 
             if (Mathf.Abs(pos.X) > ContentHalfExtent || Mathf.Abs(pos.Y) > ContentHalfExtent) continue;
 
-            float h = WorldHeight.At(pos.X, pos.Y);
-            float slope = Mathf.RadToDeg(Mathf.Acos(Mathf.Clamp(
-                WorldHeight.NormalAt(pos.X, pos.Y, 6f).Y, -1, 1)));
+            float h = WorldHeight.RawAt(pos.X, pos.Y);
+            // Measured on the RAW terrain and at the scale a landing cares about, not a
+            // coarse one. The two disagreeing is how a fuel cache ended up on a 40 degree
+            // slope; the graded pad then makes the spot landable regardless.
+            float slope = RawSlope(pos.X, pos.Y, 3f);
 
             bool ok = kind switch
             {
@@ -190,6 +318,15 @@ public static class WorldMap
         }
         pos = region.Centre;
         return false;
+    }
+
+    /// <summary>Slope of the natural ground, before any site levelling is applied.</summary>
+    private static float RawSlope(float x, float z, float e)
+    {
+        float hL = WorldHeight.RawAt(x - e, z), hR = WorldHeight.RawAt(x + e, z);
+        float hD = WorldHeight.RawAt(x, z - e), hU = WorldHeight.RawAt(x, z + e);
+        var n = new Vector3(hL - hR, 2f * e, hD - hU).Normalized();
+        return Mathf.RadToDeg(Mathf.Acos(Mathf.Clamp(n.Y, -1, 1)));
     }
 
     /// <summary>

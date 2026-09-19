@@ -23,11 +23,21 @@ public sealed partial class Main : Node3D
     private Kneeboard _kneeboard = null!;
     private ThreatWorld _threats = null!;
     private FlightHud _hud = null!;
+    private DialoguePanel _dialogue = null!;
+    private CodaServer _codaServer = null!;
     private Label _debugLabel = null!;
     private bool _showDebug;
 
     public override void _Ready()
     {
+        // Runs before the world is built: it needs an empty scene and nothing else.
+        foreach (string a in OS.GetCmdlineUserArgs())
+        {
+            if (a != "--windingtest") continue;
+            AddChild(new WindingTest { Name = "WindingTest" });
+            return;
+        }
+
         QualityTier.DetectAndApply();
 
         BuildSky();
@@ -87,6 +97,10 @@ public sealed partial class Main : Node3D
         };
         AddChild(_play);
 
+        _codaServer = new CodaServer { Name = "CodaServer" };
+        AddChild(_codaServer);
+        _play.CodaServer = _codaServer;
+
         _threats = new ThreatWorld
         {
             Name = "Threats",
@@ -115,6 +129,14 @@ public sealed partial class Main : Node3D
             InteractionPath = _play.GetPath(),
         };
         layer.AddChild(_kneeboard);
+
+        _dialogue = new DialoguePanel
+        {
+            Name = "Dialogue",
+            InteractionPath = _play.GetPath(),
+        };
+        layer.AddChild(_dialogue);
+        _play.Dialogue = _dialogue;
 
         _debugLabel = new Label
         {
@@ -317,6 +339,19 @@ public sealed partial class Main : Node3D
     public override void _UnhandledInput(InputEvent @event)
     {
         if (@event is not InputEventKey { Pressed: true, Echo: false } key) return;
+
+        // While dialogue is open, route input there instead of to the rest of the game.
+        if (_dialogue.IsOpen)
+        {
+            switch (key.Keycode)
+            {
+                case Key.Key1: _dialogue.HandleOption(0); return;
+                case Key.Key2: _dialogue.HandleOption(1); return;
+                case Key.Escape: _dialogue.Close(); return;
+                case Key.Space: _dialogue.Skip(); return;
+            }
+            return; // swallow all other keys during dialogue
+        }
 
         switch (key.Keycode)
         {
