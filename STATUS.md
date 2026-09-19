@@ -206,6 +206,14 @@ repair patches in a slightly wrong shade, and soot damage driven by the damage m
 No UVs — the wear is computed from position and normal in object space so it stays fixed
 to the hull.
 
+**Instruments are items** — the HUD physically grows as modules are installed (D-055,
+closing D-005a §2–3). Without the SAS (attitude hold) module, the left panel (airspeed,
+radar altitude, vertical speed, heading) and control position display are hidden; a "NO
+FLIGHT DATA" placeholder shows instead. Installing SAS populates the entire left side of
+the display. When any module is installed or removed, a numeric delta card briefly shows
+mass, fuel capacity, drag changes and resulting total weight, so the trade is legible. The
+attitude indicator and right panel (Nr, torque, fuel) are always visible.
+
 **Autorotation investigation closed** (D-054). The "glides half as far" gap was three
 problems: (1) the autoglide test rig drifted sideways (no lateral channel in the autopilot
 demand), inflating drag by 13.5 m² of side area; (2) the 4:1 reference is a rule-of-thumb

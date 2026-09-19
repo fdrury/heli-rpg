@@ -34,6 +34,12 @@ public sealed partial class FlightHud : Control
     private double _warnBlink;
     private bool _onFoot;
 
+    // Module delta card: shown briefly when a module is installed or removed (D-055).
+    private string? _deltaTitle;
+    private readonly List<string> _deltaLines = new();
+    private double _deltaAge = 99;
+    private const double DeltaDuration = 5.0;
+
     private static readonly Color Dim = new(0.62f, 0.72f, 0.66f, 0.85f);
     private static readonly Color Bright = new(0.80f, 0.94f, 0.84f, 0.95f);
     private static readonly Color Warn = new(0.98f, 0.74f, 0.25f);
@@ -49,6 +55,12 @@ public sealed partial class FlightHud : Control
         _font = ThemeDB.FallbackFont;
         MouseFilter = MouseFilterEnum.Ignore;
         SetAnchorsPreset(LayoutPreset.FullRect);
+
+        if (_play is not null)
+        {
+            _play.ModuleInstalled += mod => ShowDelta(mod, true);
+            _play.ModuleRemoved += mod => ShowDelta(mod, false);
+        }
     }
 
     public void SetRotorTime(RotorTime rt) => _rotorTime = rt;
@@ -59,6 +71,7 @@ public sealed partial class FlightHud : Control
     public override void _Process(double delta)
     {
         _warnBlink += delta;
+        _deltaAge += delta;
         QueueRedraw();
     }
 
@@ -86,15 +99,31 @@ public sealed partial class FlightHud : Control
         var t = _heli.Sim.Telemetry;
         var sim = _heli.Sim;
 
+        // D-055: instruments are items.  The left panel (airspeed, altitude, VS, heading)
+        // and the control position display require the SAS module, because that is the
+        // sensor package that provides air data.  Without it the pilot flies by visual
+        // reference — the attitude indicator (horizon line) stays because it is the
+        // windshield, not a sensor.
+        bool hasSas = _heli!.SasAuthority > 0.001f;
+
         DrawAttitude(size, sim);
-        DrawLeftPanel(new Vector2(28, size.Y * 0.30f), t, sim);
+
+        if (hasSas)
+            DrawLeftPanel(new Vector2(28, size.Y * 0.30f), t, sim);
+        else
+            DrawNoFlightData(new Vector2(28, size.Y * 0.30f));
+
         DrawRightPanel(new Vector2(size.X - 232, size.Y * 0.30f), t, sim);
-        DrawControlPositions(new Vector2(size.X - 190, size.Y - 190), sim);
+
+        if (hasSas)
+            DrawControlPositions(new Vector2(size.X - 190, size.Y - 190), sim);
+
         DrawLandingPanel(new Vector2(size.X * 0.5f - 150, 26), t);
-        DrawDamagePanel(new Vector2(28, size.Y * 0.30f + 210), sim);
+        DrawDamagePanel(new Vector2(28, size.Y * 0.30f + (hasSas ? 210 : 60)), sim);
         DrawRwr(new Vector2(size.X - 116, size.Y - 322));
         DrawSitePanel(new Vector2(size.X * 0.5f - 250, size.Y - 300));
         DrawWarnings(new Vector2(size.X * 0.5f, size.Y - 122), t);
+        DrawDeltaCard(new Vector2(28, size.Y * 0.62f));
         DrawFooter(size);
     }
 
@@ -314,6 +343,17 @@ public sealed partial class FlightHud : Control
     }
 
     /// <summary>
+    /// Shown when the SAS module is not installed. The player sees where the flight data
+    /// panel would be, matching the kneeboard's "empty bay" pattern — you cannot want a
+    /// thing you do not know exists.
+    /// </summary>
+    private void DrawNoFlightData(Vector2 origin)
+    {
+        DrawRect(new Rect2(origin - new Vector2(10, 22), new Vector2(196, 48)), Panel);
+        Label(origin with { Y = origin.Y + 4 }, "NO FLIGHT DATA", Dim * new Color(1, 1, 1, 0.65f), 12);
+    }
+
+    /// <summary>
     /// What can be done here. Only ever shown when the aircraft is actually shut down at
     /// a place, because landing is meant to be the act that pays (D-003a).
     /// </summary>
@@ -490,6 +530,62 @@ public sealed partial class FlightHud : Control
                       "TAB: kneeboard   F: board Hugh";
         DrawString(_font, new Vector2(20, size.Y - 16), help, HorizontalAlignment.Left, -1, 12,
                    Dim * new Color(1, 1, 1, 0.55f));
+    }
+
+    // ------------------------------------------------------- module delta card
+
+    /// <summary>
+    /// D-005a §2: printed numeric delta on acquisition. Briefly shows mass, fuel and drag
+    /// changes when a module is installed or removed, so the trade is legible.
+    /// </summary>
+    private void ShowDelta(ModuleDef mod, bool installed)
+    {
+        _deltaTitle = installed
+            ? $"{mod.Name.ToUpperInvariant()} FITTED"
+            : $"{mod.Name.ToUpperInvariant()} REMOVED";
+        _deltaLines.Clear();
+
+        double sign = installed ? 1 : -1;
+        _deltaLines.Add($"Mass       {FormatDelta(sign * mod.Mass)} kg");
+
+        if (Math.Abs(mod.FuelCapacityDelta) > 0.1)
+            _deltaLines.Add($"Fuel cap   {FormatDelta(sign * mod.FuelCapacityDelta)} kg");
+
+        if (Math.Abs(mod.DragDelta.X) > 0.001)
+            _deltaLines.Add($"Drag       {FormatDelta(sign * mod.DragDelta.X)} m\u00B2");
+
+        if (_heli is not null)
+            _deltaLines.Add($"Total      {_heli.Sim.TotalMass:F0} kg");
+
+        _deltaAge = 0;
+    }
+
+    private static string FormatDelta(double v) =>
+        v >= 0 ? $"+{v:F0}" : $"{v:F0}";
+
+    private void DrawDeltaCard(Vector2 origin)
+    {
+        if (_deltaTitle is null || _deltaAge >= DeltaDuration) return;
+
+        float alpha = _deltaAge < DeltaDuration - 1.0
+            ? 1f
+            : (float)(DeltaDuration - _deltaAge);
+
+        float h = 30 + _deltaLines.Count * 18 + 8;
+        var panel = new Rect2(origin, new Vector2(250, h));
+        DrawRect(panel, Panel * new Color(1, 1, 1, alpha));
+        DrawRect(panel, Bright * new Color(1, 1, 1, 0.45f * alpha), false, 1.2f);
+
+        DrawString(_font, origin + new Vector2(12, 20), _deltaTitle,
+                   HorizontalAlignment.Left, -1, 13, Bright * new Color(1, 1, 1, alpha));
+
+        float y = origin.Y + 36;
+        foreach (var line in _deltaLines)
+        {
+            DrawString(_font, new Vector2(origin.X + 12, y), line,
+                       HorizontalAlignment.Left, -1, 12, Dim * new Color(1, 1, 1, alpha));
+            y += 18;
+        }
     }
 
     // ---------------------------------------------------------- rotor time

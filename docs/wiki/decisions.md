@@ -1882,3 +1882,35 @@ rise — both beyond scope for a game rotor.
 Reversibility: fully reversible. No existing behaviour changed (ConingInflow stays off,
 powered envelope unchanged). The lateral fix is a test-rig improvement. Guards can be rolled
 back to the old numbers by removing `LateralSpeed = 0`.
+
+## D-055 — Instruments are items: the HUD grows with the aircraft · 2026-09-19
+
+**Decision.** Two changes from D-005a that make module installation *visible* on the
+interface, not just felt in the flight model:
+
+1. **Instrument gating.** The left panel (airspeed, radar altitude, vertical speed, heading)
+   and the control position display are hidden until the SAS (attitude hold) module is
+   installed. Without it, a "NO FLIGHT DATA" placeholder appears where the left panel would
+   be. The attitude indicator (horizon line) stays — it represents looking out the windshield,
+   not a sensor — and the right panel (Nr, torque, fuel) stays because the engine gauges are
+   hardwired. The RWR display already had its own conditional logic (D-005a).
+
+2. **Numeric delta card.** When any module is installed or removed, a brief overlay shows the
+   mass delta, fuel capacity delta (if any), drag delta (if any) and the resulting total
+   aircraft mass. It auto-dismisses after 5 seconds. This is D-005a §2's "printed numeric
+   delta on acquisition."
+
+**Why.** D-005a §3 says "the HUD physically grows as boxes are installed, so the interface
+itself is a progress bar." At game start with no modules, the HUD is sparse: attitude
+reference, power gauges, warnings. Installing the SAS populates the entire left side of the
+display with air data — a visible, meaningful change that makes the progression real rather
+than abstract. The delta card makes the trade legible: +12 kg mass, so the hover is slightly
+worse, but you can see your airspeed now.
+
+**Why SAS specifically.** The attitude hold unit is a sensor package (rate gyros, air data
+computer) that physically provides the measurements the left panel displays. A real UH-1
+with failed flight instruments would still have the visual horizon and engine gauges, which
+is exactly the bare HUD. Diegetically correct and mechanically meaningful.
+
+**Reversibility:** high. Two conditionals in FlightHud._Draw and one overlay method. Removing
+the feature is deleting the `hasSas` checks and the delta card code.
