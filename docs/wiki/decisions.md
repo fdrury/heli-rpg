@@ -1081,3 +1081,21 @@ off-thread has been fine; **constructing** one is not.
 
 The replacement is deterministic and seeded identically, so scatter remains reproducible —
 though the layout differs from before, which for decorative scatter costs nothing.
+
+## D-038 — Rock appears at cliff angles, not only at impossible ones
+
+**Decision.** The terrain shader's rock threshold moves from a surface normal Y of
+0.68/0.44 to 0.84/0.55, and exposed rock gets perturbed horizontal strata.
+
+**Why.** The old thresholds put bare rock only on ground steeper than about 64°. The world
+report has the 90th-percentile slope at 43° and the 99th at 65°, so effectively nothing in
+the world ever reached it and every hillside — however steep — was grassed to the top. Rock
+now begins around 33° and is bare by 57°.
+
+The strata term is perturbed by a large-scale noise deliberately: an unperturbed height
+term rings the whole world in contour lines, which is what it did on the first attempt.
+
+**Honestly assessed:** this is a modest improvement, not a transformation. Steep ground now
+shows gravel and stone where it did not, but most of the visible landscape is below 33° and
+still reads as ground cover. Real cliff faces would need the height function to produce
+them, and the same report says it mostly does not.

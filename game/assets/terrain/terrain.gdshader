@@ -43,8 +43,15 @@ uniform float detail_fade_end = 1150.0;
 uniform float macro_scale = 0.0045;
 uniform float macro_strength = 0.42;
 
-uniform float slope_rock_start = 0.68;
-uniform float slope_rock_end = 0.44;
+// Where bare rock takes over from ground cover, as the surface normal's Y component
+// (1.0 flat, 0.0 vertical).
+//
+// Was 0.68 / 0.44, which is rock only past about 64 degrees. The world report puts the
+// 90th percentile slope at 43 degrees and the 99th at 65, so effectively nothing in the
+// world ever reached it and every hillside in the game - however steep - was grassed to
+// the top. 0.84 starts rock at about 33 degrees and 0.55 is bare by 57.
+uniform float slope_rock_start = 0.84;
+uniform float slope_rock_end = 0.55;
 // Bare high ground. Keyed well above the median terrain height and perturbed hard,
 // because a sharp altitude threshold near the median draws contour lines across the
 // whole landscape - which is exactly what it did at 135 m.
@@ -180,6 +187,16 @@ void fragment() {
     // most of what stops the landscape reading as farmland.
     float dead = smoothstep(0.32, 0.82, field) * dead_amount;
     col = mix(col, col * dead_tint * 1.18, dead * (grass_w * 0.85 + dirt_w * 0.3));
+
+    // Strata. Exposed rock in real country is bedded, and horizontal banding is the
+    // single cheapest cue that a face is rock rather than a steep field. Perturbed by a
+    // large-scale noise so the beds tilt and wander instead of ringing the world in
+    // contour lines - which is what an unperturbed height term does, and did.
+    if (rock_w > 0.01) {
+        float bed = sin(world_pos.y * 0.085 + fbm(uv * 0.0032) * 5.5);
+        float strata = 0.90 + 0.20 * smoothstep(-0.25, 0.25, bed);
+        col = mix(col, col * strata, rock_w * 0.75);
+    }
 
     col = desaturate(col, saturation) * grade_tint;
     col *= mix(0.80, 1.14, fbm(uv * 0.00026));   // very large scale brightness drift
