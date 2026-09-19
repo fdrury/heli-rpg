@@ -516,18 +516,27 @@ public sealed partial class FlightHud : Control
             }
         }
 
-        Caption("VORTEX RING", t.VrsSeverity > 0.25, Danger, true);
-        Caption("LOW ROTOR", t.RotorRpmPercent < 92, Danger, true);
+        // The caution and warning panel owns everything below, and these six captions are
+        // gone rather than merely duplicated.
+        //
+        // They were naive comparisons - `RotorRpmPercent < 92`, `StalledFraction > 0.18` -
+        // against signals that are measurably noisy: torque swings 5.8 points in a steady
+        // hover and stalled fraction swings 0 to 5% at 100 kt on the 2/rev. A bare
+        // comparison on those reports blade azimuth, not a condition; the same drive-by
+        // measurement counted 582 threshold transitions where the filtered system counts
+        // two. Keeping them beside a properly hysteresised panel would have shown the pilot
+        // two different answers to the same question, and the flickering one is the one the
+        // eye goes to.
+        //
+        // AUTOROTATE stays: it is a state, not a threshold, so there is nothing to filter,
+        // and it is the one a pilot most wants confirmed instantly.
         Caption("AUTOROTATE", t.Autorotating && t.Engine != EngineState.Running, Warn);
-        Caption("TORQUE", t.TorqueLimited, Warn);
-        Caption("TAIL AUTH", t.TailRotorSaturated, Warn);
-        Caption("BLADE STALL", t.StalledFraction > 0.18, Warn);
     }
 
     private void DrawFooter(Vector2 size)
     {
         string help = "W/S or throttle: collective   arrows or stick: cyclic   A/D: pedals   " +
-                      "C: camera   TAB: kneeboard   1-4: actions   Z/X: chaff/flares   F: dismount   R: respawn";
+                      "C: camera   TAB: kneeboard   1-4: actions   Z/X: chaff/flares   M: ack warnings   F: dismount   R: respawn";
         DrawString(_font, new Vector2(20, size.Y - 16), help, HorizontalAlignment.Left, -1, 12,
                    Dim * new Color(1, 1, 1, 0.55f));
     }
