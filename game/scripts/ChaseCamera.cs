@@ -15,6 +15,10 @@ public enum CameraMode { Chase, Cockpit, Orbit, Flyby, ThirdPerson }
 /// ThirdPerson follows the pilot on foot with an over-shoulder offset. The camera's
 /// delta is compensated for Rotor Time so the player's view stays responsive during
 /// slow-motion.
+///
+/// Cockpit mode supports head-look: middle-mouse drag, hat switch / D-pad, or numpad
+/// slew the view within the cockpit. Release springs back to forward. L padlocks onto
+/// the nearest detected threat or known site.
 /// </summary>
 public sealed partial class ChaseCamera : Camera3D
 {
@@ -46,6 +50,34 @@ public sealed partial class ChaseCamera : Camera3D
     private Vector3 _flybyPoint;
     private float _shake;
 
+    // --------------------------------------------------------- head-look state
+    // A Huey has big side windows and a chin bubble, so the pilot can look almost
+    // directly behind and well below the horizon.
+    private const float HeadYawLimit = 150f * Mathf.Pi / 180f;
+    private const float HeadPitchDown = -40f * Mathf.Pi / 180f;
+    private const float HeadPitchUp = 60f * Mathf.Pi / 180f;
+    private const float HeadReturnRate = 4f;
+    private const float MouseLookSens = 0.003f;
+    private const float HatLookRate = 2.5f;  // rad/s
+
+    private float _headYaw;
+    private float _headPitch;
+    private bool _lookActiveThisFrame;
+
+    // Hat / keyboard look input, set each frame by Main before physics runs.
+    private float _hatYaw, _hatPitch;
+
+    // Padlock
+    private bool _padlocked;
+    private Vector3 _padlockTarget;
+
+    /// <summary>Head yaw in radians (0 = forward, positive = right).</summary>
+    public float HeadYaw => _headYaw;
+    /// <summary>Head pitch in radians (0 = level, positive = up).</summary>
+    public float HeadPitch => _headPitch;
+    /// <summary>True when padlocked to a target.</summary>
+    public bool IsPadlocked => _padlocked;
+
     public override void _Ready()
     {
         _target = GetNodeOrNull<Node3D>(TargetPath);
@@ -71,12 +103,73 @@ public sealed partial class ChaseCamera : Camera3D
         };
         if (Mode == CameraMode.Flyby && _target is not null)
             _flybyPoint = _target.GlobalPosition + new Vector3(38, 12, 38);
+        ResetHead();
     }
 
     /// <summary>Switch to third-person or back to chase for mode transitions.</summary>
     public void SetOnFoot(bool onFoot)
     {
         Mode = onFoot ? CameraMode.ThirdPerson : CameraMode.Chase;
+        ResetHead();
+    }
+
+    // --------------------------------------------------------- head-look API
+
+    /// <summary>Apply relative mouse motion to head-look (middle-mouse drag).</summary>
+    public void ApplyHeadLook(Vector2 delta)
+    {
+        if (Mode != CameraMode.Cockpit) return;
+        _headYaw = Mathf.Clamp(_headYaw + delta.X * MouseLookSens, -HeadYawLimit, HeadYawLimit);
+        _headPitch = Mathf.Clamp(_headPitch - delta.Y * MouseLookSens, HeadPitchDown, HeadPitchUp);
+        _lookActiveThisFrame = true;
+        _padlocked = false;
+    }
+
+    /// <summary>Store hat / keyboard look demand. Called by Main each physics frame.</summary>
+    public void SetLookInput(float yaw, float pitch)
+    {
+        _hatYaw = yaw;
+        _hatPitch = pitch;
+    }
+
+    /// <summary>Padlock onto a world-space target, or release if null.</summary>
+    public void Padlock(Vector3? target)
+    {
+        if (target.HasValue)
+        {
+            _padlockTarget = target.Value;
+            _padlocked = true;
+        }
+        else
+        {
+            _padlocked = false;
+        }
+    }
+
+    /// <summary>Snap head to forward and release padlock.</summary>
+    public void CenterHead()
+    {
+        _headYaw = 0;
+        _headPitch = 0;
+        _padlocked = false;
+    }
+
+    /// <summary>Set head angles directly (for scripted shots). Prevents spring return.</summary>
+    public void SetHeadAngles(float yaw, float pitch)
+    {
+        _headYaw = Mathf.Clamp(yaw, -HeadYawLimit, HeadYawLimit);
+        _headPitch = Mathf.Clamp(pitch, HeadPitchDown, HeadPitchUp);
+        _lookActiveThisFrame = true;
+    }
+
+    private void ResetHead()
+    {
+        _headYaw = 0;
+        _headPitch = 0;
+        _padlocked = false;
+        _lookActiveThisFrame = false;
+        _hatYaw = 0;
+        _hatPitch = 0;
     }
 
     public override void _PhysicsProcess(double delta)
@@ -151,9 +244,57 @@ public sealed partial class ChaseCamera : Camera3D
     {
         Transform3D t = _target!.GlobalTransform;
         GlobalPosition = t * CockpitOffset;
-        // Rigid in the cockpit: the airframe is the frame of reference, which is the
-        // whole point of the view.
-        GlobalBasis = t.Basis;
+
+        // --- head-look ---
+
+        // Hat / keyboard continuous input
+        if (Mathf.Abs(_hatYaw) > 0.1f || Mathf.Abs(_hatPitch) > 0.1f)
+        {
+            _headYaw = Mathf.Clamp(_headYaw + _hatYaw * HatLookRate * dt, -HeadYawLimit, HeadYawLimit);
+            _headPitch = Mathf.Clamp(_headPitch + _hatPitch * HatLookRate * dt, HeadPitchDown, HeadPitchUp);
+            _lookActiveThisFrame = true;
+            _padlocked = false;
+        }
+
+        // Padlock: slew to track the target
+        if (_padlocked)
+        {
+            Vector3 toTarget = _padlockTarget - GlobalPosition;
+            if (toTarget.LengthSquared() > 1f)
+            {
+                Vector3 localDir = t.Basis.Inverse() * toTarget.Normalized();
+                float wantYaw = Mathf.Atan2(localDir.X, -localDir.Z);
+                float wantPitch = Mathf.Asin(Mathf.Clamp(localDir.Y, -1, 1));
+                _headYaw = Mathf.Lerp(_headYaw,
+                    Mathf.Clamp(wantYaw, -HeadYawLimit, HeadYawLimit),
+                    1f - Mathf.Exp(-8f * dt));
+                _headPitch = Mathf.Lerp(_headPitch,
+                    Mathf.Clamp(wantPitch, HeadPitchDown, HeadPitchUp),
+                    1f - Mathf.Exp(-8f * dt));
+            }
+        }
+        // Spring return when idle
+        else if (!_lookActiveThisFrame)
+        {
+            float decay = 1f - Mathf.Exp(-HeadReturnRate * dt);
+            _headYaw = Mathf.Lerp(_headYaw, 0, decay);
+            _headPitch = Mathf.Lerp(_headPitch, 0, decay);
+            if (Mathf.Abs(_headYaw) < 0.001f) _headYaw = 0;
+            if (Mathf.Abs(_headPitch) < 0.001f) _headPitch = 0;
+        }
+        _lookActiveThisFrame = false;
+
+        // Apply head rotation on top of the rigid airframe basis
+        if (_headYaw != 0 || _headPitch != 0)
+        {
+            Basis yaw = new(Vector3.Up, _headYaw);
+            Basis pitch = new(yaw.X, _headPitch);
+            GlobalBasis = t.Basis * (pitch * yaw);
+        }
+        else
+        {
+            GlobalBasis = t.Basis;
+        }
     }
 
     private void UpdateOrbit(float dt)

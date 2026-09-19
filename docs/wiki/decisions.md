@@ -1203,3 +1203,45 @@ the places people drove to before the collapse.
 **Reversibility:** high for all three. Water: remove one shader file, a few blocks in
 TerrainStreamer, and one constant. Woodland: remove GreenTree from ProceduralProps and
 PropScatter. Roads: remove Roads.cs and one line in Main.
+
+## D-041 — Cockpit head-look with padlock · 2026-09-19
+
+**Decision.** The cockpit camera now supports head rotation. Three input methods:
+
+1. **Middle-mouse drag** — relative motion maps to yaw/pitch, like FPS mouse look.
+2. **Hat switch / D-pad** — digital 4-axis look at 2.5 rad/s (HOTAS POV hat or gamepad).
+3. **Numpad 4/6/8/2** — keyboard equivalent of the hat switch. Numpad 5 or Home centres.
+
+Release all inputs and the view springs back to forward (exponential decay, τ ≈ 4/s).
+`L` padlocks onto the nearest detected threat emitter, or failing that the nearest known
+site within 5 km. `L` again releases. Manual look breaks padlock.
+
+Limits: ±150° yaw (the Huey has big side windows and open doors), -40° to +60° pitch
+(down at instruments, up through overhead glass). These match the real aircraft's
+outward visibility.
+
+**Why.** The cockpit has built instruments (2×3 bezel array on the panel, control sticks,
+collective levers, pedals) that the fixed forward view cannot see. D-034 fixed the
+lighting so the instruments are correct; this decision makes them visible. Padlock is
+the standard combat flight sim solution for tracking a threat while still flying —
+relevant here because the RWR tells you something is painting you and you want to see
+where it is.
+
+**Key choices.**
+
+- *Middle mouse, not right mouse.* Right mouse is Rotor Time in both modes. Middle mouse
+  is unbound, natural for "hold and drag", and matches DCS/IL-2.
+- *Spring return, not sticky.* A pilot looks somewhere, reads the information, then
+  looks back to fly. Holding the look is the exceptional case (padlock handles it). A
+  sticky head that stays wherever you left it would force the player to centre manually
+  after every glance, which is a task the spring does better.
+- *Head rotation only, not head translation.* The pilot's eye stays at `CockpitOffset`
+  and only the gaze direction changes. Translation (leaning to see around the post) is
+  a second-order feature that would need collision checks against the cockpit geometry.
+- *HUD stays on screen.* The 2D flight instruments are a game HUD, not a literal panel.
+  They stay visible regardless of head direction. The 3D panel instruments are the ones
+  that require looking down.
+
+**Reversibility:** high. Head-look state is ~40 lines in ChaseCamera, input routing is
+~30 lines in Main, padlock is ~40 lines in Main. No sim/ changes, no save/load changes,
+no new files. Remove the head-look fields and UpdateCockpit reverts to one line.

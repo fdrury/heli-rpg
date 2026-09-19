@@ -22,7 +22,8 @@ public sealed partial class ScreenshotDirector : Node
     private Kneeboard? _kneeboard;
 
     private sealed record Shot(string Name, CameraMode Mode, float Altitude, float Speed, float Heading,
-                               SiteKind? Over = null, double? ClockHours = null, Vector2? At = null);
+                               SiteKind? Over = null, double? ClockHours = null, Vector2? At = null,
+                               float? HeadYaw = null, float? HeadPitch = null);
 
     private readonly List<Shot> _shots = new()
     {
@@ -63,6 +64,13 @@ public sealed partial class ScreenshotDirector : Node
             new Vector2(4600, 3100)),      // Ashmount
         new("22_sawtooth_low",   CameraMode.Chase,   80f,  40f,  2.2f, null, null,
             new Vector2(-4800, -3300)),    // Sawtooth Works
+
+        // Head-look: the cockpit has instruments that the fixed forward view cannot see.
+        // These prove the pilot can look around inside the airframe.
+        new("24_cockpit_left",  CameraMode.Cockpit, 120f, 32f, 2.1f, null, null, null,
+            HeadYaw: -1.3f),                  // ~75 deg left — out the side door
+        new("25_cockpit_panel", CameraMode.Cockpit, 120f, 32f, 2.1f, null, null, null,
+            HeadPitch: -0.52f),               // ~30 deg down — at the instruments
     };
 
     private Site? _aimedAt;
@@ -104,6 +112,7 @@ public sealed partial class ScreenshotDirector : Node
     private void Setup(Shot shot)
     {
         _camera.Mode = shot.Mode;
+        _camera.CenterHead();
 
         // Hold the clock still for the duration of the set. Otherwise thirteen shots at
         // sixteen seconds of settle each advance the world by an hour and a half, and no
@@ -179,6 +188,10 @@ public sealed partial class ScreenshotDirector : Node
             Heading = -shot.Heading,
         };
         _heli.OverrideControls = _ap.Update(_heli.Sim, demand, delta);
+
+        // Hold head-look angles for scripted cockpit shots.
+        if (shot.Mode == CameraMode.Cockpit && (shot.HeadYaw.HasValue || shot.HeadPitch.HasValue))
+            _camera.SetHeadAngles(shot.HeadYaw ?? 0, shot.HeadPitch ?? 0);
 
         // Long enough for the autopilot to settle and the camera lag to catch up.
         double settle = shot.Altitude < 12f ? 26.0 : 16.0;

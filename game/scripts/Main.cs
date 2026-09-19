@@ -36,6 +36,7 @@ public sealed partial class Main : Node3D
     private Label _debugLabel = null!;
     private bool _showDebug;
     private GameMode _mode = GameMode.Flying;
+    private bool _middleMouseHeld;
 
     /// <summary>Current game mode, read by HUD and other systems.</summary>
     public GameMode Mode => _mode;
@@ -371,10 +372,27 @@ public sealed partial class Main : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        // Mouse motion: on foot it drives the camera; in flight it is ignored.
-        if (@event is InputEventMouseMotion motion && _mode == GameMode.OnFoot)
+        // Mouse motion: on foot it drives the camera; in cockpit with middle-mouse it
+        // drives head-look.
+        if (@event is InputEventMouseMotion motion)
         {
-            _pilot.ApplyMouseMotion(motion.Relative);
+            if (_mode == GameMode.OnFoot)
+            {
+                _pilot.ApplyMouseMotion(motion.Relative);
+                return;
+            }
+            if (_middleMouseHeld && _camera.Mode == CameraMode.Cockpit)
+            {
+                _camera.ApplyHeadLook(motion.Relative);
+                return;
+            }
+            return;
+        }
+
+        // Middle mouse: held = head-look drag in cockpit.
+        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Middle } mmb)
+        {
+            _middleMouseHeld = mmb.Pressed;
             return;
         }
 
@@ -500,6 +518,14 @@ public sealed partial class Main : Node3D
                 {
                     GD.Print("[heli] no attitude hold unit installed");
                 }
+                break;
+            case Key.L:
+                TogglePadlock();
+                break;
+            case Key.Kp5:
+            case Key.Home:
+                _camera.CenterHead();
+                GD.Print("[camera] head centred");
                 break;
         }
     }
@@ -630,6 +656,10 @@ public sealed partial class Main : Node3D
         // FOV tracks Rotor Time zoom smoothly.
         _camera.Fov = _rotorTime.CurrentFov(_camera.Fov, (float)delta);
 
+        // Head-look: poll hat switch / D-pad / numpad for continuous cockpit look.
+        if (_mode == GameMode.Flying && _camera.Mode == CameraMode.Cockpit)
+            PollHeadLook();
+
         // On foot: move the character. BeginFrame resets the per-frame guard so that
         // either Move (player input) or WalkToward (test script) runs, but not both.
         if (_mode == GameMode.OnFoot)
@@ -637,6 +667,34 @@ public sealed partial class Main : Node3D
             _pilot.BeginFrame();
             _pilot.Move(delta);
         }
+    }
+
+    /// <summary>
+    /// Read hat switch, D-pad and numpad and feed them to the camera as head-look input.
+    /// Called each physics frame so the pilot can look around in cockpit mode.
+    /// </summary>
+    private void PollHeadLook()
+    {
+        float yaw = 0, pitch = 0;
+
+        // Hat / D-pad (works for HOTAS POV hat and gamepad D-pad alike)
+        var pads = Input.GetConnectedJoypads();
+        if (pads.Count > 0)
+        {
+            int dev = pads[0];
+            if (Input.IsJoyButtonPressed(dev, JoyButton.DpadLeft)) yaw -= 1;
+            if (Input.IsJoyButtonPressed(dev, JoyButton.DpadRight)) yaw += 1;
+            if (Input.IsJoyButtonPressed(dev, JoyButton.DpadUp)) pitch += 1;
+            if (Input.IsJoyButtonPressed(dev, JoyButton.DpadDown)) pitch -= 1;
+        }
+
+        // Numpad fallback
+        if (Input.IsKeyPressed(Key.Kp4)) yaw -= 1;
+        if (Input.IsKeyPressed(Key.Kp6)) yaw += 1;
+        if (Input.IsKeyPressed(Key.Kp8)) pitch += 1;
+        if (Input.IsKeyPressed(Key.Kp2)) pitch -= 1;
+
+        _camera.SetLookInput(yaw, pitch);
     }
 
     public override void _Process(double delta)
@@ -881,6 +939,68 @@ public sealed partial class Main : Node3D
         if (_play.Loadout.IsInstalled("chaff")) field.Fitted |= Countermeasure.Chaff;
         if (_play.Loadout.IsInstalled("flares")) field.Fitted |= Countermeasure.Flares;
         if (_play.Loadout.IsInstalled("suppressor")) field.Fitted |= Countermeasure.ExhaustSuppressor;
+    }
+
+    // -------------------------------------------------------------- head-look / padlock
+
+    /// <summary>
+    /// Toggle padlock: if locked, release; if free, lock onto the nearest detected
+    /// threat emitter, or failing that the nearest known site within 5 km.
+    /// </summary>
+    private void TogglePadlock()
+    {
+        if (_camera.Mode != CameraMode.Cockpit) return;
+
+        if (_camera.IsPadlocked)
+        {
+            _camera.Padlock(null);
+            GD.Print("[camera] padlock released");
+            return;
+        }
+
+        Vector3 heliPos = _heli.GlobalPosition;
+        Vector3? best = null;
+        float bestDist = float.MaxValue;
+
+        // Nearest detected threat emitter
+        foreach (var track in _threats.Field.Tracks)
+        {
+            if (!track.EverDetected) continue;
+            var em = track.Emitter;
+            float gx = (float)em.East;
+            float gz = (float)-em.North;
+            float gy = WorldHeight.At(gx, gz);
+            Vector3 pos = new(gx, gy, gz);
+            float d = heliPos.DistanceTo(pos);
+            if (d < bestDist) { bestDist = d; best = pos; }
+        }
+
+        // If no threats, try nearest known site within 5 km
+        if (!best.HasValue)
+        {
+            bestDist = 5000f;
+            var progress = _play.Progress;
+            foreach (var site in WorldMap.Sites)
+            {
+                if (!progress.HasVisited(site.Id)
+                    && !progress.Knows($"contact.{site.Id}")
+                    && !progress.Knows($"site.{site.Id}"))
+                    continue;
+                Vector3 pos = site.Ground;
+                float d = heliPos.DistanceTo(pos);
+                if (d < bestDist) { bestDist = d; best = pos; }
+            }
+        }
+
+        if (best.HasValue)
+        {
+            _camera.Padlock(best);
+            GD.Print($"[camera] padlock on ({bestDist:F0} m)");
+        }
+        else
+        {
+            GD.Print("[camera] nothing to padlock");
+        }
     }
 
     private bool IsFirstSettlement(Site site)

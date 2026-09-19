@@ -1,6 +1,6 @@
 # ROTORWASH — status
 
-*Last updated: 2026-09-19*
+*Last updated: 2026-09-20*
 
 A single-player post-apocalyptic RPG about the last helicopter pilot in the world.
 Godot 4.7.2 (.NET). `docs/wiki/00-vision.md` is what it is; `docs/wiki/decisions.md` is
@@ -57,6 +57,9 @@ godot --path game -- --screenshot
 Controls: `W`/`S` or throttle = collective · arrows or stick = cyclic · `A`/`D` or twist =
 pedals · `TAB` kneeboard · `1`-`4` actions · `Z`/`X` chaff/flares · `C` camera ·
 `F2` stability augmentation (requires module) · `R` respawn · `F5` save · `F9` load.
+
+Cockpit look: middle mouse + drag or hat/D-pad or numpad 4/6/8/2 · numpad 5 or Home = centre ·
+`L` padlock nearest threat/site · release = spring return to forward.
 
 On foot: `WASD` move · `Shift` sprint · `LMB` fire · `RMB` Rotor Time · `R` reload ·
 `F` board Hugh.
@@ -163,21 +166,27 @@ radius 500 m, persisted through save/load. Scale bar and survey-percentage reado
 `FogOfWar` lives in sim/ (pure .NET, no Godot dependency) with byte-array serialisation;
 the game layer generates terrain and fog textures and draws markers via `_Draw()`.
 
+**Look-around** — cockpit head-look (D-041). In cockpit mode the pilot can look around
+inside the airframe: middle-mouse drag, hat switch / D-pad, or numpad 4/6/8/2 slew the
+view ±150° yaw, -40° to +60° pitch. Release springs back to forward. `L` padlocks onto
+the nearest detected threat emitter or known site. The 3D cockpit instruments (2×3 bezel
+array, control sticks, collective levers, pedals) are now visible by looking down; the
+side doors and terrain are visible by looking left/right. Two screenshot shots
+(`24_cockpit_left`, `25_cockpit_panel`) verify the feature across builds.
+
 ## Next
 
 The original eight are done. This list is what the game most visibly lacks now, roughly in
 order of how much each would change a player's impression.
 
-1. **Look-around.** The cockpit has instruments that the fixed forward view cannot see
-   (D-034). A hat switch / head-look, and a padlock on the last thing of interest.
-2. **Building variety.** Settlements are boxes with pitched roofs. Silhouette variety and
+1. **Building variety.** Settlements are boxes with pitched roofs. Silhouette variety and
    some interior suggestion would do more than texture work.
-3. **Airframe wear.** One flat olive drab. Panel lines, dirt streaks, sun-bleaching and
+2. **Airframe wear.** One flat olive drab. Panel lines, dirt streaks, sun-bleaching and
    repaired patches — ideally driven by the damage model, so a patched aircraft looks
    patched.
-4. **Storm weather.** Lightning, and rain on the windscreen. The model already produces
+3. **Storm weather.** Lightning, and rain on the windscreen. The model already produces
    storms (D-026) and nothing distinguishes them from rain.
-5. **A benchmark pass.** Periodic comparisons against other RPGs — skill trees, story,
+4. **A benchmark pass.** Periodic comparisons against other RPGs — skill trees, story,
    graphics, audio, world size — recorded in the wiki. The last one fed D-005a; audio
    and world-feel have moved a long way since.
 
