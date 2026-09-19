@@ -1388,3 +1388,38 @@ What is left is **profile power**, which would have to roughly triple between po
 and the descent, with 9–15% of blade elements past stall. The next step is to split induced
 from profile inside `MainRotor` and look at the post-stall drag rise — that is a change
 inside the blade-element loop and wants its own session.
+
+## D-044 — The autorotation gap is in the rotor's drag in the windmill-brake state
+
+Completing D-041 and D-043. `RotorOutput` now splits shaft power exactly into **induced**
+(the lift vector tilted by the inflow angle) and **profile** (section drag), which is a clean
+division of the same in-plane force the blade-element loop already computes.
+
+At 60 kt, the two conditions side by side:
+
+| | induced | profile | parasite |
+|---|---|---|---|
+| powered level flight | +193 kW | +211 kW | 42 kW |
+| autorotation | **−337 kW** | +252 kW | 146 kW |
+
+That **clears profile drag**, which was the leading suspect after D-043: it rises only 20%
+between the two, exactly as it should at the same rotor speed. Parasite triples, but only
+because the descent adds a large vertical airspeed through the fuselage's 10 m² plan
+area — and that force *retards* the descent, so it is a consequence, not a cause.
+
+Induced power is correctly **negative**: the rotor is extracting from the upflow, which is
+what autorotation is. The magnitude is the problem. Running the numbers the other way: for
+the real aircraft's 1700 fpm, total dissipation must be about 328 kW, and our profile (211–252)
+plus tail (50) plus drivetrain (11) plus a lower parasite already accounts for roughly that.
+So the model would sit near the right descent rate **if the disc were not also acting as a
+large drag device**.
+
+**Conclusion: the gap is in the rotor's retarding force in the windmill-brake state** —
+the thrust/inflow relationship when the air is coming up through the disc — not in the
+blades, not in the fuselage, and not in vortex ring. `Inflow.SolveMomentum` reports λ ≈ 0.009
+in a 19 m/s descent, which is the right answer for *forward flight* momentum theory and
+looks suspiciously small for a disc being driven backwards.
+
+Still not fixed, and still deliberately: it is one branch of the inflow model, but that
+branch is load-bearing for hover, climb and vortex ring as well, and the rest of the envelope
+currently matches the real aircraft to within a few per cent. It now has a precise address.

@@ -20,6 +20,10 @@ public struct RotorOutput
     public double TipMachAdvancing;
     public double StalledFraction; // 0..1 of blade elements past stall
     public double PowerRequired;   // W
+    /// <summary>Shaft power spent making lift, W: the lift vector tilted by the inflow.</summary>
+    public double InducedPower;
+    /// <summary>Shaft power spent dragging the blades round, W.</summary>
+    public double ProfilePower;
 }
 
 /// <summary>
@@ -173,6 +177,7 @@ public sealed class MainRotor
         Vec3 forceAcc = Vec3.Zero;
         Vec3 momentAcc = Vec3.Zero;
         double torqueAcc = 0;
+        double inducedTorqueAcc = 0, profileTorqueAcc = 0;
         double thrustAcc = 0;
         int stalled = 0, elementCount = 0;
         double maxTipMach = 0;
@@ -261,6 +266,14 @@ public sealed class MainRotor
                     forceAcc += dF * dtSub;
                     momentAcc += Vec3.Cross(rElem, dF) * dtSub;
                     torqueAcc += r * cosB * dFt * dtSub;
+
+                    // The in-plane force splits exactly into the lift vector tilted by the
+                    // inflow angle, and the section drag. That is precisely the induced /
+                    // profile division, and having the two separately is the only way to
+                    // tell an inefficient disc from a draggy blade - which is the open
+                    // question in D-043.
+                    inducedTorqueAcc += r * cosB * (dL * sinPhi) * dtSub;
+                    profileTorqueAcc += r * cosB * (dD * cosPhi) * dtSub;
                     thrustAcc += (-Vec3.Dot(dF, _zd)) * dtSub;
 
                     flapMoment += r * dFn;
@@ -356,6 +369,8 @@ public sealed class MainRotor
         outp.TipMachAdvancing = maxTipMach;
         outp.StalledFraction = elementCount > 0 ? (double)stalled / elementCount : 0;
         outp.PowerRequired = outp.ShaftTorque * omega;
+        outp.InducedPower = inducedTorqueAcc * inv * omega;
+        outp.ProfilePower = profileTorqueAcc * inv * omega;
 
         return outp;
     }

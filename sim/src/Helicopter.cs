@@ -49,6 +49,10 @@ public struct FlightTelemetry
     public double DrivetrainPower;
     /// <summary>Power spent dragging the fuselage through the air, W.</summary>
     public double ParasitePower;
+    /// <summary>Of the main rotor's demand, the part spent making lift, W.</summary>
+    public double InducedPower;
+    /// <summary>Of the main rotor's demand, the part spent dragging blades round, W.</summary>
+    public double ProfilePower;
     public double FuelKg;
     public double FuelFlow;          // kg/s
     public double Sideslip;          // rad
@@ -142,7 +146,7 @@ public sealed class Helicopter
     public bool UseInternalGroundModel { get; set; } = true;
 
     private Vec3 _lastAccelBody;
-    private double _pMain, _pTail, _pDrive, _pPara;
+    private double _pMain, _pTail, _pDrive, _pPara, _pInduced, _pProfile;
     private double _cachedMass;
     private Vec3 _cachedCg;
     private Mat3 _inertia, _inertiaInv;
@@ -480,11 +484,15 @@ public sealed class Helicopter
         _pTail += (tailTorqueAtMain * RotorOmega - _pTail) * kp;
         _pDrive += (losses * RotorOmega - _pDrive) * kp;
         _pPara += (parasitePower - _pPara) * kp;
+        _pInduced += (mr.InducedPower - _pInduced) * kp;
+        _pProfile += (mr.ProfilePower - _pProfile) * kp;
 
         Telemetry.MainRotorPower = _pMain;
         Telemetry.TailRotorPower = _pTail;
         Telemetry.DrivetrainPower = _pDrive;
         Telemetry.ParasitePower = _pPara;
+        Telemetry.InducedPower = _pInduced;
+        Telemetry.ProfilePower = _pProfile;
         Telemetry.FuelKg = Fuel;
         Telemetry.FuelFlow = pp.FuelFlow;
         Telemetry.Sideslip = speed > 1 ? Math.Asin(Math.Clamp(vb.Y / speed, -1, 1)) : 0;

@@ -65,6 +65,9 @@ public static class EnvelopeTests
         }
 
         FlightTelemetry tel = h.Telemetry;
+        Console.WriteLine($"          (at {kt,3:F0} kt level: induced {tel.InducedPower / 1000,6:F0}" +
+                          $" profile {tel.ProfilePower / 1000,6:F0} kW," +
+                          $" parasite {tel.ParasitePower / 1000,5:F0} kW)");
         return (tel.PowerRequired, tel.PowerAvailable, tel.FuelFlow, true);
     }
 
@@ -174,7 +177,7 @@ public static class EnvelopeTests
             // apparently gliding worse than both 50 and 80, which no aircraft does.
             double rodSum = 0, nrSum = 0, groundSum = 0;
             double pMain = 0, pTail = 0, pDrive = 0, pPara = 0, vrsSum = 0, inflowSum = 0;
-            double stallSum = 0, clSum = 0;
+            double stallSum = 0, clSum = 0, indSum = 0, profSum = 0;
             int samples = 0;
             const double dt = 1.0 / 240.0;
             for (double t = 0; t < 60; t += dt)
@@ -205,6 +208,8 @@ public static class EnvelopeTests
                     inflowSum += h.Rotor.Inflow.Lambda0;
                     stallSum += h.Telemetry.StalledFraction;
                     clSum += h.Telemetry.BladeLoading;
+                    indSum += h.Telemetry.InducedPower;
+                    profSum += h.Telemetry.ProfilePower;
                     samples++;
                 }
             }
@@ -223,7 +228,8 @@ public static class EnvelopeTests
                               $" tail {pTail / n / 1000,5:F0}" +
                               $" drive {pDrive / n / 1000,5:F0}" +
                               $" para {pPara / n / 1000,5:F0} kW" +
-                              $"  stalled {stallSum / n,5:P0}  Ct/sig {clSum / n,6:F3}");
+                              $"  induced {indSum / n / 1000,6:F0} profile {profSum / n / 1000,6:F0} kW" +
+                              $"  stalled {stallSum / n,4:P0}");
 
             if (ratio > bestRatio) { bestRatio = ratio; bestKt = kt; bestRod = rod; }
             if (nr < 60) failure ??= $"rotor decayed to {nr:F0}% autorotating at {kt:F0} kt";
