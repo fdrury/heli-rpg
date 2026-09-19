@@ -1737,3 +1737,39 @@ search gating, determinism, and Progress integration. All pass.
 short authored sequence. Both can be changed without touching the flight model, world, or
 combat. The save format adds three fields (Contracts, ContractsCompleted, SearchStage)
 which are forward-compatible.
+
+## D-052 — Interior window glow: emissive shader, not real lights · 2026-09-19
+
+**Decision.** Standing residential buildings glow warm amber through their windows at
+night. Implemented as a thin emissive plane between the dark recess and the glass in
+every `WindowBand`, driven by a shader (`window_glow.gdshader`) whose `daylight`
+uniform is pushed once per frame from `SceneMoodDriver`.
+
+**Why emissive geometry rather than OmniLight3D nodes.** A settlement has 7–14 buildings
+with 3–5 windows each — 50+ potential light sources. Forward+ clusters handle real
+lights well, but not fifty per settlement with multiple settlements loaded. An emissive
+surface costs nothing beyond the draw call it is already part of, and at approach altitude
+(70–150 m) a warm rectangle behind glass reads as "someone's home" without needing to
+cast light onto surrounding geometry. The bloom pass (`GlowHdrThreshold = 1.05`) catches
+the emission and softens it, which is the only spill the effect needs.
+
+**Why a shader, not a second StandardMaterial3D.** The glow has to track the day/night
+cycle: invisible at noon, full at midnight, fading through twilight. A `StandardMaterial3D`
+would need its `Emission` updated every frame on a shared material, which changes the
+render hash and forces a pipeline rebind. A shader reads the uniform without touching
+the material state. It also provides per-window variation (some rooms dark, slight colour
+and flicker differences) from a world-position hash, so no two windows glow identically.
+
+**Per-window variation.** ~30% of windows stay dark (empty rooms, storage). The rest vary
+in warmth and have a slow, desynchronised flicker that reads as firelight rather than
+electric light. All variation is derived from the window's world position, so it is
+stable across frames and across save/load.
+
+**Verified.** Shots `29_night_settlement` and `30_night_settlement_close` show warm
+rectangles visible from 50 m and 25 m at night. Daytime shots (`10_settlement`,
+`26_settlement_close`) show no glow artefacts. No performance regression: the settlement
+shot holds 33–36 fps on the GTX 1650 Ti, identical to the pre-glow baseline.
+
+**Reversibility:** high. Delete the glow plane from `WindowBand`, the `Glow` field from
+`Palette`, and the one-line update in `SceneMoodDriver`. The shader file is inert if
+unreferenced.

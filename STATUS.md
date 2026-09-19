@@ -194,6 +194,12 @@ Door openings and chimneys (~35%) appear on standing houses. Sheds gain ridge ve
 loading docks. Collapsed buildings can have a partial wall still standing. Small
 buildings (relay shacks) get simple gable or flat parapet only.
 
+**Interior lighting** — windows glow warm amber at night (D-052). An emissive shader
+plane behind the glass fades in through twilight, driven by the same daylight fraction
+that controls the sun. ~30% of windows stay dark; the rest vary in warmth and flicker
+like firelight. No real lights — the emissive surface plus bloom is enough to read as
+inhabited from approach altitude. Zero performance cost on a GTX 1650 Ti.
+
 **Airframe wear** — procedural object-space shader on the aircraft body. Sun-bleaching
 (upward-facing surfaces fade), grime (undersides darken), panel lines, dirt streaking,
 repair patches in a slightly wrong shade, and soot damage driven by the damage model.
@@ -224,9 +230,7 @@ godot --headless --path game -- --looptest
 
 ## Next
 
-1. **Interior lighting.** Buildings have dark window recesses but no light comes from
-   inside. A warm glow behind the glass at night would make settlements read as inhabited.
-2. **Autorotation glides half as far as it should.** Measured and localised, not fixed —
+1. **Autorotation glides half as far as it should.** Measured and localised, not fixed —
    `simlab autoglide`, D-041 and D-043. Best glide 1.99:1 at 3191 fpm against a real
    4:1 at 1700. Ruled out: vortex ring (severity exactly 0.00), inflow (λ 0.009, which is
    what momentum theory gives at μ 0.125), blade loading (C_T/σ 0.070). What remains is

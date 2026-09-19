@@ -295,6 +295,11 @@ public sealed partial class SceneMoodDriver : Node
             env.AmbientLightEnergy *= 1f - storm * 0.35f;
             env.TonemapExposure *= 1f - storm * 0.15f;
         }
+
+        // --- Interior window glow ----------------------------------------------
+        // Push the daylight fraction into the shared glow material so every window
+        // in the world fades in together through twilight.
+        SiteKit.Materials.Glow.SetShaderParameter("daylight", day);
     }
 
     /// <summary>Aim a directional light along a direction of travel.</summary>

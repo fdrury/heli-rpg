@@ -81,6 +81,11 @@ public sealed partial class ScreenshotDirector : Node
             ForceFlash: true),
         new("28_storm_cockpit",  CameraMode.Cockpit,110f, 38f, 2.4f, null, 704.0,
             ForceFlash: true),
+
+        // Night settlement: proves the interior window glow reads as inhabited after dark.
+        // Low approach altitude so windows subtend enough pixels to see the warm colour.
+        new("29_night_settlement",      CameraMode.Chase, 50f, 0f, 0.4f, SiteKind.Settlement, 22.0),
+        new("30_night_settlement_close", CameraMode.Orbit, 25f, 0f, 0.4f, SiteKind.Settlement, 22.0),
     };
 
     private Site? _aimedAt;

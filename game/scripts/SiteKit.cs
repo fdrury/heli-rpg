@@ -32,6 +32,12 @@ public static class SiteKit
         public Material Dark = null!;
         public Material Glass = null!;
 
+        /// <summary>
+        /// Warm emissive surface behind window glass, driven by the day/night cycle.
+        /// ShaderMaterial so SceneMoodDriver can push the daylight fraction each frame.
+        /// </summary>
+        public ShaderMaterial Glow = null!;
+
         public static Palette Build()
         {
             Material M(Color c, float rough, float metal = 0f) => new StandardMaterial3D
@@ -40,6 +46,20 @@ public static class SiteKit
                 Roughness = rough,
                 Metallic = metal,
             };
+
+            var glowShader = GD.Load<Shader>("res://assets/buildings/window_glow.gdshader");
+            ShaderMaterial glow;
+            if (glowShader is not null)
+            {
+                glow = new ShaderMaterial { Shader = glowShader };
+                glow.SetShaderParameter("daylight", 1.0f);
+            }
+            else
+            {
+                GD.PushWarning("[sitekit] window glow shader missing, windows will not light up");
+                glow = new ShaderMaterial();
+            }
+
             return new Palette
             {
                 Concrete = M(new Color(0.46f, 0.45f, 0.42f), 0.92f),
@@ -54,6 +74,7 @@ public static class SiteKit
                     Roughness = 0.18f,
                     MetallicSpecular = 0.8f,
                 },
+                Glow = glow,
             };
         }
     }
@@ -433,6 +454,10 @@ public static class SiteKit
     /// Windows on one face, with a dark recess behind the glass. The recess is what makes
     /// a window read as an opening into a room rather than a reflective sticker — it is
     /// cheap and it is the single biggest "interior suggestion" trick at this polygon budget.
+    ///
+    /// The glow plane sits between the recess and the glass. During the day it is invisible
+    /// (alpha 0); at night the shader fades it in as a warm emissive rectangle that reads as
+    /// interior light even from approach altitude. The glass in front tints and softens it.
     /// </summary>
     private static void WindowBand(Node3D root, RandomNumberGenerator rng, Vector3 at,
                                    float w, float h, float d, float yaw)
@@ -448,6 +473,10 @@ public static class SiteKit
             Vector3 recessLocal = new(t * w * 0.82f, h * 0.55f, d * 0.5f - 0.08f);
             Vector3 recessRotated = recessLocal.Rotated(Vector3.Up, yaw);
             Add(root, Box(1.1f, 1.2f, 0.2f), Materials.Dark, at + recessRotated, yaw);
+            // Glow plane: just proud of the recess, behind the glass.
+            Vector3 glowLocal = new(t * w * 0.82f, h * 0.55f, d * 0.5f + 0.03f);
+            Vector3 glowRotated = glowLocal.Rotated(Vector3.Up, yaw);
+            Add(root, Box(1.05f, 1.15f, 0.02f), Materials.Glow, at + glowRotated, yaw);
             Add(root, Box(1.0f, 1.1f, 0.05f), Materials.Glass, at + rotated, yaw);
         }
     }
