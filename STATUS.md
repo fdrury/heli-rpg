@@ -26,7 +26,7 @@ a thing you do not know exists.
 # the game
 tools/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe --path game
 
-# 29 headless tests (flight + loadout) - no engine needed
+# 34 headless tests (flight + loadout + combat) - no engine needed
 dotnet run --project tools/simlab -c Release -- all
 
 # render a 126 s sortie to builds/audio/sortie.wav and listen to it
@@ -37,6 +37,9 @@ godot --headless --path game -- --selftest
 
 # fly the actual game loop and check it works
 godot --headless --path game -- --looptest
+
+# on-foot combat: land, dismount, shoot NPCs, called shots with Rotor Time
+godot --headless --path game -- --combattest
 
 # survey the generated world: terrain statistics, site placement, coverage
 godot --headless --path game -- --worldreport
@@ -51,6 +54,9 @@ godot --path game -- --screenshot
 Controls: `W`/`S` or throttle = collective · arrows or stick = cyclic · `A`/`D` or twist =
 pedals · `TAB` kneeboard · `1`-`4` actions · `Z`/`X` chaff/flares · `C` camera ·
 `F2` stability augmentation (requires module) · `R` respawn.
+
+On foot: `WASD` move · `Shift` sprint · `LMB` fire · `RMB` Rotor Time · `R` reload ·
+`F` board Hugh.
 
 ## Done
 
@@ -118,9 +124,21 @@ because CharacterBody3D.MoveAndSlide does not work with ConcavePolygonShape3D in
 Godot 4.7. The foottest exercises the full cycle: fly, land, shut down, dismount, walk,
 activate/drain Rotor Time, walk back, board.
 
+**Combat** — hitscan sidearm (revolver, 6 rounds, 18 total) with called shots through
+Rotor Time (D-016). Seven body zones (head, torso, arms, legs, weapon) as StaticBody3D
+collision shapes on each hostile NPC; a ray from the camera determines what was hit.
+Head → instant down, torso → wound, arm → accuracy loss, leg → immobilise, weapon →
+disarm. During Rotor Time the HUD projects diamond markers onto each zone with labels,
+highlighting whichever is under the crosshair. The pilot has 100 HP (three hits and
+you're down, recover at Hugh). Hostile NPCs detect, face and fire back with a reaction
+delay; zone effects stack (two arm hits make them nearly useless, one leg hit pins them
+in place). Ammo counter, pilot health bar, red vignette damage flash, and shot-feedback
+text all draw in the existing HUD aesthetic. The combattest exercises the full cycle:
+fly, land, shut down, dismount, spawn NPC, hip fire, aimed torso shot, Rotor Time
+headshot, reload, pilot damage, board.
+
 ## Next
 
-7. On-foot combat: called shots with Rotor Time targeting
 8. Save / load
 
 ## Open questions for Fred

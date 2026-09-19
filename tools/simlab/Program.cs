@@ -81,6 +81,11 @@ public static class Program
         Run("countermeasures", ThreatTests.Countermeasures);
         Run("survivability", ThreatTests.Survivability);
         Run("routeinflation", ThreatTests.RouteInflation);
+        Run("combat_zones", CombatTests.ZoneResolution);
+        Run("combat_npc", CombatTests.NpcHealthEffects);
+        Run("combat_attrition", CombatTests.NpcAttrition);
+        Run("combat_sidearm", CombatTests.SidearmMechanics);
+        Run("combat_pilot", CombatTests.PilotHealthCycle);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 

@@ -29,6 +29,8 @@ public sealed partial class Main : Node3D
     private CodaServer _codaServer = null!;
     private PilotController _pilot = null!;
     private RotorTime _rotorTime = null!;
+    private Sidearm _sidearm = null!;
+    private readonly System.Collections.Generic.List<HostileNpc> _hostileNpcs = new();
     private Label _debugLabel = null!;
     private bool _showDebug;
     private GameMode _mode = GameMode.Flying;
@@ -36,6 +38,7 @@ public sealed partial class Main : Node3D
     /// <summary>Current game mode, read by HUD and other systems.</summary>
     public GameMode Mode => _mode;
     public RotorTime RotorTimeSystem => _rotorTime;
+    public Sidearm Sidearm => _sidearm;
 
     public override void _Ready()
     {
@@ -92,6 +95,9 @@ public sealed partial class Main : Node3D
         _rotorTime.SetHelicopter(_heli);
         AddChild(_rotorTime);
 
+        _sidearm = new Sidearm { Name = "Sidearm" };
+        AddChild(_sidearm);
+
         _landing = new LandingController { Name = "Landing", HelicopterPath = _heli.GetPath() };
         AddChild(_landing);
 
@@ -139,6 +145,8 @@ public sealed partial class Main : Node3D
         };
         layer.AddChild(_hud);
         _hud.SetRotorTime(_rotorTime);
+        _hud.SetSidearm(_sidearm);
+        _hud.SetCamera(_camera);
 
         _kneeboard = new Kneeboard
         {
@@ -209,6 +217,15 @@ public sealed partial class Main : Node3D
                 _threats.Disabled = true;
                 AddChild(new FootTest(this, _heli, _play, _landing, _sites, _pilot, _rotorTime)
                 { Name = "FootTest" });
+                break;
+            }
+            if (arg == "--combattest")
+            {
+                GD.Print("[main] running the combat test");
+                _hud.Visible = false;
+                _threats.Disabled = true;
+                AddChild(new CombatTest(this, _heli, _play, _landing, _sites, _pilot, _rotorTime, _sidearm)
+                { Name = "CombatTest" });
                 break;
             }
             if (arg == "--screenshot")
@@ -364,6 +381,13 @@ public sealed partial class Main : Node3D
             return;
         }
 
+        // Left click: fire sidearm when on foot.
+        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } && _mode == GameMode.OnFoot)
+        {
+            FireSidearm();
+            return;
+        }
+
         if (@event is not InputEventKey { Pressed: true, Echo: false } key) return;
 
         // While dialogue is open, route input there instead of to the rest of the game.
@@ -424,7 +448,8 @@ public sealed partial class Main : Node3D
         // Mode-specific keys.
         if (_mode == GameMode.Flying)
             HandleFlightKey(key);
-        // On foot: WASD is handled by PilotController.Move() in _PhysicsProcess, not here.
+        else if (_mode == GameMode.OnFoot)
+            HandleOnFootKey(key);
     }
 
     private void HandleFlightKey(InputEventKey key)
@@ -457,6 +482,55 @@ public sealed partial class Main : Node3D
                 }
                 break;
         }
+    }
+
+    /// <summary>Spawn a hostile NPC at a position, wired to the combat system.</summary>
+    public HostileNpc SpawnHostileNpc(Vector3 position, float yaw)
+    {
+        var npc = new HostileNpc { Name = $"Hostile_{_hostileNpcs.Count}" };
+        AddChild(npc);
+        npc.SpawnAt(position, yaw);
+        npc.SetTarget(_pilot);
+
+        npc.Fired += didHit =>
+        {
+            if (didHit && _mode == GameMode.OnFoot)
+            {
+                _sidearm.TakeNpcHit(npc.Damage);
+                if (_sidearm.PilotHp.IsDown)
+                {
+                    GD.Print("[combat] pilot is down — retreating to Hugh");
+                    _sidearm.PilotHp.Recover(0.5f);
+                    TryBoard();
+                }
+            }
+        };
+
+        npc.Hit += result =>
+            GD.Print($"[combat] {npc.Name}: {result.Description}");
+
+        _hostileNpcs.Add(npc);
+        return npc;
+    }
+
+    private void HandleOnFootKey(InputEventKey key)
+    {
+        switch (key.Keycode)
+        {
+            case Key.R:
+                _sidearm.TryReload();
+                break;
+        }
+    }
+
+    /// <summary>Fire the sidearm from the camera centre.</summary>
+    private void FireSidearm()
+    {
+        var space = GetWorld3D().DirectSpaceState;
+        Vector2 screenCentre = GetViewport().GetVisibleRect().Size / 2;
+        Vector3 origin = _camera.ProjectRayOrigin(screenCentre);
+        Vector3 direction = _camera.ProjectRayNormal(screenCentre);
+        _sidearm.Fire(origin, direction, space);
     }
 
     // ------------------------------------------------------- mode transitions
@@ -550,7 +624,9 @@ public sealed partial class Main : Node3D
                 $"fps {Engine.GetFramesPerSecond()}   mode ON FOOT\n" +
                 $"pos {_pilot.GlobalPosition}\n" +
                 $"rt charge {_rotorTime.Charge:P0}  active {_rotorTime.Active}\n" +
-                $"timescale {Engine.TimeScale:F2}";
+                $"timescale {Engine.TimeScale:F2}\n" +
+                $"sidearm {_sidearm.State.Rounds}/{_sidearm.State.Capacity} (+{_sidearm.State.SpareRounds})  " +
+                $"hp {_sidearm.PilotHp.Health:F0}";
             return;
         }
         var t = _heli.Sim.Telemetry;

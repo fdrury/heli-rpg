@@ -876,3 +876,43 @@ The explicit material eliminated the effect completely: the same 4° slope now p
 clean touchdown with no bounce.
 
 **Reversible.** One property on the StaticBody3D constructor.
+
+## D-035 — On-foot combat: hitscan sidearm with called shots · 2026-09-19
+
+**Decision.** The pilot carries a revolver (6-round cylinder, 12 spare). Left click fires
+a hitscan ray from the camera centre. When it intersects a hostile NPC's body-zone
+collision shape, that zone's effect applies: head → instant down, torso → wound (speed
+halved), arm → accuracy loss (×0.4 stacked), leg → immobilise, weapon → disarm. During
+Rotor Time the HUD projects diamond markers onto every visible zone with labels, and the
+one under the crosshair is highlighted — the mechanic is skill-based aiming in slow-motion,
+not a target-lock menu. The pilot has 100 HP; hostile NPCs fire back after a reaction delay
+with a hit probability scaled by their accuracy factor and range.
+
+**Architecture.** `sim/src/Combat.cs` (pure .NET) owns the data model: `BodyZone` enum,
+`CalledShot.Resolve()` for effect lookup, `NpcHealth` for per-zone damage tracking with
+effect stacking, `SidearmState` for ammo management, `PilotHealth` for player damage.
+`game/scripts/HostileNpc.cs` builds seven `StaticBody3D` zone colliders on collision
+layer 4 with `body_zone` metadata. `game/scripts/Sidearm.cs` fires the ray and resolves
+hits. `FlightHud.cs` draws ammo counter, pilot health bar, damage flash vignette, shot
+feedback text, and zone markers (the markers only appear during Rotor Time). Main wires
+NPC fire events → pilot damage → recovery. Five simlab tests cover zone resolution, NPC
+attrition, sidearm mechanics and pilot health. The combattest exercises the full cycle
+headless: fly, land, dismount, spawn NPC, hip fire, aimed torso shot, RT headshot, reload,
+pilot damage, board.
+
+**Why this design.** The vision doc says Rotor Time is "one mechanic in two contexts":
+in flight it places shots from a manoeuvre; on foot it places called shots against body
+zones. The mechanic IS the slow-motion — without RT you fire centre mass and hope; with
+RT you can pick a limb. This makes the charge-from-flying loop pay out on foot, which is
+the bridge that makes the pilot feel like the same person in both contexts. Violence has
+weight: six rounds, limited spare ammo, and three-hits-down for the pilot makes every
+encounter tense rather than trivial.
+
+**Why hitscan, not projectile.** A revolver's bullet travel time over 50 m is ~0.07 s.
+Modelling it adds complexity (raycasts per frame, leading targets) that would be
+invisible to the player at these ranges. Hitscan is honest about what it is.
+
+**Reversibility:** high. The combat layer is additive — removing it means deleting four
+files and the wiring in Main. The sim-layer types have no dependents outside combat.
+NPC spawning is driven by `SpawnHostileNpc()` in Main; integrating it with the world
+(which sites are hostile, bandit camps, etc.) is a separate decision.

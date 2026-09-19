@@ -28,6 +28,8 @@ public sealed partial class FlightHud : Control
     private SiteInteraction? _play;
     private ThreatWorld? _threats;
     private RotorTime? _rotorTime;
+    private Sidearm? _sidearm;
+    private Camera3D? _camera;
     private Font _font = null!;
     private double _warnBlink;
     private bool _onFoot;
@@ -50,6 +52,8 @@ public sealed partial class FlightHud : Control
     }
 
     public void SetRotorTime(RotorTime rt) => _rotorTime = rt;
+    public void SetSidearm(Sidearm s) => _sidearm = s;
+    public void SetCamera(Camera3D cam) => _camera = cam;
     public void SetOnFoot(bool onFoot) => _onFoot = onFoot;
 
     public override void _Process(double delta)
@@ -69,6 +73,11 @@ public sealed partial class FlightHud : Control
         if (_onFoot)
         {
             DrawCrosshair(size);
+            DrawAmmoCounter(new Vector2(size.X - 180, size.Y - 100));
+            DrawPilotHealth(new Vector2(28, size.Y - 100));
+            DrawDamageFlash(size);
+            DrawShotFeedback(size);
+            DrawZoneMarkers(size);
             DrawSitePanel(new Vector2(size.X * 0.5f - 250, size.Y - 300));
             DrawFooterOnFoot(size);
             return;
@@ -477,7 +486,7 @@ public sealed partial class FlightHud : Control
 
     private void DrawFooterOnFoot(Vector2 size)
     {
-        string help = "WASD: move   Shift: sprint   Mouse: look   RMB: Rotor Time   " +
+        string help = "WASD: move   LMB: fire   RMB: Rotor Time   R: reload   " +
                       "TAB: kneeboard   F: board Hugh";
         DrawString(_font, new Vector2(20, size.Y - 16), help, HorizontalAlignment.Left, -1, 12,
                    Dim * new Color(1, 1, 1, 0.55f));
@@ -526,6 +535,170 @@ public sealed partial class FlightHud : Control
 
         if (_rotorTime is { Active: true })
             DrawCircle(c, 2f, col);
+    }
+
+    // -------------------------------------------------------- combat HUD
+
+    /// <summary>
+    /// Ammo counter: rounds in cylinder and spare. Bottom right, matches the
+    /// instrument panel aesthetic.
+    /// </summary>
+    private void DrawAmmoCounter(Vector2 origin)
+    {
+        if (_sidearm is null) return;
+        var s = _sidearm.State;
+
+        DrawRect(new Rect2(origin, new Vector2(156, 58)), Panel);
+
+        string status = _sidearm.IsReloading ? "RELOADING" : "SIDEARM";
+        Label(origin + new Vector2(10, 16), status,
+              _sidearm.IsReloading ? Warn : Dim, 11);
+
+        // Cylinder dots: filled for loaded, hollow for empty.
+        for (int i = 0; i < s.Capacity; i++)
+        {
+            Vector2 p = origin + new Vector2(10 + i * 16, 34);
+            if (i < s.Rounds)
+                DrawCircle(p, 5, Bright);
+            else
+            {
+                DrawArc(p, 5, 0, Mathf.Tau, 12, Dim, 1.2f);
+            }
+        }
+
+        // Spare count
+        Label(origin + new Vector2(108, 42), $"+{s.SpareRounds}", Dim, 12);
+    }
+
+    private void DrawPilotHealth(Vector2 origin)
+    {
+        if (_sidearm is null) return;
+        float hp = _sidearm.PilotHp.Health;
+        float max = _sidearm.PilotHp.MaxHealth;
+        float frac = hp / max;
+
+        DrawRect(new Rect2(origin, new Vector2(156, 36)), Panel);
+        Label(origin + new Vector2(10, 16), "PILOT", Dim, 11);
+        Color c = frac < 0.35f ? Danger : frac < 0.6f ? Warn : Bright;
+        Bar(origin + new Vector2(10, 24), 136, frac, c);
+    }
+
+    /// <summary>Red vignette flash when the pilot takes damage.</summary>
+    private void DrawDamageFlash(Vector2 size)
+    {
+        if (_sidearm is null) return;
+        float t = _sidearm.TimeSinceDamage;
+        if (t > 0.6f) return;
+
+        float alpha = (1f - t / 0.6f) * 0.35f;
+        Color flash = new(0.9f, 0.1f, 0.05f, alpha);
+
+        // Vignette: four edge strips
+        float inset = 60;
+        DrawRect(new Rect2(0, 0, size.X, inset), flash);                     // top
+        DrawRect(new Rect2(0, size.Y - inset, size.X, inset), flash);        // bottom
+        DrawRect(new Rect2(0, inset, inset, size.Y - inset * 2), flash);     // left
+        DrawRect(new Rect2(size.X - inset, inset, inset, size.Y - inset * 2), flash); // right
+    }
+
+    /// <summary>Brief feedback text when a shot hits or misses.</summary>
+    private void DrawShotFeedback(Vector2 size)
+    {
+        if (_sidearm is null) return;
+        float t = _sidearm.TimeSinceLastShot;
+        if (t > 1.5f) return;
+
+        var shot = _sidearm.LastShot;
+        if (shot is null) return;
+
+        float alpha = Mathf.Clamp(1f - t / 1.5f, 0, 1);
+        Vector2 pos = new(size.X * 0.5f, size.Y * 0.38f);
+
+        if (shot.Value.DidHit && shot.Value.Effect is { } eff)
+        {
+            Color c = eff.Effect == ZoneEffect.Incapacitate ? Danger
+                     : eff.Effect == ZoneEffect.Disarm ? Warn
+                     : Bright;
+            c.A *= alpha;
+            string text = eff.Description.ToUpperInvariant();
+            var sz = _font.GetStringSize(text, HorizontalAlignment.Left, -1, 16);
+            DrawString(_font, pos - new Vector2(sz.X / 2, 0), text,
+                       HorizontalAlignment.Left, -1, 16, c);
+        }
+        else
+        {
+            Color c = Dim;
+            c.A *= alpha;
+            string text = "MISS";
+            var sz = _font.GetStringSize(text, HorizontalAlignment.Left, -1, 14);
+            DrawString(_font, pos - new Vector2(sz.X / 2, 0), text,
+                       HorizontalAlignment.Left, -1, 14, c);
+        }
+    }
+
+    /// <summary>
+    /// During Rotor Time, project body zone markers onto visible hostile NPCs.
+    /// This is the "called shot" — the slow-motion highlights what you can aim at.
+    /// </summary>
+    private void DrawZoneMarkers(Vector2 size)
+    {
+        if (_rotorTime is not { Active: true }) return;
+        if (_camera is null) return;
+
+        // Find hostile NPCs in the scene.
+        var main = GetNode<Main>("/root/Main");
+        if (main is null) return;
+
+        foreach (var child in main.GetChildren())
+        {
+            if (child is not HostileNpc npc) continue;
+            if (npc.Health.IsDown) continue;
+
+            float dist = _camera.GlobalPosition.DistanceTo(npc.GlobalPosition);
+            if (dist > 60f) continue;
+
+            // Project each zone's world position to screen space.
+            foreach (var zoneChild in npc.GetChildren())
+            {
+                if (zoneChild is not StaticBody3D zoneBody) continue;
+                if (!zoneBody.HasMeta("body_zone")) continue;
+
+                var zone = (BodyZone)(int)zoneBody.GetMeta("body_zone");
+                Vector3 worldPos = zoneBody.GlobalPosition;
+
+                if (_camera.IsPositionBehind(worldPos)) continue;
+                Vector2 screen = _camera.UnprojectPosition(worldPos);
+
+                // Zone label
+                string label = zone switch
+                {
+                    BodyZone.Head => "HEAD",
+                    BodyZone.Torso => "BODY",
+                    BodyZone.LeftArm => "L.ARM",
+                    BodyZone.RightArm => "R.ARM",
+                    BodyZone.LeftLeg => "L.LEG",
+                    BodyZone.RightLeg => "R.LEG",
+                    BodyZone.Weapon => "WEAPON",
+                    _ => "?",
+                };
+
+                // Highlight the zone nearest to crosshair.
+                float distToCenter = screen.DistanceTo(size * 0.5f);
+                bool nearCross = distToCenter < 50f;
+                Color c = nearCross ? RtActive : Dim * new Color(1, 1, 1, 0.75f);
+
+                // Diamond marker
+                float markerSize = nearCross ? 8f : 5f;
+                DrawLine(screen + new Vector2(0, -markerSize), screen + new Vector2(markerSize, 0), c, 1.4f);
+                DrawLine(screen + new Vector2(markerSize, 0), screen + new Vector2(0, markerSize), c, 1.4f);
+                DrawLine(screen + new Vector2(0, markerSize), screen + new Vector2(-markerSize, 0), c, 1.4f);
+                DrawLine(screen + new Vector2(-markerSize, 0), screen + new Vector2(0, -markerSize), c, 1.4f);
+
+                // Label offset to the right
+                DrawString(_font, screen + new Vector2(markerSize + 4, 4), label,
+                           HorizontalAlignment.Left, -1, nearCross ? 12 : 10, c);
+            }
+        }
     }
 
     // --------------------------------------------------------------- helpers
