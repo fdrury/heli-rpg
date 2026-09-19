@@ -173,6 +173,8 @@ public static class EnvelopeTests
             // happens to be and the numbers come out non-monotonic with speed - 60 kt
             // apparently gliding worse than both 50 and 80, which no aircraft does.
             double rodSum = 0, nrSum = 0, groundSum = 0;
+            double pMain = 0, pTail = 0, pDrive = 0, pPara = 0, vrsSum = 0, inflowSum = 0;
+            double stallSum = 0, clSum = 0;
             int samples = 0;
             const double dt = 1.0 / 240.0;
             for (double t = 0; t < 60; t += dt)
@@ -192,6 +194,17 @@ public static class EnvelopeTests
                     nrSum += h.Telemetry.RotorRpmPercent;
                     groundSum += Math.Sqrt(h.State.Velocity.X * h.State.Velocity.X +
                                            h.State.Velocity.Y * h.State.Velocity.Y);
+                    // Averaged with everything else. The collective loop holding Nr hunts
+                    // a little, so a single sample of shaft power catches the hunt rather
+                    // than the condition - which is D-042 for the third time in one file.
+                    pMain += h.Telemetry.MainRotorPower;
+                    pTail += h.Telemetry.TailRotorPower;
+                    pDrive += h.Telemetry.DrivetrainPower;
+                    pPara += h.Telemetry.ParasitePower;
+                    vrsSum += h.Telemetry.VrsSeverity;
+                    inflowSum += h.Rotor.Inflow.Lambda0;
+                    stallSum += h.Telemetry.StalledFraction;
+                    clSum += h.Telemetry.BladeLoading;
                     samples++;
                 }
             }
@@ -200,7 +213,17 @@ public static class EnvelopeTests
             double nr = samples > 0 ? nrSum / samples : 0;
             double ground = samples > 0 ? groundSum / samples : 0;
             double ratio = rod > 0.1 ? ground / rod : 0;
-            Console.WriteLine($"  {kt,5:F0}  {rod * Fpm,6:F0} fpm   {ratio,5:F2}:1  {nr,5:F0}%");
+            // Close the energy books. Descent power is weight times rate of descent, and
+            // everything it pays for is now itemised.
+            double weight = h.TotalMass * Atmosphere.Gravity;
+            double n = Math.Max(samples, 1);
+            Console.WriteLine($"  {kt,5:F0}  {rod * Fpm,6:F0} fpm   {ratio,5:F2}:1  {nr,5:F0}%  " +
+                              $"descent {weight * rod / 1000,5:F0} kW =" +
+                              $" main {pMain / n / 1000,6:F0}" +
+                              $" tail {pTail / n / 1000,5:F0}" +
+                              $" drive {pDrive / n / 1000,5:F0}" +
+                              $" para {pPara / n / 1000,5:F0} kW" +
+                              $"  stalled {stallSum / n,5:P0}  Ct/sig {clSum / n,6:F3}");
 
             if (ratio > bestRatio) { bestRatio = ratio; bestKt = kt; bestRod = rod; }
             if (nr < 60) failure ??= $"rotor decayed to {nr:F0}% autorotating at {kt:F0} kt";

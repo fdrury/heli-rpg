@@ -1358,3 +1358,33 @@ The same mistake, in three costumes: control-derivative tests that measured depa
 instead of response; audio tests that held blade loading fixed while varying torque, a
 condition no aircraft can be in; and this. **Decide what condition you are measuring, hold
 it, and only then read.**
+
+## D-043 — Power is itemised, and the autorotation gap is localised
+
+**Decision.** `FlightTelemetry` now breaks power into main rotor, tail rotor, drivetrain and
+parasite, each averaged over a rotor revolution.
+
+**Why.** A single `PowerRequired` cannot tell you whether a glide is steep because the rotor
+is inefficient, because the tail is dragging, or because the fuselage is — and D-041 could
+not close the energy books without it.
+
+**The averaging is not optional.** A two-bladed rotor puts a violent 2/rev into shaft
+torque: instantaneous main-rotor power in a *steady* autorotation swung between −347 and
++464 kW depending purely on blade azimuth. That looks like a diagnosis and is actually a
+phase reading. The tip-path-plane telemetry had to learn the same lesson; this is the same
+aliasing in a different gauge, and the same number drives the pilot's torque display.
+
+**What it localised.** At 60 kt the descent supplies 714 kW where powered level flight at the
+same speed needs 440 — the rotor dissipates ~270 kW more in the descent. Ruled out along the
+way:
+
+* **Not vortex ring.** Severity reads exactly 0.00 at every glide speed; the window is
+  correctly closed by forward speed.
+* **Not the inflow.** λ ≈ 0.009 at 60 kt, which is what momentum theory gives for
+  C_T/(2μ) at μ = 0.125. The inflow model is behaving.
+* **Not overloading.** C_T/σ sits near 0.070, normal.
+
+What is left is **profile power**, which would have to roughly triple between powered flight
+and the descent, with 9–15% of blade elements past stall. The next step is to split induced
+from profile inside `MainRotor` and look at the post-stall drag rise — that is a change
+inside the blade-element loop and wants its own session.

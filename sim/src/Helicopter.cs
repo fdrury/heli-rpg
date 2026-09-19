@@ -33,6 +33,22 @@ public struct FlightTelemetry
     public double Thrust;
     public double PowerRequired;
     public double PowerAvailable;
+
+    // --- Where the power goes -----------------------------------------------
+    // Broken out because "PowerRequired" as a single number cannot tell you whether an
+    // autorotation is descending too fast because the rotor is inefficient, because the
+    // tail is dragging, or because the fuselage is. The envelope test measured a glide
+    // ratio half the real aircraft's (D-041) and could not close the energy books without
+    // these, and a pilot's torque gauge is a single number for the same reason a diagnosis
+    // needs more than one.
+    /// <summary>Shaft power the main rotor demands, W. Negative when autorotating.</summary>
+    public double MainRotorPower;
+    /// <summary>Shaft power the tail rotor demands, referred to the main shaft, W.</summary>
+    public double TailRotorPower;
+    /// <summary>Drivetrain losses, W.</summary>
+    public double DrivetrainPower;
+    /// <summary>Power spent dragging the fuselage through the air, W.</summary>
+    public double ParasitePower;
     public double FuelKg;
     public double FuelFlow;          // kg/s
     public double Sideslip;          // rad
@@ -126,6 +142,7 @@ public sealed class Helicopter
     public bool UseInternalGroundModel { get; set; } = true;
 
     private Vec3 _lastAccelBody;
+    private double _pMain, _pTail, _pDrive, _pPara;
     private double _cachedMass;
     private Vec3 _cachedCg;
     private Mat3 _inertia, _inertiaInv;
@@ -400,10 +417,14 @@ public sealed class Helicopter
         // fuselage - a real and annoying few percent of thrust you never get back.
         double q = 0.5 * rho * Damage.DragFactor;
         Vec3 vb = vAirBody;
-        forceBody += new Vec3(
+        var parasite = new Vec3(
             -q * af.DragArea.X * vb.X * Math.Abs(vb.X),
             -q * af.DragArea.Y * vb.Y * Math.Abs(vb.Y),
             -q * af.DragArea.Z * vb.Z * Math.Abs(vb.Z));
+        forceBody += parasite;
+
+        // Work rate against that drag: what the airframe costs simply to move.
+        double parasitePower = -Vec3.Dot(parasite, vb);
         forceBody += Vec3.Down * (Math.Max(mr.Thrust, 0) * af.VerticalDrag / (1.0 + advanceRatio * 12.0));
 
         // Fuselage static moments: a helicopter fuselage is aerodynamically unstable in
@@ -445,6 +466,25 @@ public sealed class Helicopter
         Telemetry.Thrust = mr.Thrust;
         Telemetry.PowerRequired = loadTorque * RotorOmega;
         Telemetry.PowerAvailable = pp.PowerAvailable;
+        // Averaged over a rotor revolution, not sampled.
+        //
+        // A two-bladed rotor puts a violent 2/rev into shaft torque: the instantaneous main
+        // rotor power in a steady autorotation swings between -347 and +464 kW depending
+        // purely on where the blades happen to be, which makes the number worse than
+        // useless - it looks like a diagnosis and is actually a phase reading. The
+        // aircraft's own telemetry already had to learn this lesson once for the tip-path
+        // plane; this is the same aliasing in a different gauge.
+        double rev = 2 * Math.PI / Math.Max(RotorOmega, 1.0);
+        double kp = 1.0 - Math.Exp(-dt / rev);
+        _pMain += (mr.ShaftTorque * RotorOmega - _pMain) * kp;
+        _pTail += (tailTorqueAtMain * RotorOmega - _pTail) * kp;
+        _pDrive += (losses * RotorOmega - _pDrive) * kp;
+        _pPara += (parasitePower - _pPara) * kp;
+
+        Telemetry.MainRotorPower = _pMain;
+        Telemetry.TailRotorPower = _pTail;
+        Telemetry.DrivetrainPower = _pDrive;
+        Telemetry.ParasitePower = _pPara;
         Telemetry.FuelKg = Fuel;
         Telemetry.FuelFlow = pp.FuelFlow;
         Telemetry.Sideslip = speed > 1 ? Math.Asin(Math.Clamp(vb.Y / speed, -1, 1)) : 0;
