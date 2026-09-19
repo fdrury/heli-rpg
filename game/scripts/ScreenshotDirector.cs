@@ -33,13 +33,14 @@ public sealed partial class ScreenshotDirector : Node
         new("07_close_orbit",    CameraMode.Orbit,   70f,   0f,  1.6f),
         new("08_brownout",       CameraMode.Orbit,    3.5f, 0f,  2.7f),
         new("09_brownout_cockpit", CameraMode.Cockpit, 3.5f, 0f, 2.7f),
-        new("10_settlement",     CameraMode.Chase,  160f,  0f,  0.4f, SiteKind.Settlement),
-        new("11_airfield",       CameraMode.Chase,  260f,  0f,  1.1f, SiteKind.Airfield),
+        new("10_settlement",     CameraMode.Chase,  110f,  0f,  0.4f, SiteKind.Settlement),
+        new("11_airfield",       CameraMode.Chase,  175f,  0f,  1.1f, SiteKind.Airfield),
         new("12_relay",          CameraMode.Orbit,   90f,  0f,  2.2f, SiteKind.Relay),
         new("13_depot_low",      CameraMode.Chase,   70f, 18f,  3.1f, SiteKind.Depot),
         new("06_high_cruise",    CameraMode.Chase,  420f,  50f,  5.1f),
     };
 
+    private Site? _aimedAt;
     private int _index;
     private double _time;
     private bool _capturing;
@@ -72,15 +73,32 @@ public sealed partial class ScreenshotDirector : Node
         Vector2 ground2;
         if (shot.Over is SiteKind kind)
         {
-            // Park just off the site so the chase camera looks across it rather than
-            // straight down at the roofs.
+            // Park off the site so the chase camera looks ACROSS it rather than straight
+            // down at the roofs.
+            //
+            // The stand-off has to scale with altitude, which a fixed 150 m did not. At the
+            // 160 m the settlement shot flies at, 150 m of stand-off puts the site 47 deg
+            // below the nose - well outside a 50 deg vertical field of view - so every site
+            // shot in the set was a picture of empty terrain with the site underneath the
+            // aircraft. Solving for a ~16 deg depression keeps the site in the lower third
+            // of frame, which is where you would actually look at it from.
+            //
+            // Orbit shots are different: that camera tracks the aircraft, so the site has to
+            // be close enough to sit behind it in frame.
             Site? site = WorldMap.Nearest(Vector2.Zero, kind);
             Vector2 centre = site?.Position ?? Vector2.Zero;
-            ground2 = centre - new Vector2(Mathf.Sin(shot.Heading), Mathf.Cos(shot.Heading)) * 150f;
+            float standOff = shot.Mode == CameraMode.Orbit ? 90f : shot.Altitude * 3.4f + 60f;
+            // PLUS, not minus. Measured: with the stand-off subtracted the subject came
+            // back 162 deg off axis - i.e. squarely behind the camera - which is why
+            // every site picture was a photograph of empty scenery with the settlement
+            // out of shot behind the aircraft.
+            ground2 = centre + new Vector2(Mathf.Sin(shot.Heading), Mathf.Cos(shot.Heading)) * standOff;
+            _aimedAt = site;
             GD.Print($"[shots] {shot.Name} -> {site?.Name ?? "nowhere"}");
         }
         else
         {
+            _aimedAt = null;
             ground2 = new Vector2(Mathf.Sin(shot.Heading) * 260f, Mathf.Cos(shot.Heading) * 260f);
         }
 
@@ -127,6 +145,23 @@ public sealed partial class ScreenshotDirector : Node
         var t = _heli.Sim.Telemetry;
         GD.Print($"[shots] {shot.Name}: {(err == Error.Ok ? "saved" : err.ToString())}  " +
                  $"{t.AirspeedTrue * 1.94384:F0} kt  {t.HeightAgl:F0} m agl  {Engine.GetFramesPerSecond()} fps");
+
+        // Whether the subject is actually in shot. Three site pictures in a row came back
+        // as empty scenery, and staring at them cannot distinguish "the site did not build"
+        // from "the site is behind the camera". This can.
+        if (_aimedAt is Site aim)
+        {
+            Camera3D cam = GetViewport().GetCamera3D();
+            Vector3 g = aim.Ground;
+            Vector3 rel = cam.GlobalTransform.Basis.Inverse() * (g - cam.GlobalPosition);
+            // Camera looks down -Z in Godot, so a subject in front has rel.Z < 0.
+            float range = new Vector2(g.X - cam.GlobalPosition.X, g.Z - cam.GlobalPosition.Z).Length();
+            float offAxis = Mathf.RadToDeg(Mathf.Atan2(new Vector2(rel.X, rel.Y).Length(), -rel.Z));
+            int built = GetTree().Root.FindChild("Sites", true, false)?.GetChildCount() ?? -1;
+            GD.Print($"[shots]     subject {aim.Name}: {range:F0} m away, " +
+                     $"{(rel.Z < 0 ? "AHEAD" : "BEHIND")}, {offAxis:F0} deg off axis, " +
+                     $"{built} sites built");
+        }
 
         _index++;
         _capturing = false;
