@@ -93,13 +93,43 @@ public struct TalkContext
     /// <summary>What is bolted to the aircraft. Visible to anyone standing next to it.</summary>
     public readonly List<string> VisibleFittings = new();
 
+    /// <summary>
+    /// Every knowledge id in <c>Progress.AllKnown</c>. This is the whole of the story
+    /// layer's interface to dialogue (story.md 4.5, 7.3): a baked line can require that
+    /// the player has learned something, or that they have not learned it yet, and the
+    /// selector's existing most-specific-match rule sequences the arc for free.
+    ///
+    /// Facts only, per D-005a. The corpus never receives "act two" or "63% complete" -
+    /// it receives the ids of things the pilot has actually found out.
+    /// </summary>
+    public readonly HashSet<string> KnownIds = new();
+
     public TalkContext() { }
 }
 
 /// <summary>A condition a baked line requires. Deliberately tiny and inspectable.</summary>
 public readonly record struct Requirement(string Key, double Min, double Max)
 {
-    public bool Holds(in TalkContext c) => Key switch
+    /// <summary>Key prefix for "the player has learned this". See TalkContext.KnownIds.</summary>
+    public const string KnowsPrefix = "knows:";
+
+    /// <summary>Key prefix for "the player has NOT learned this yet".</summary>
+    public const string UnknownPrefix = "unknown:";
+
+    public bool Holds(in TalkContext c)
+    {
+        // The record struct is (string, double, double), so there is no room for a second
+        // string: the knowledge id rides in Key behind a prefix. Ugly in exactly one
+        // place, invisible everywhere else, and it needs no change to the selector, the
+        // save format or the coda (story.md 7.3).
+        if (Key.StartsWith(KnowsPrefix, StringComparison.Ordinal))
+            return c.KnownIds is not null && c.KnownIds.Contains(Key[KnowsPrefix.Length..]);
+        if (Key.StartsWith(UnknownPrefix, StringComparison.Ordinal))
+            return c.KnownIds is null || !c.KnownIds.Contains(Key[UnknownPrefix.Length..]);
+        return Numeric(c);
+    }
+
+    private bool Numeric(in TalkContext c) => Key switch
     {
         "fuel" => c.FuelFraction >= Min && c.FuelFraction <= Max,
         "condition" => c.WorstComponentHealth >= Min && c.WorstComponentHealth <= Max,
@@ -107,6 +137,7 @@ public readonly record struct Requirement(string Key, double Min, double Max)
         "standing" => c.Standing >= Min && c.Standing <= Max,
         "hours_since" => c.HoursSinceLastMeeting >= Min && c.HoursSinceLastMeeting <= Max,
         "carried" => c.CarriedMass >= Min && c.CarriedMass <= Max,
+        "medical" => (c.CarriedMedical ? 1.0 : 0.0) >= Min && (c.CarriedMedical ? 1.0 : 0.0) <= Max,
         _ => true,
     };
 
@@ -115,6 +146,17 @@ public readonly record struct Requirement(string Key, double Min, double Max)
     public static Requirement Meetings(double min, double max) => new("meetings", min, max);
     public static Requirement Standing(double min, double max) => new("standing", min, max);
     public static Requirement HoursSince(double min, double max) => new("hours_since", min, max);
+    public static Requirement Carried(double min, double max) => new("carried", min, max);
+
+    /// <summary>Whether medical stock is visibly aboard. Sparrow's entire price is this.</summary>
+    public static Requirement Medical(bool carrying) =>
+        carrying ? new("medical", 1, 1) : new("medical", 0, 0);
+
+    /// <summary>This line may only be said once the player has learned <paramref name="id"/>.</summary>
+    public static Requirement Knows(string id) => new(KnowsPrefix + id, 0, 0);
+
+    /// <summary>This line may only be said while the player has NOT yet learned <paramref name="id"/>.</summary>
+    public static Requirement Unknown(string id) => new(UnknownPrefix + id, 0, 0);
 }
 
 /// <summary>One hand-vetted line. Thousands of these are generated offline and shipped.</summary>
@@ -167,6 +209,21 @@ public sealed class DialogueBank
     private readonly List<DialogueLine> _lines = new();
     private readonly Dictionary<string, double> _lastUsed = new();
 
+    /// <summary>
+    /// Use order, as a counter rather than a clock. The world-time penalty below stops a
+    /// line being repeated within the day; it does nothing at all when visits are days
+    /// apart, and days apart is the normal case. Without this, a bank of thirty return
+    /// greetings would say the first one every single time and the other twenty-nine
+    /// would never be heard - which is the exact failure the corpus is being deepened to
+    /// avoid. Least-recently-used breaks ties, so an equal-specificity pool round-robins
+    /// and depth converts directly into variety.
+    /// </summary>
+    private readonly Dictionary<string, long> _useOrder = new();
+    private long _seq;
+
+    /// <summary>The last thing this character said, whatever the tag. Never said twice running.</summary>
+    private string _lastPicked = "";
+
     public IReadOnlyList<DialogueLine> Lines => _lines;
 
     public void Add(DialogueLine line) => _lines.Add(line);
@@ -181,6 +238,11 @@ public sealed class DialogueBank
     {
         DialogueLine? best = null;
         double bestScore = double.NegativeInfinity;
+        long bestOrder = long.MaxValue;
+
+        // The line just said, held back in case it is the only legal thing in the bank.
+        DialogueLine? fallback = null;
+        double fallbackScore = double.NegativeInfinity;
 
         foreach (DialogueLine line in _lines)
         {
@@ -202,14 +264,53 @@ public sealed class DialogueBank
                 score -= Math.Max(0, 26.0 - hours * 2.0);
             }
 
-            if (score > bestScore) { bestScore = score; best = line; }
+            // Never said = order 0, so the bank is exhausted before anything is reused.
+            long order = _useOrder.TryGetValue(line.Id, out long o) ? o : 0;
+
+            // "I have just said that." The world-clock penalty above cannot see this: it
+            // has fully decayed by the next visit and most visits are days apart. Without
+            // a penalty in SEQUENCE terms, a line that is uniquely the most specific match
+            // for a common state - the one warm greeting, the one line gated on what the
+            // player has just learned - wins every single time it is legal, and says
+            // itself into the ground. The ladder is steep and short: it changes what is
+            // said immediately after, and is gone again three lines later, so the
+            // most-specific-match rule still governs everything else.
+            if (order > 0)
+            {
+                long since = _seq - order;
+                score -= since switch { <= 1 => 14.0, 2 => 7.0, 3 => 3.0, _ => 0.0 };
+            }
+
+            // A hard rule rather than a penalty: nobody says the same sentence twice in a
+            // row. A penalty only wins when it is larger than the score gap to the next
+            // candidate, and a line that is uniquely the most specific match for a common
+            // state - the one warm greeting, the one beat gated on what was just learned -
+            // can outscore everything else by more than any penalty worth having. The
+            // penalty ladder above still shapes the next three lines; this decides the
+            // next one outright, and gives way only when the bank has nothing else legal.
+            if (line.Id == _lastPicked)
+            {
+                if (score > fallbackScore) { fallbackScore = score; fallback = line; }
+                continue;
+            }
+
+            bool better = score > bestScore + 1e-9
+                       || (score > bestScore - 1e-9 && order < bestOrder);
+            if (better) { bestScore = score; bestOrder = order; best = line; }
         }
 
-        if (best is not null) _lastUsed[best.Id] = now;
+        best ??= fallback;
+
+        if (best is not null)
+        {
+            _lastUsed[best.Id] = now;
+            _useOrder[best.Id] = ++_seq;
+            _lastPicked = best.Id;
+        }
         return best;
     }
 
-    public void ForgetUsage() => _lastUsed.Clear();
+    public void ForgetUsage() { _lastUsed.Clear(); _useOrder.Clear(); _seq = 0; _lastPicked = ""; }
 
     /// <summary>Read line usage times for saving.</summary>
     public IReadOnlyDictionary<string, double> LineUsage => _lastUsed;
@@ -218,7 +319,14 @@ public sealed class DialogueBank
     public void RestoreUsage(IEnumerable<KeyValuePair<string, double>> usage)
     {
         _lastUsed.Clear();
+        _useOrder.Clear();
+        _seq = 0;
+        _lastPicked = "";
         foreach (var (k, v) in usage) _lastUsed[k] = v;
+
+        // Rebuild the rotation order from the saved times, oldest first, so a reload does
+        // not make the bank start repeating from the top of the list.
+        foreach (var kv in _lastUsed.OrderBy(kv => kv.Value)) _useOrder[kv.Key] = ++_seq;
     }
 }
 
