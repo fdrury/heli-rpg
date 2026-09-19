@@ -916,3 +916,27 @@ invisible to the player at these ranges. Hitscan is honest about what it is.
 files and the wiring in Main. The sim-layer types have no dependents outside combat.
 NPC spawning is driven by `SpawnHostileNpc()` in Main; integrating it with the world
 (which sites are hostile, bandit camps, etc.) is a separate decision.
+
+## D-032 — Rain is drawn, and overcast daylight is flat rather than dark
+
+**Decision.** `WeatherEffects` draws rain as world-space GPU particles whose emitter follows
+the camera, scaled by the weather model's precipitation and slanted by its wind.
+
+**Why.** The weather model has carried precipitation since it was written and nothing ever
+drew it, so "Rain" was a word in a debug line and a change in fog density.
+
+Three things worth keeping:
+
+* The particles are **world-space** while the emitter follows the camera. Local coordinates
+  carry the whole shower along with the aircraft, which looks like flying inside a jar
+  rather than flying through weather.
+* `Amount` is only written when the rounded value actually changes. Writing it **restarts
+  the particle system**, so driving it straight from a continuously varying weather value
+  resets the rain every frame and nothing is ever drawn.
+* Wind slants the rain. It is the most legible wind indicator the game has — far better
+  than a number on a HUD.
+
+**Also:** overcast daylight was far too dark. The sun was cut by `1 - cover * 0.86`, and a
+rainy morning rendered as a bright sky over near-black ground, which is what night looks
+like. An overcast day is *flat and bright*, not dark: the cut is now 0.70, ambient rises
+further with cover, and exposure lifts slightly under a heavy deck.

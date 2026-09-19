@@ -46,6 +46,10 @@ public sealed partial class ScreenshotDirector : Node
         new("15_dusk",           CameraMode.Chase,  160f,  38f,  4.6f, null, 16.4),
         new("16_night",          CameraMode.Chase,   45f,  30f,  2.2f, null, 22.0),
         new("17_night_cockpit",  CameraMode.Cockpit,120f,  32f,  2.1f, null, 22.0),
+        // 81.75 h is the first good daylight rain the weather model produces - found by
+        // scanning it rather than by re-rendering until something looked wet.
+        new("18_rain",           CameraMode.Chase,  120f,  40f,  0.8f, null, 81.75),
+        new("19_rain_cockpit",   CameraMode.Cockpit,110f,  38f,  2.4f, null, 81.75),
     };
 
     private Site? _aimedAt;

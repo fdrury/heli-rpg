@@ -50,6 +50,7 @@ public static class SceneMood
         root.AddChild(sun);
         root.AddChild(moon);
         root.AddChild(new SceneMoodDriver(env, sun, moon) { Name = "SceneMoodDriver" });
+        root.AddChild(new WeatherEffects { Name = "WeatherEffects" });
     }
 
     private static WorldEnvironment BuildEnvironment()
@@ -205,7 +206,10 @@ public sealed partial class SceneMoodDriver : Node
         var warm = new Color(1.0f, 0.965f - low * 0.26f, 0.90f - low * 0.45f);
 
         // Overcast kills the directional component and hands the job to the sky.
-        float clear = 1f - cover * 0.86f;
+        // Overcast dims the sun but must not switch it off. At 0.86 a rainy morning
+        // rendered with a bright sky over near-black ground, which is what a night looks
+        // like, not a wet day - an overcast day is FLAT and bright, not dark.
+        float clear = 1f - cover * 0.70f;
         _sun.LightColor = warm;
         _sun.LightEnergy = 1.65f * day * clear;
         _sun.ShadowEnabled = _sun.LightEnergy > 0.06f;
@@ -223,7 +227,7 @@ public sealed partial class SceneMoodDriver : Node
         // dim, black, with no horizon and no aircraft. You cannot fly what you cannot see.
         // This is high enough to read terrain silhouettes and the airframe, low enough that
         // flying at night is still something you would rather not have to do.
-        env.AmbientLightEnergy = Mathf.Lerp(0.24f, 0.66f + cover * 0.42f, day);
+        env.AmbientLightEnergy = Mathf.Lerp(0.24f, 0.62f + cover * 0.95f, day);
 
         // --- The sky itself -----------------------------------------------------
         var skyMat = (ProceduralSkyMaterial)env.Sky.SkyMaterial;
@@ -258,7 +262,7 @@ public sealed partial class SceneMoodDriver : Node
         env.FogDepthBegin = Mathf.Lerp(90f, 260f, day);
 
         env.AdjustmentSaturation = Mathf.Lerp(0.62f, 0.93f - cover * 0.11f, day);
-        env.TonemapExposure = Mathf.Lerp(1.55f, 1.0f, day);
+        env.TonemapExposure = Mathf.Lerp(1.55f, 1.0f + cover * 0.16f, day);
     }
 
     /// <summary>Aim a directional light along a direction of travel.</summary>

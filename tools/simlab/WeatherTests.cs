@@ -118,6 +118,19 @@ public static class WeatherTests
         if (seen.Count < 3)
             failure ??= $"only {seen.Count} kind(s) of sky in four days";
 
+        // When does it next rain in daylight? Anything that wants to LOOK at weather needs
+        // a time to look at, and scanning for it beats guessing and re-rendering.
+        for (double t = 0; t < 10 * 86400.0; t += 900)
+        {
+            Weather.Conditions wc = w.At(t);
+            if (wc.Precipitation > 0.25 && w.Sun(t).ElevationDeg > 12)
+            {
+                Console.WriteLine($"  first good daylight rain at {t / 3600:F2} h " +
+                                  $"(sun {w.Sun(t).ElevationDeg:F0} deg): {wc.Describe()}");
+                break;
+            }
+        }
+
         // Wind must be continuous. A jump of several knots between consecutive frames is
         // a step input to the rotor and would feel like hitting something.
         double biggestJump = 0;
