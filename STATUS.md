@@ -154,7 +154,26 @@ everything, loads, and verifies fourteen properties survived the round trip.
 
 ## Next
 
-*(empty — all eight items complete)*
+The original eight are done. This list is what the game most visibly lacks now, roughly in
+order of how much each would change a player's impression.
+
+1. **Terrain variety.** Everything reads as smooth rolling dunes — no cliffs, no ridgelines
+   with rock faces, no river valleys, no roads, no woodland. It is the single biggest thing
+   between the current renders and somewhere that looks like a place. Verify with
+   `--worldreport` and screenshots; site placement and `SitePads` will need re-checking
+   against any new relief.
+2. **Look-around.** The cockpit has instruments that the fixed forward view cannot see
+   (D-034). A hat switch / head-look, and a padlock on the last thing of interest.
+3. **Building variety.** Settlements are boxes with pitched roofs. Silhouette variety and
+   some interior suggestion would do more than texture work.
+4. **Airframe wear.** One flat olive drab. Panel lines, dirt streaks, sun-bleaching and
+   repaired patches — ideally driven by the damage model, so a patched aircraft looks
+   patched.
+5. **Storm weather.** Lightning, and rain on the windscreen. The model already produces
+   storms (D-026) and nothing distinguishes them from rain.
+6. **A benchmark pass.** Fred asked for periodic comparisons against other RPGs — skill
+   trees, story, graphics, audio, world size — recorded in the wiki. The last one fed
+   D-005a; audio and world-feel have moved a long way since.
 
 ## Open questions for Fred
 
