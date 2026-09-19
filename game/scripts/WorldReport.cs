@@ -121,6 +121,19 @@ public static class WorldReport
         // that decides whether a beat has anywhere to happen.
         var kinds = (SiteKind[])Enum.GetValues(typeof(SiteKind));
         GD.Print("");
+        // Shortfalls first, and loudly. The census below shows what exists; this shows what
+        // the design asked for and did not get, which is the thing that used to be invisible.
+        if (WorldMap.Shortfalls.Count == 0)
+        {
+            GD.Print("  every region got everything the plan asked for.");
+        }
+        else
+        {
+            GD.Print($"  *** {WorldMap.Shortfalls.Count} SHORTFALL(S): the plan asked for places the terrain refused ***");
+            foreach ((string region, SiteKind kind, int wanted, int got) in WorldMap.Shortfalls)
+                GD.Print($"      {region,-18} {kind,-11} wanted {wanted}, got {got}");
+        }
+        GD.Print("");
         GD.Print("  what each region actually got (asked-for counts live in WorldMap.BuildSites)");
         var header = new System.Text.StringBuilder("  region            ");
         foreach (SiteKind k in kinds) header.Append($"{Abbrev(k),5}");

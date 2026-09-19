@@ -1773,3 +1773,65 @@ shot holds 33–36 fps on the GTX 1650 Ti, identical to the pre-glow baseline.
 **Reversibility:** high. Delete the glow plane from `WindowBand`, the `Glow` field from
 `Palette`, and the one-line update in `SceneMoodDriver`. The shader file is inert if
 unreferenced.
+
+## D-051 — The coning inflow term: real physics, shipped OFF
+
+A parallel agent found a genuine omission in the blade-element loop. `U_P` was resolved on
+the **shaft** axis rather than on the **flapped blade's normal**, silently dropping the
+classical spanwise contribution — the flow through a coned disc, from below at the front and
+from above at the back. It costs almost nothing in powered flight, which is exactly why it
+survived, and in a descent it is part of the upflow the driving region lives on.
+
+It works. Best glide goes **1.98:1 → 2.54:1**, every speed in the sweep improves, and hover
+power is unchanged at 814 kW.
+
+**It also reverses right cyclic, so it ships defaulted to 0.**
+
+| `ConingInflow` | roll for right cyclic (sim / Godot) | best glide |
+|---|---|---|
+| 0.0 | **+49.8 / +49.8 °/s** — agreeing exactly | 1.98:1 |
+| 1.0 | −31.7 / +11.2 °/s | 2.54:1 |
+| 1.0, sign flipped | −64.1 / +6.8 °/s | 1.94:1 |
+
+The mechanism is not mysterious: the spanwise term puts a 1/rev variation into `U_P`, which
+through the usual 90° gyroscopic lag becomes **lateral flapping**. It biases roll by
+construction. What is unexplained is the *size* of the bias — large enough to reverse the
+control — and flipping its sign makes both numbers worse, so it is not a simple sign error.
+
+**Why this was not caught by the agent that wrote it:** its brief forbade running Godot,
+because this machine cannot render. `simlab all` passed throughout. The defect only appears
+through the bridge, where controls are rate-limited and the rigid body is integrated by
+Godot — and the tell is that the sim and the body **disagree**, which they never otherwise
+do. That is a gap in how the work was briefed, not in the work: the headless suite does not
+cover the bridge, and `--selftest` is headless too and should have been in the brief.
+
+Kept, flagged and measured rather than deleted. The physics is real and D-041 is still open.
+Flying the aircraft correctly wins until the lateral bias is understood.
+
+## D-052 — Compressibility is NOT cleared after all
+
+D-047 ruled compressibility out of the autorotation investigation because tip Mach measured
+0.73 against a 0.74 drag-divergence threshold. That measurement was wrong.
+`TipMachAdvancing` reported the maximum over the ~8° of azimuth a single physics step
+covers, not over a revolution. Corrected to a per-revolution maximum, the advancing tip at
+the same condition is **0.81** — comfortably *above* the threshold, so the drag rise is
+active and was never eliminated.
+
+A reminder that a refutation is only as good as the instrument behind it, and that this is
+the third time aliasing on a two-bladed rotor has produced a confident wrong answer
+(tip-path plane, then shaft power in D-043, now tip Mach).
+
+## D-053 — `autoglide` was never measuring the rotor
+
+The headline autorotation number was measured while the aircraft **slid sideways at 27–47
+m/s**, dragging 13.5 m² of side area through the air — at "60 kt" its world-frame forward
+velocity was actually negative. The autopilot flying the test has no lateral channel.
+
+`EnvelopeTests.AutorotationTrim` replaces it for diagnosis: six unknowns against six
+residuals at a pinned descending condition, engine failed, Nr pinned at 100%, bisected until
+net shaft power crosses zero. Straight flight, no sideslip, no controller. Pinning lateral
+velocity alone moves 60 kt from 3864 to 2561 fpm.
+
+Which also means the 4:1 reference may be unreachable for *this* airframe: at honest trim it
+gives 3.19:1 at 2226 fpm, and the published figure assumes a heavier machine — a lighter
+aircraft buys a faster descent for the same dissipation.

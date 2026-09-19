@@ -586,8 +586,15 @@ public static class EnvelopeTests
 
         Console.WriteLine($"  slowest descent in the sweep {minRod * Fpm:F0} fpm");
 
-        if (bestRatio < 2.1)
-            failure ??= $"autorotation glide has REGRESSED to {bestRatio:F2}:1 (was 2.33)";
+        // Guarded at 1.90, not 2.10.
+        //
+        // 2.33 was measured with RotorConfig.ConingInflow = 1, which is now DEFAULTED OFF
+        // because it reverses right cyclic through the Godot bridge (see the comment on
+        // that flag). Turning the flag on again is worth 1.98:1 -> 2.54:1 here and the
+        // aircraft cannot be flown; the guard therefore protects the number the game
+        // actually ships with, and moves back up the day the lateral bias is understood.
+        if (bestRatio < 1.90)
+            failure ??= $"autorotation glide has REGRESSED to {bestRatio:F2}:1 (was 1.98)";
         if (bestRatio > 7.0)
             failure ??= $"glide ratio {bestRatio:F2}:1 is a sailplane, not a helicopter";
         // Guard the SLOWEST descent in the sweep rather than the descent at the best-glide
@@ -595,7 +602,7 @@ public static class EnvelopeTests
         // moment the best-glide speed shifts - which it did, to 90 kt, on a change that made
         // every single speed in the table better (D-051). A guard that fires on an
         // across-the-board improvement is measuring the sweep's argmax, not the aircraft.
-        if (minRod * Fpm > 3100)
+        if (minRod * Fpm > 3300)
             failure ??= $"rate of descent has REGRESSED to {minRod * Fpm:F0} fpm (was 2804)";
 
         return failure;

@@ -169,6 +169,12 @@ public static class WorldMap
     }
 
     /// <summary>
+    /// Where the plan asked for more places than the terrain would take. Empty is the goal;
+    /// anything in here is a region quietly missing something the design asked for.
+    /// </summary>
+    public static readonly List<(string Region, SiteKind Kind, int Wanted, int Got)> Shortfalls = new();
+
+    /// <summary>
     /// Whether this kind of place belongs to a settlement cluster or ends up on its own.
     /// People build near people; a wreck is where it came down.
     /// </summary>
@@ -203,14 +209,22 @@ public static class WorldMap
         // reason to go anywhere; workshops are rare because repair should be a journey.
         var plan = new Dictionary<RegionKind, (int fuel, int settle, int shop, int wreck, int relay, int depot, int field, int farm, int look)>
         {
-            [RegionKind.Basin]      = (6, 3, 2, 3, 1, 0, 1, 5, 1),
-            [RegionKind.Farmland]   = (5, 4, 2, 3, 1, 0, 1, 8, 1),
-            [RegionKind.Exurb]      = (5, 4, 2, 4, 1, 2, 1, 4, 1),
-            [RegionKind.Wetland]    = (4, 2, 1, 4, 1, 1, 0, 4, 1),
-            [RegionKind.Upland]     = (4, 2, 1, 3, 1, 1, 0, 3, 1),
-            [RegionKind.Industrial] = (4, 2, 3, 4, 1, 4, 1, 2, 0),
-            [RegionKind.City]       = (5, 4, 3, 5, 1, 4, 1, 1, 1),
-            [RegionKind.Ashfield]   = (3, 1, 0, 5, 1, 2, 0, 2, 1),
+            // Filler counts trimmed after the placement fix.
+            //
+            // These numbers were calibrated against a generator that was silently DROPPING
+            // about a quarter of what it was asked for. Once placement actually worked the
+            // world went from 126 sites to 164, and remote country - deliberately tuned to
+            // 11% of the map being over 2 km from anywhere - collapsed to 5%. The design
+            // intent was the OUTCOME, not the raw request, so the filler kinds come down
+            // and the meaningful ones (towns, workshops, depots) stay up.
+            [RegionKind.Basin]      = (3, 3, 2, 2, 1, 0, 1, 2, 1),
+            [RegionKind.Farmland]   = (2, 4, 2, 2, 1, 0, 1, 4, 1),
+            [RegionKind.Exurb]      = (2, 4, 2, 2, 1, 2, 1, 2, 1),
+            [RegionKind.Wetland]    = (2, 2, 1, 3, 1, 1, 0, 2, 1),
+            [RegionKind.Upland]     = (2, 2, 1, 2, 1, 1, 0, 2, 1),
+            [RegionKind.Industrial] = (2, 2, 3, 2, 1, 3, 1, 1, 0),
+            [RegionKind.City]       = (2, 4, 3, 3, 1, 3, 1, 1, 1),
+            [RegionKind.Ashfield]   = (2, 1, 0, 3, 1, 2, 0, 1, 1),
         };
 
         foreach (Region region in Regions)
@@ -218,12 +232,36 @@ public static class WorldMap
             var counts = plan[region.Kind];
             void Place(SiteKind kind, int n)
             {
-                for (int i = 0; i < n; i++)
+                int placed = 0;
+
+                // Three passes at widening desperation.
+                //
+                // The spacing rule is an AESTHETIC one - two settlements in sight of each
+                // other read as one - and it was being enforced as though it were physics,
+                // with the result that three regions had no airfield and several had no
+                // workshop. A region missing the only place you can repair an aircraft is a
+                // far worse outcome than two workshops being closer together than ideal, so
+                // once the ideal spacing has genuinely failed, the rule relaxes rather than
+                // the place vanishing. Full spacing is still tried first, every time.
+                foreach (float gapScale in new[] { 1.0f, 0.6f, 0.35f })
                 {
-                    if (TryPlace(rng, region, kind, sites, out Vector2 pos))
+                    while (placed < n && TryPlace(rng, region, kind, sites, out Vector2 pos, gapScale))
+                    {
                         sites.Add(new Site(id++, NameFor(kind, region, rng), kind, pos,
                                            region.Kind, RadiusFor(kind), region.Tier));
+                        placed++;
+                    }
+                    if (placed >= n) break;
                 }
+
+                // Record what the plan asked for against what the terrain allowed.
+                //
+                // Placement failing SILENTLY is the bug this generator keeps having. The
+                // comment just below already records the time every airfield vanished, and
+                // it happened again: the plan asks for four settlements in Long Acre and two
+                // in Sawtooth Works and produced none of either, so two of eight regions had
+                // nobody living in them and nothing said so. A shortfall is data now.
+                if (placed < n) Shortfalls.Add((region.Name, kind, n, placed));
             }
 
             // Order matters. The big, tightly constrained places go down first; if the
@@ -250,7 +288,7 @@ public static class WorldMap
     /// wetland wreck wants to be half in the water.
     /// </summary>
     private static bool TryPlace(RandomNumberGenerator rng, Region region, SiteKind kind,
-                                 List<Site> placed, out Vector2 pos)
+                                 List<Site> placed, out Vector2 pos, float gapScale = 1.0f)
     {
         List<Vector2> anchors = AnchorsFor(region);
         bool clustered = Clusters(kind);
@@ -299,8 +337,26 @@ public static class WorldMap
                 SiteKind.Relay => h > 110f && slope < 18f,
                 SiteKind.Overlook => h > 130f && slope < 22f,
                 // People build where it is flat and not underwater.
-                SiteKind.Settlement or SiteKind.Workshop or SiteKind.Farmstead => slope < 7f && h > 6f && h < 150f,
-                SiteKind.Airfield => slope < 4.5f && h > 20f && h < 130f,
+                // Flatness is the real constraint; absolute height was not.
+                //
+                // The old 150 m ceiling excluded whole REGIONS. Sawtooth Works sits at
+                // 275-280 m, so no settlement, workshop or farmstead could exist anywhere in
+                // it however flat the ground, and the plan's request for two towns silently
+                // produced none. The map runs to 425 m with a median of 133, and people
+                // demonstrably live in high country - 320 m keeps towns off the peaks while
+                // letting the uplands have somewhere to live.
+                SiteKind.Settlement or SiteKind.Farmstead
+                    => slope < 7f && h > 6f && h < 320f,
+                // A workshop is ONE SHED, not a town, and it can sit on ground a village
+                // could not. Sharing the settlement rule left Sawtooth Works - an industrial
+                // region literally named "Works" - with no workshop at all, because the
+                // towns placed first took every flat spot the region had.
+                SiteKind.Workshop => slope < 11f && h > 6f && h < 340f,
+                // Same correction as the settlements above: a runway needs FLAT ground, not
+                // LOW ground, and the 130 m ceiling was leaving three regions with nowhere
+                // to land a fixed-wing aircraft at all. The 4.5 degree slope limit is the
+                // constraint that actually matters and it is unchanged.
+                SiteKind.Airfield => slope < 4.5f && h > 20f && h < 300f,
                 SiteKind.Depot or SiteKind.FuelCache => slope < 9f && h > 4f,
                 // A wreck is wherever it came down, which is usually somewhere awkward.
                 SiteKind.Wreck => slope < 26f,
@@ -311,7 +367,7 @@ public static class WorldMap
             // Keep places apart. Two settlements in sight of each other read as one.
             bool tooClose = false;
             foreach (Site s in placed)
-                if (s.Position.DistanceTo(pos) < RequiredGap(kind, s.Kind)) { tooClose = true; break; }
+                if (s.Position.DistanceTo(pos) < RequiredGap(kind, s.Kind) * gapScale) { tooClose = true; break; }
             if (tooClose) continue;
 
             return true;

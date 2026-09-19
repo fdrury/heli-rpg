@@ -42,6 +42,7 @@ public static class Program
         Run("poshold", TrimTests.PositionHold);
         Run("envelope", EnvelopeTests.Performance);
         Run("autoglide", EnvelopeTests.Autorotation);
+        Run("autotrim", EnvelopeTests.AutorotationTrim);
         Run("autobalance", EnvelopeTests.AutorotationBalance);
         Run("radialsweep", EnvelopeTests.RadialInflowSweep);
         Run("driving", EnvelopeTests.DrivingRegion);
@@ -49,6 +50,18 @@ public static class Program
         Run("alertsat", AlertTests.Saturates);
         Run("alertlocal", AlertTests.StaysLocal);
         Run("alerteffect", AlertTests.EffectsAreBounded);
+        Run("warn_thresholds", WarningTests.Thresholds);
+        Run("warn_hysteresis", WarningTests.Hysteresis);
+        Run("warn_latch", WarningTests.Latching);
+        Run("warn_priority", WarningTests.Priority);
+        Run("warn_tones", WarningTests.Tones);
+        Run("warn_inflight", WarningTests.InFlight);
+        Run("xmsn_oil", DamageCascadeTests.TransmissionOilLoss);
+        Run("xmsn_shutdown", DamageCascadeTests.ShutdownStopsTheClock);
+        Run("hyd_leak", DamageCascadeTests.HydraulicLeak);
+        Run("hot_section", DamageCascadeTests.EngineHotSection);
+        Run("cascade_flight", DamageCascadeTests.InFlightCascade);
+        Run("warning_panel", DamageCascadeTests.WarningPanelLadder);
         Run("gating", GatingTests.CountermeasureGating);
         Run("altgating", GatingTests.AltitudeGating);
         Run("dragk", EnvelopeTests.DragKSweep);

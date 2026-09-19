@@ -66,7 +66,21 @@ public sealed class RotorConfig
     /// runs on: measured on the six-DOF autorotation trim, 2475 -> 2319 fpm at 70 kt
     /// (2.86:1 -> 3.06:1) with hover power unchanged (815 -> 814 kW).
     /// </summary>
-    public double ConingInflow { get; set; } = 1.0;
+    // DEFAULT 0 - the term is correct physics and currently breaks lateral control.
+    //
+    // At 1.0 it buys a real autorotation improvement (best glide 1.98:1 -> 2.54:1) and
+    // costs right cyclic: the Godot bridge self-test measures -31.7 deg/s of roll for a
+    // RIGHT cyclic input, with the sim and the rigid body disagreeing (-31.7 against
+    // +11.2), where at 0.0 they agree exactly at +49.8. The spanwise term puts a 1/rev
+    // variation into U_P, which through the usual 90-degree gyroscopic lag becomes lateral
+    // flapping - so it biases roll by construction, and the bias is currently large enough
+    // to reverse the control. Flipping its sign makes both numbers worse (-64.1 deg/s,
+    // glide 1.94:1), so it is not a simple sign error.
+    //
+    // Kept, flagged and measured rather than deleted: the physics is real and the
+    // autorotation gap (D-041) is still open. Flying the aircraft correctly wins until
+    // somebody works out why the lateral bias is that big.
+    public double ConingInflow { get; set; } = 0.0;
 
     public double NominalOmega { get; init; } = 27.0;
 
