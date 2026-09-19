@@ -19,9 +19,10 @@ public sealed partial class ScreenshotDirector : Node
     private readonly HelicopterController _heli;
     private readonly ChaseCamera _camera;
     private readonly Autopilot _ap = new() { CollectiveTrim = 0.5 };
+    private Kneeboard? _kneeboard;
 
     private sealed record Shot(string Name, CameraMode Mode, float Altitude, float Speed, float Heading,
-                               SiteKind? Over = null, double? ClockHours = null);
+                               SiteKind? Over = null, double? ClockHours = null, Vector2? At = null);
 
     private readonly List<Shot> _shots = new()
     {
@@ -50,19 +51,34 @@ public sealed partial class ScreenshotDirector : Node
         // scanning it rather than by re-rendering until something looked wet.
         new("18_rain",           CameraMode.Chase,  120f,  40f,  0.8f, null, 81.75),
         new("19_rain_cockpit",   CameraMode.Cockpit,110f,  38f,  2.4f, null, 81.75),
+
+        // The high country. Every other shot in this set is taken within a couple of
+        // kilometres of the origin, which is the tutorial basin and is FLAT BY DESIGN -
+        // relief is scaled by the continental field, so the starting region has almost
+        // none. Photographing only there made the world look like rolling dunes when the
+        // world report says median slope 15 deg, p90 43 deg and peaks at 425 m.
+        new("20_upland",         CameraMode.Chase,  260f,  45f,  1.1f, null, null,
+            new Vector2(1500, -4400)),     // Cold Shoulder
+        new("21_ashmount",       CameraMode.Chase,  320f,  48f,  3.9f, null, null,
+            new Vector2(4600, 3100)),      // Ashmount
+        new("22_sawtooth_low",   CameraMode.Chase,   80f,  40f,  2.2f, null, null,
+            new Vector2(-4800, -3300)),    // Sawtooth Works
     };
 
     private Site? _aimedAt;
     private int _index;
     private double _time;
     private bool _capturing;
+    private bool _didKneeboard;
     private readonly string _outDir;
 
-    public ScreenshotDirector(HelicopterController heli, ChaseCamera camera, string outDir)
+    public ScreenshotDirector(HelicopterController heli, ChaseCamera camera, string outDir,
+                              Kneeboard? kneeboard = null)
     {
         _heli = heli;
         _camera = camera;
         _outDir = outDir;
+        _kneeboard = kneeboard;
     }
 
     private string _resolvedDir = "";
@@ -96,7 +112,12 @@ public sealed partial class ScreenshotDirector : Node
         SceneMood.Clock = (shot.ClockHours ?? 9.25) * 3600.0;
 
         Vector2 ground2;
-        if (shot.Over is SiteKind kind)
+        if (shot.At is Vector2 spot)
+        {
+            _aimedAt = null;
+            ground2 = spot;
+        }
+        else if (shot.Over is SiteKind kind)
         {
             // Park off the site so the chase camera looks ACROSS it rather than straight
             // down at the roofs.
@@ -225,10 +246,36 @@ public sealed partial class ScreenshotDirector : Node
         _index++;
         _capturing = false;
         if (_index < _shots.Count) Setup(_shots[_index]);
+        else if (_kneeboard is not null && !_didKneeboard)
+        {
+            _didKneeboard = true;
+            CaptureKneeboard();
+        }
         else
         {
             GD.Print("[shots] done");
             GetTree().Quit(0);
         }
+    }
+
+    private async void CaptureKneeboard()
+    {
+        // Show the kneeboard on the MAP page (page index 3)
+        _kneeboard.Visible = true;
+        // Cycle to MAP: pages are AIRCRAFT(0), KNOWN(1), LOG(2), MAP(3)
+        for (int i = 0; i < 3; i++) _kneeboard.NextPage();
+
+        // Wait two frames for the draw to happen
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+
+        Image img = GetViewport().GetTexture().GetImage();
+        string path = $"{_resolvedDir}/23_kneeboard_map.png";
+        Error err = img.SavePng(path);
+        GD.Print($"[shots] 23_kneeboard_map: {(err == Error.Ok ? "saved" : err.ToString())}");
+
+        _kneeboard.Visible = false;
+        GD.Print("[shots] done");
+        GetTree().Quit(0);
     }
 }

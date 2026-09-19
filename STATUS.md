@@ -157,11 +157,13 @@ everything, loads, and verifies fourteen properties survived the round trip.
 The original eight are done. This list is what the game most visibly lacks now, roughly in
 order of how much each would change a player's impression.
 
-1. **Terrain variety.** Everything reads as smooth rolling dunes — no cliffs, no ridgelines
-   with rock faces, no river valleys, no roads, no woodland. It is the single biggest thing
-   between the current renders and somewhere that looks like a place. Verify with
-   `--worldreport` and screenshots; site placement and `SitePads` will need re-checking
-   against any new relief.
+1. **Rock faces and ground cover, not terrain shape.** *Re-scoped after measuring.* The
+   world is not flat: `--worldreport` gives median slope 15°, p90 43°, p99 65° and peaks at
+   425 m, and shots 20–22 in the high country show real hills, steep sides and valleys.
+   Relief is scaled by the continental field, so the starting basin is flat **by design**
+   and every screenshot before now was taken in it. What is genuinely missing is *material*
+   on steep ground — everything is rounded and grassed, with no exposed rock, scree faces
+   or cliff banding — plus roads, water and woodland.
 2. **Look-around.** The cockpit has instruments that the fixed forward view cannot see
    (D-034). A hat switch / head-look, and a padlock on the last thing of interest.
 3. **Building variety.** Settlements are boxes with pitched roofs. Silhouette variety and
