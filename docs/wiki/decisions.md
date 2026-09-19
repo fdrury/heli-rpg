@@ -395,3 +395,58 @@ the budget for a 1.7B at the measured latency. By the third visit it reads:
 
 **Reversibility:** high. The corpus is data, the coda is strictly additive, and the whole
 thing degrades to the baked layer if the model is absent, slow or wrong.
+
+### D-016 — Mesh winding was backwards everywhere · 2026-09-18 · **[FRED SPOTTED IT]**
+Godot treats **clockwise** as front-facing. Every hand-built mesh in this project used the
+textbook counter-clockwise convention, which is the wrong one here.
+
+Proven with a new `--windingtest` that renders two identical quads differing only in vertex
+order, plus a third built with the terrain streamer's exact index order viewed from above.
+The counter-clockwise quad is culled. So is the terrain patch.
+
+**Why it hid for days:** it does not make anything disappear. Godot flips the normal on a
+back face so two-sided geometry still lights, so every mesh kept rendering — with every
+surface lit as though the sun were behind it. The world looked muddy and dark, and I treated
+that as a palette problem: raising exposure, ambient and sun energy, desaturating, adding
+macro brightness variation. All of it was compensating for inverted lighting.
+
+**The lesson, which is now a rule on this project:** when a whole class of output looks
+subtly wrong and no individual fix helps, stop adjusting and test the assumption underneath.
+A five-minute render test settled what an hour of reasoning had got backwards twice.
+
+Consequence: the lighting grade now needs re-tuning, because it was tuned against a bug.
+
+### D-017 — POI distribution: lumpy, not sparse · 2026-09-18 · **[FRED'S QUESTION]**
+Fred asked whether, given the helicopter's range dwarfs the map, POIs should be spread out
+with sparser fill between.
+
+**Sparser everywhere is the wrong move** — that is exactly the density Just Cause 3 has
+(0.42 settlements/km²) and the reason it is the genre's canonical emptiness failure. But
+*lumpier* is right, and the measurements agreed with the instinct: the old layout put you
+within **3.1 km of something from any point on the map**, so no leg was ever a journey.
+
+Done, in three steps, each measured:
+
+| | before | after |
+|---|---|---|
+| Ground over 2 km from anywhere | 1% | **11%** |
+| Longest gap | 2.5 km | **3.2 km** |
+| Median distance to nearest | 572 m | 702 m |
+
+1. Human infrastructure clusters around a few anchors per region; wrecks get their own
+   incident anchors, so they come in fields rather than a sprinkle.
+2. Regions were shrunk and pushed apart — they used to tile three quarters of the envelope.
+3. **Fewer, fatter clusters.** The arithmetic is the whole design: 40 clusters over 169 km²
+   sit 2 km apart and nowhere is ever remote. A dozen sit 3.5 km apart, and each then holds
+   seven or eight places — so arriving somewhere is an event rather than a waypoint.
+
+**But the honest finding is that spacing is not the lever.** Even aggressively clustered,
+the longest gap is about a minute of flight. A 13 km map cannot be made to feel large by
+spacing alone, and trying would cost content. The lever that works is **route inflation**:
+threat envelopes and terrain masking, measured at 1.63x on flat ground and more with
+terrain. A 3 km gap that must be flown as a 10 km masked dogleg is a journey; a 5 km gap
+flown straight is not.
+
+So the two systems do different jobs, and both are needed: **clustering makes arrival an
+event, threat makes the going there a journey.** Fuel does neither, and per D-003a has
+stopped pretending to.

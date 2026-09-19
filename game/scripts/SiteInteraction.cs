@@ -29,6 +29,11 @@ public sealed partial class SiteInteraction : Node
     private SiteStreamer _sites = null!;
     private LandingController _landing = null!;
 
+    /// <summary>Set by Main after both nodes are created.</summary>
+    public DialoguePanel? Dialogue { get; set; }
+    public CodaServer? CodaServer { get; set; }
+    public bool InDialogue => Dialogue?.IsOpen ?? false;
+
     public Progress Progress { get; } = Progress.NewGame();
 
     /// <summary>Actions available at this instant. Empty when airborne or away from a site.</summary>
@@ -48,6 +53,10 @@ public sealed partial class SiteInteraction : Node
 
     public event Action<string>? Notice;
 
+    // --- NPC registry: persists across visits so memory accumulates ---
+    private readonly Dictionary<int, (NpcMind npc, DialogueBank bank)> _npcs = new();
+    private int _mattieSiteId = -1;
+
     public override void _Ready()
     {
         _heli = GetNode<HelicopterController>(HelicopterPath);
@@ -56,6 +65,17 @@ public sealed partial class SiteInteraction : Node
         _rng.Seed = 5150;
 
         Progress.Journalled += line => GD.Print($"[journal] {line}");
+
+        // Mattie is at the first settlement in the Basin — the tutorial region.
+        foreach (var site in WorldMap.Sites)
+        {
+            if (site.Kind == SiteKind.Settlement && site.Region == RegionKind.Basin)
+            {
+                _mattieSiteId = site.Id;
+                GD.Print($"[dialogue] Mattie lives at {site.Name} (id {site.Id})");
+                break;
+            }
+        }
     }
 
     public override void _Process(double delta)
@@ -79,7 +99,7 @@ public sealed partial class SiteInteraction : Node
         }
 
         UpdateParked();
-        RebuildActions();
+        if (!InDialogue) RebuildActions();
         KeepMassInSync();
     }
 
@@ -141,6 +161,8 @@ public sealed partial class SiteInteraction : Node
                 AddRefuel(site, rec);
                 break;
         }
+
+        if (site.Kind == SiteKind.Settlement) AddTalk(site);
 
         if (site.Kind is SiteKind.Workshop or SiteKind.Airfield or SiteKind.Settlement)
             AddRepairs(site);
@@ -390,4 +412,82 @@ public sealed partial class SiteInteraction : Node
     }
 
     private double _lastCarried = -1;
+
+    // --------------------------------------------------------------- dialogue
+
+    private void AddTalk(Site site)
+    {
+        _actions.Add(new SiteAction("Talk", "People here.",
+            () =>
+            {
+                if (Dialogue is null) return false;
+                var (npc, bank) = GetOrCreateNpc(site);
+                var ctx = BuildTalkContext(site, npc);
+
+                bool firstConversation = npc.Meetings == 0;
+                DialogueCorpus.RememberVisit(npc, ctx);
+
+                if (firstConversation)
+                {
+                    Progress.Learn(new Knowledge(KnowledgeKind.Contact,
+                        $"contact.{npc.Id}", npc.Name, $"At {site.Name}."));
+                }
+
+                npc.Standing = Math.Min(1.0, npc.Standing + 0.05);
+
+                Dialogue.Open(npc, bank, ctx, CodaServer);
+                return true;
+            }));
+    }
+
+    private (NpcMind npc, DialogueBank bank) GetOrCreateNpc(Site site)
+    {
+        if (_npcs.TryGetValue(site.Id, out var existing)) return existing;
+
+        NpcMind npc;
+        DialogueBank bank;
+
+        if (site.Id == _mattieSiteId)
+        {
+            npc = DialogueCorpus.Mattie();
+            bank = DialogueCorpus.MattieLines();
+        }
+        else
+        {
+            npc = DialogueCorpus.Settler(site.Id, site.Name);
+            bank = DialogueCorpus.SettlerLines();
+        }
+
+        _npcs[site.Id] = (npc, bank);
+        return (npc, bank);
+    }
+
+    private TalkContext BuildTalkContext(Site site, NpcMind npc)
+    {
+        var sim = _heli.Sim;
+        var worst = sim.Damage.Worst();
+        double fuelFrac = sim.Fuel / Math.Max(sim.Airframe.FuelCapacity, 1);
+
+        return new TalkContext
+        {
+            Now = Progress.Clock,
+            SiteId = site.Id.ToString(),
+            SiteName = site.Name,
+            RegionName = WorldMap.RegionAt(site.Position).Name,
+            FuelFraction = fuelFrac,
+            WorstComponentHealth = worst.Health,
+            WorstComponentName = worst.Component.ToString(),
+            CarriedMass = Progress.CarriedMass,
+            CarriedParts = (int)Progress.Amount(Stock.Parts),
+            CarriedMedical = Progress.Amount(Stock.Medical) > 0,
+            HoursSinceLastMeeting = npc.LastSeenAt < 0
+                ? double.PositiveInfinity
+                : (Progress.Clock - npc.LastSeenAt) / 3600.0,
+            PreviousMeetings = npc.Meetings,
+            ArrivedDamaged = worst.Health < 0.6,
+            ArrivedLowOnFuel = fuelFrac < 0.25,
+            ArrivedAtNight = false,      // TODO: day/night cycle
+            Standing = npc.Standing,
+        };
+    }
 }

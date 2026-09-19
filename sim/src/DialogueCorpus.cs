@@ -152,4 +152,126 @@ public static class DialogueCorpus
         if (npc.Meetings > 4) phrases.Add($"they have been here {npc.Meetings} times");
         return phrases;
     }
+
+    // ------------------------------------------------------------ generic settlers
+
+    private static readonly string[] SettlerNames =
+    {
+        "Sal", "Mick", "Jen", "Drew", "Kit", "Nora", "Ruth", "Corin",
+        "Ash", "Bren", "Dale", "Moss", "Wren", "Fen", "Tess", "Clay",
+        "Rae", "Joss", "Hale", "Senna",
+    };
+
+    private static readonly string[] SettlerPersonas =
+    {
+        "keeps things running at {0}, practical, does not waste words",
+        "watches the perimeter at {0}, says little, sees everything",
+        "trades salvage at {0}, weighs every word before speaking it",
+        "tends what grows at {0}, tired, steady, not unkind",
+        "repairs things at {0}, patient, matter-of-fact",
+    };
+
+    /// <summary>
+    /// A generic settler for sites without a named character. Each gets a deterministic
+    /// name and persona. The persona mentions the site so the coda can contextualise.
+    /// </summary>
+    public static NpcMind Settler(int seed, string siteName)
+    {
+        var rng = new Random(seed * 104729 + 3);
+        return new NpcMind
+        {
+            Id = $"npc.settler.{seed}",
+            Name = SettlerNames[rng.Next(SettlerNames.Length)],
+            Persona = string.Format(SettlerPersonas[rng.Next(SettlerPersonas.Length)], siteName),
+            Wants = "to keep this place going and for people to stop dying out there",
+            Standing = 0.0,
+            Forbidden = { "chosen one", "hero", "save the world" },
+        };
+    }
+
+    /// <summary>
+    /// Lines shared by all generic settlers. Each NPC gets its own bank instance so
+    /// recency tracking is per-character.
+    /// </summary>
+    public static DialogueBank SettlerLines()
+    {
+        var b = new DialogueBank();
+        b.AddRange(new[]
+        {
+            // --- First meeting ---
+            L("settler.first", "Not many come out this way. Not on purpose.",
+              "greeting", 3, Requirement.Meetings(0, 0)),
+            L("settler.first.damaged",
+              "Whatever did that to your aircraft, it is still out there.",
+              "greeting", 5, Requirement.Meetings(0, 0), Requirement.Condition(0, 0.6)),
+
+            // --- Returning ---
+            L("settler.return.a", "You again.", "greeting", 1, Requirement.Meetings(1, 99)),
+            L("settler.return.b", "Back.", "greeting", 1, Requirement.Meetings(1, 99)),
+            L("settler.return.c", "Heard you before I saw you.",
+              "greeting", 1, Requirement.Meetings(1, 99)),
+            L("settler.return.d", "Still flying.", "greeting", 1, Requirement.Meetings(1, 99)),
+            L("settler.return.e", "I know that sound now.",
+              "greeting", 1, Requirement.Meetings(1, 99)),
+            L("settler.return.f", "Thought you would be back.",
+              "greeting", 1, Requirement.Meetings(1, 99)),
+
+            L("settler.return.soon",
+              "Twice in one day. You are either busy or in trouble.",
+              "greeting", 4, Requirement.Meetings(1, 99), Requirement.HoursSince(0, 14)),
+            L("settler.return.long",
+              "I had stopped expecting you.",
+              "greeting", 4, Requirement.Meetings(1, 99), Requirement.HoursSince(200, 99999)),
+
+            // --- Fuel ---
+            L("settler.dry",
+              "You came in on nothing. I could hear it from the stutter.",
+              "greeting", 6, Requirement.Fuel(0, 0.1)),
+            L("settler.low",
+              "That does not look like enough fuel to get back.",
+              "greeting", 4, Requirement.Fuel(0, 0.25)),
+
+            // --- Condition ---
+            L("settler.wrecked",
+              "That does not sound right. None of it sounds right.",
+              "greeting", 6, Requirement.Condition(0, 0.35)),
+            L("settler.patched",
+              "Somebody worked on that. You, I assume.",
+              "greeting", 4, Requirement.Condition(0.35, 0.7)),
+
+            // --- Standing ---
+            L("settler.warm",
+              "Sit down. You have earned it.",
+              "greeting", 3, Requirement.Standing(0.5, 1), Requirement.Meetings(3, 99)),
+
+            // --- Parting ---
+            L("settler.bye.a", "Watch yourself.", "parting", 1),
+            L("settler.bye.b", "Go.", "parting", 1),
+            L("settler.bye.c", "Safe skies.", "parting", 1),
+            L("settler.bye.low",
+              "Do not push the fuel. Land before it is a decision somebody else makes.",
+              "parting", 4, Requirement.Fuel(0, 0.3)),
+            L("settler.bye.damaged",
+              "Get that looked at before you go anywhere that matters.",
+              "parting", 5, Requirement.Condition(0, 0.6)),
+
+            // --- Talk ---
+            L("settler.talk.quiet",
+              "Quiet here, mostly. The way I like it.",
+              "talk", 2),
+            L("settler.talk.before",
+              "Before all this, I never looked up. Nobody did.",
+              "talk", 2),
+            L("settler.talk.sound",
+              "You can hear it a long way off. Everyone can.",
+              "talk", 3, Requirement.Meetings(2, 99)),
+            L("settler.talk.trade",
+              "If you find parts, I know people who need them. Everybody needs something.",
+              "talk", 2),
+            L("settler.talk.relay",
+              "The relay was on last week. Could not make out the words, but it was on.",
+              "talk", 2),
+        });
+        return b;
+    }
 }

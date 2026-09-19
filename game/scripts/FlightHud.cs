@@ -293,7 +293,7 @@ public sealed partial class FlightHud : Control
     /// </summary>
     private void DrawSitePanel(Vector2 origin)
     {
-        if (_play is null) return;
+        if (_play is null || _play.InDialogue) return;
 
         if (_play.Busy is string busy)
         {
