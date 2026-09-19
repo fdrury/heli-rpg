@@ -13,38 +13,43 @@ nothing until it is connected. Clear it, do not grow it.
 
 ## Salvage economy → the game (from `916f9ef`)
 
-`sim/src/Salvage.cs` is complete and covered, and is currently **dead code in the running
-game**. Five hooks, in the order that matters:
+`sim/src/Salvage.cs` was complete and covered and **dead code in the running game**. Four
+of the five hooks are now in. One is left, and it is the one that fills the cargo list.
 
-1. **Nothing wears components with flight time.** `Salvage.WearOver` is written and tested;
-   the flight loop needs a per-component tick:
-   `damage.Apply(c, Salvage.WearOver(c, health, hours), DamageCause.Wear)`.
-   *Without this, condition never degrades and the entire demand side of the economy does
-   not exist.* This is the one that matters; the rest are plumbing.
-   **Owner:** whoever holds `sim/src/Helicopter.cs`.
+1. ~~**Nothing wears components with flight time.**~~ **DONE.** Not as a per-frame tick —
+   that was tried and it moved the autorotation rate of descent from 3193 to 3859 fpm off a
+   1.5e-4 perturbation of blade condition (`02-damage.md`). Instead `DamageState` runs a
+   Hobbs meter in `UpdateSystems` while the rotor turns and charges the hours through
+   `Salvage.WearOver` the moment it stops (`AccrueFlightHours`). One wear model, booked at
+   the moment D-003a says to charge the player — when he lands. Measured: a main rotor is
+   good for 151 flight hours, an engine 112, and the aircraft as a whole — with the
+   couplings, serviced between sorties — stops being airworthy at **53 flight hours**.
+   Covered by `salvage_hours`.
 
 2. **`SiteInteraction.AddSalvage` still rolls its own yields** — a `switch` on `SiteKind`
    with its own RNG. It should call `Salvage.SearchesAt` / `Salvage.Search` with
    `(SalvageSiteKind)(int)site.Kind` and `site.Tier`. The two enums are deliberately kept in
-   the same order so that cast is valid.
+   the same order so that cast is valid. **This is now the only thing standing between the
+   salvage economy and the game**: mass, fitting and the save all work on
+   `Progress.Cargo`, and nothing puts a `SalvagePart` into it. Found parts still arrive as
+   `Stock.Parts` at a nominal 6.5 kg each.
    **Owner:** `game/scripts/SiteInteraction.cs`.
 
-3. **`Progress.CarriedMass` does not know about cargo**, so salvaged parts weigh nothing.
-   Cleanest fix: `Progress` gains `Cargo Cargo { get; } = new()` and `CarriedMass` adds
-   `Cargo.Mass`. (The alternative — a `"cargo"` `MassItem` added from the Godot layer — puts
-   the mass budget in two places.)
-   **Owner:** `sim/src/Progress.cs`.
+3. ~~**`Progress.CarriedMass` does not know about cargo.**~~ **DONE.** `Progress.Cargo` is a
+   `Cargo`, `CarriedMass` adds `Cargo.Mass`, and the Godot layer's existing
+   `KeepMassInSync` carries it to the rotor with no second mass budget. Measured: a 200 kg
+   haul costs 625 m of hover ceiling (3250 m → 2625 m) and 54% of the rate of climb at
+   1500 m. Covered by `salvage_cargo`.
 
-4. **`SaveData` has no cargo field.** Needs `List<CargoPartSave> { Id, Condition }` plus
-   capture and apply. `Cargo.Restore` already takes exactly `(string Id, double Condition)`
-   tuples.
-   **Owner:** `sim/src/SaveData.cs`.
+4. ~~**`SaveData` has no cargo field.**~~ **DONE.** `List<CargoPartSave> { Id, Condition }`,
+   captured in `CaptureProgress` and applied in `ApplyProgress`. Only id and condition are
+   stored, so retuning a part's mass retunes every existing save; an id that has left the
+   catalog is dropped rather than throwing, and a save written before the field existed
+   still opens. Covered by `salvage_cargosave`.
 
-5. **Unserviceable thresholds are baked into expressions** in `Damage.cs` (`Airworthy`
-   0.25/0.20/0.15, `SkidsServiceable` 0.25, `AvionicsWorking` 0.35). `Salvage` mirrors them
-   with comments pointing back, which is two sources of truth. They want to be named
-   constants on `DamageState`.
-   **Owner:** `sim/src/Damage.cs`.
+5. ~~**Unserviceable thresholds are baked into expressions.**~~ **DONE.** They are named
+   constants on `DamageState` (`MainRotorFloor` and the rest) with
+   `DamageState.UnserviceableAt`, and `Salvage.UnserviceableAt` forwards to it. One table.
 
 **Noted, not a hook:** `Loadout.ModuleAtSite` uses `new Random(seed)`, whose sequence .NET
 does not guarantee across versions — a runtime upgrade could reshuffle which sites hold

@@ -746,4 +746,447 @@ public static class SalvageTests
 
         return null;
     }
+
+    // ================================================ wear, weight and the save
+    //
+    // The three hooks that turn this file from a model into a mechanism. Until they
+    // existed Salvage.cs was complete, covered, and dead code in the running game:
+    // nothing wore components with flight time, salvaged parts weighed nothing, and a
+    // part did not survive a save. Each test below measures the hook rather than the
+    // model - through the real aircraft, the real damage path and the real save file -
+    // because a model nothing calls passes its own tests forever.
+
+    private const double Dt = 1.0 / 240.0;
+
+    /// <summary>
+    /// Flying the aircraft wears it out, and flying it does nothing else at all.
+    ///
+    /// <para><b>Two claims, and the second one is the trap.</b> The demand side of the
+    /// whole parts economy is that hours cost condition. But the obvious implementation -
+    /// tick <c>Salvage.WearOver</c> every frame - was tried and is documented in
+    /// <c>02-damage.md</c>: after one minute of flying it had perturbed main rotor health
+    /// by 1.5e-4, and that moved the measured autorotation rate of descent from 3193 to
+    /// 3859 fpm and best glide from 50 kt to 70. The autorotation equilibrium is
+    /// knife-edged. It also made wear depend on how many iterations <c>Trim.Solve</c>
+    /// took, because trim solves by stepping the aircraft.</para>
+    ///
+    /// <para>So the Hobbs meter runs in <c>DamageState.UpdateSystems</c> and the hours are
+    /// charged when the rotor stops. This test asserts BOTH halves: that ten minutes of
+    /// real flight moved no health value by so much as a bit, and that stopping the rotor
+    /// then charged exactly what <c>Salvage.WearOver</c> says it should. If the first
+    /// assertion ever fails, look at the autorotation numbers before anything else.</para>
+    /// </summary>
+    public static string? FlightHours()
+    {
+        const double flightMinutes = 10.0;
+
+        var h = new Helicopter(Airframe.Workhorse(), new FlatEnvironment()) { Fuel = 500 };
+        h.PlaceInFlight(300);
+        h.UseInternalGroundModel = false;
+        var ap = new Autopilot { CollectiveTrim = 0.6 };
+        var demand = new AutopilotDemand
+            { Altitude = 300, ForwardSpeed = 0, LateralSpeed = 0, Heading = 0 };
+
+        // Settle first, and throw the settling away.
+        //
+        // PlaceInFlight drops an UNTRIMMED aircraft into the air, and the autopilot
+        // catching it puts a brief excursion through the gearbox: measured at 2.36e-5 of
+        // transmission health in the first thirty seconds, from the continuous-torque
+        // term in UpdateSystems, and then nothing ever again. That is the damage model
+        // working - it really is a momentary overtorque - but it is an artefact of how
+        // the aircraft got into the air, not of flying it, and counting it would make
+        // this test assert something it does not mean.
+        for (int i = 0; i < (int)(30 / Dt); i++)
+        {
+            h.Input = ap.Update(h, demand, Dt);
+            h.Step(Dt);
+        }
+        h.Damage.AccrueFlightHours();   // zero the Hobbs meter; the settling is not the test
+
+        var atLiftoff = new Dictionary<Component, double>();
+        foreach (Component c in Enum.GetValues<Component>()) atLiftoff[c] = h.Damage.Health(c);
+
+        int steps = (int)(flightMinutes * 60 / Dt);
+        for (int i = 0; i < steps; i++)
+        {
+            h.Input = ap.Update(h, demand, Dt);
+            h.Step(Dt);
+        }
+
+        // --- 1. The flight itself perturbed nothing --------------------------
+        foreach (Component c in Enum.GetValues<Component>())
+            if (h.Damage.Health(c) != atLiftoff[c])
+                return $"{c} health moved during the flight itself " +
+                       $"({atLiftoff[c]:R} -> {h.Damage.Health(c):R}). Wear is being ticked in " +
+                       "flight again; check the autorotation numbers, they will have moved too";
+
+        double hobbs = h.Damage.RotorTurningSeconds;
+        Console.WriteLine($"  flew {flightMinutes:F0} min of hover at 300 m, {h.TotalMass:F0} kg all up");
+        Console.WriteLine($"  Hobbs meter: {hobbs / 60:F1} min of rotor-turning time, " +
+                          "health untouched to the last bit");
+        if (hobbs < flightMinutes * 60 * 0.98)
+            return $"the Hobbs meter only ran {hobbs:F0} s over a {flightMinutes * 60:F0} s flight";
+
+        // --- 2. Stopping the rotor charges exactly the salvage curve ----------
+        double booked = h.Damage.AccrueFlightHours();
+        Console.WriteLine();
+        Console.WriteLine($"  shut down; {booked:F4} flight hours booked");
+        Console.WriteLine("    component      health after    lost   Salvage.WearOver   life left h");
+
+        foreach (Component c in Enum.GetValues<Component>())
+        {
+            double lost = atLiftoff[c] - h.Damage.Health(c);
+            double expect = Salvage.WearOver(c, atLiftoff[c], booked);
+            Console.WriteLine($"    {c,-13} {h.Damage.Health(c),13:F6} {lost,8:F6} {expect,17:F6}" +
+                              $" {Salvage.LifeHours(c, h.Damage.Health(c)),12:F0}");
+            if (lost <= 0)
+                return $"{c} lost no condition to {booked:F3} flight hours - nothing wears";
+            if (Math.Abs(lost - expect) > 1e-12)
+                return $"{c} lost {lost:R} but Salvage.WearOver says {expect:R} - " +
+                       "there are two wear models again";
+        }
+
+        // The wear must also be in the damage log, with a cause, like every other kind of
+        // damage. A silent health change is one the player can never find out about.
+        int wearEntries = 0;
+        foreach (DamageEvent e in h.Damage.Log) if (e.Cause == DamageCause.Wear) wearEntries++;
+        Console.WriteLine($"  damage log carries {wearEntries} Wear entries " +
+                          "(logged in hundredths, so a short flight books none yet)");
+
+        // --- 3. How long the aircraft lasts on hours alone --------------------
+        //
+        // Through DamageState.UpdateSystems, not through Salvage.LifeHours, so the answer
+        // includes the couplings: a worn rotor shakes, and the shaking chafes the lines
+        // around it. That makes "hours until grounded" shorter than the component curves
+        // predict on their own, which is the honest number and the one the economy has to
+        // keep up with.
+        double shaft = Math.Max(h.Telemetry.MainRotorPower, 0)
+                     + Math.Max(h.Telemetry.TailRotorPower, 0)
+                     + Math.Max(h.Telemetry.DrivetrainPower, 0);
+        var hover = new SystemLoad(
+            RotorFraction: h.Telemetry.RotorRpmPercent / 100.0,
+            TorqueFraction: h.Telemetry.TorquePercent / 100.0,
+            ShaftPowerW: shaft,
+            PowerFraction: shaft / Math.Max(h.Telemetry.PowerAvailable, 1.0),
+            AmbientTempC: 15.0,
+            EngineRunning: true);
+        var parked = new SystemLoad(0, 0, 0, 0, 15.0, false);
+
+        Console.WriteLine();
+        Console.WriteLine($"  measured flight load: {hover.ShaftPowerW / 1000:F0} kW through the gearbox, " +
+                          $"{hover.TorqueFraction * 100:F0}% torque, Nr {hover.RotorFraction * 100:F0}%");
+
+        const double maxHours = 800;
+
+        // One sortie: an hour aloft, then the rotor stops and the hours book. With
+        // <paramref name="serviced"/> the fluids are also put back, which is what
+        // ResetSystems means and what the game does on every load: a parked aircraft is
+        // cold, with whatever the mechanic poured into it.
+        (Dictionary<Component, double> floors, double grounded) Ladder(bool serviced)
+        {
+            var d = new DamageState();
+            var floorAt = new Dictionary<Component, double>();
+            double groundedAt = 0, flown = 0;
+            while (flown < maxHours)
+            {
+                for (int i = 0; i < 60; i++) d.UpdateSystems(hover, 60.0);
+                d.UpdateSystems(parked, 1.0);
+                if (serviced) d.ResetSystems();
+                flown += 1.0;
+
+                foreach (Component c in Enum.GetValues<Component>())
+                    if (!floorAt.ContainsKey(c) && d.Health(c) <= DamageState.UnserviceableAt(c))
+                        floorAt[c] = flown;
+                if (groundedAt == 0 && !d.Airworthy) groundedAt = flown;
+                if (floorAt.Count == Enum.GetValues<Component>().Length) break;
+            }
+            return (floorAt, groundedAt);
+        }
+
+        // Two ladders, because the difference between them is a real finding and not a
+        // measurement artefact. Wear is quadratic into the gearbox oil leak: at 0.99 of
+        // transmission health the leak is a millionth of the reservoir per second, which
+        // is nothing on a sortie and is 0.4% of the oil per flight hour. An aircraft
+        // NOBODY EVER TOPS UP therefore does not die of wear, it dies of oil starvation
+        // at 21 hours, with the gearbox and the hydraulics off it going together. A
+        // serviced one lives on the component curves, which is what the parts economy is
+        // priced against.
+        var (unserviced, unservicedGrounded) = Ladder(serviced: false);
+        var (floors, grounded) = Ladder(serviced: true);
+
+        Console.WriteLine("  flying it an hour at a time, nothing but hours:");
+        Console.WriteLine("    component      serviced   never serviced   floor   pure-wear curve");
+        foreach (Component c in Enum.GetValues<Component>())
+        {
+            string a = floors.TryGetValue(c, out double hrs) ? $"{hrs:F0} h" : "none";
+            string b = unserviced.TryGetValue(c, out double uh) ? $"{uh:F0} h" : "none";
+            Console.WriteLine($"    {c,-13} {a,10} {b,16}   {DamageState.UnserviceableAt(c),5:F2}" +
+                              $" {Salvage.LifeHours(c, 1.0),15:F0} h");
+            if (!floors.ContainsKey(c))
+                return $"{c} never reached its unserviceable threshold in {maxHours:F0} flight hours - " +
+                       "it is effectively immortal and will never be a reason to salvage anything";
+        }
+
+        Console.WriteLine($"  serviced between sorties, the aircraft stopped being airworthy after " +
+                          $"{grounded:F0} flight hours with nothing going wrong at all");
+        Console.WriteLine($"  never serviced, {unservicedGrounded:F0} h - the gearbox weeps its oil away " +
+                          "on ordinary wear long before the gears are worn out");
+
+        if (grounded <= 0) return "hours alone never made the aircraft unairworthy";
+        if (grounded < 40)
+            return $"{grounded:F0} flight hours to grounded - D-007 asks for a loop that is " +
+                   "forgiving, and this is an aircraft that needs an engine every third sortie";
+        if (grounded > 300)
+            return $"{grounded:F0} flight hours to grounded - the player will finish the game " +
+                   "before anything needs replacing, so the demand side does not exist";
+        if (unservicedGrounded >= grounded)
+            return "servicing the aircraft between sorties made no difference at all";
+
+        return null;
+    }
+
+    // ------------------------------------------------------- cargo has mass
+
+    /// <summary>
+    /// A part in the back weighs what the part weighs, and the rotor has to lift it.
+    ///
+    /// <para><c>Progress.CarriedMass</c> used to count scrap, jerrycans and rations and
+    /// nothing else, so a main transmission in the cabin weighed exactly as much as an
+    /// empty cabin. That is not a missing feature, it is THE feature: D-003a says load is
+    /// a constraint that is FELT, and the whole knapsack argument in this file rests on
+    /// two hundred kilos costing something real.</para>
+    ///
+    /// <para>Measured on the flight model, and routed through <c>Progress.CarriedMass</c>
+    /// exactly as the game layer routes it - one "cargo" mass item kept in sync with that
+    /// one number - so this fails if the plumbing comes apart, not only if the arithmetic
+    /// does.</para>
+    /// </summary>
+    public static string? CargoWeighs()
+    {
+        // --- 1. The arithmetic ------------------------------------------------
+        var p = new Progress();
+        p.Add(Stock.Scrap, 20);      // 20 kg
+        p.Add(Stock.Fuel, 2);        // two jerrycans, 40 kg
+        double bulk = p.CarriedMass;
+
+        p.Cargo.Take(new SalvagePart(Salvage.Catalog["xmsn_main"], 0.62));   // 180 kg
+        p.Cargo.Take(new SalvagePart(Salvage.Catalog["avi_ah"], 0.88));      //   7 kg
+
+        Console.WriteLine($"  bulk stock {bulk:F0} kg, cargo {p.Cargo.Mass:F0} kg " +
+                          $"({p.Cargo.Count} parts), carried {p.CarriedMass:F0} kg");
+        if (Math.Abs(p.CarriedMass - (bulk + p.Cargo.Mass)) > 1e-9)
+            return $"CarriedMass is {p.CarriedMass:F1} kg but bulk + cargo is {bulk + p.Cargo.Mass:F1} kg";
+        if (Math.Abs(p.Cargo.Mass - 187.0) > 1e-9)
+            return $"a transmission and an attitude reference came to {p.Cargo.Mass:F1} kg, not 187";
+
+        p.Cargo.Drop("xmsn_main");
+        if (Math.Abs(p.CarriedMass - (bulk + 7.0)) > 1e-9)
+            return "dropping the transmission did not take 180 kg off the carried mass";
+        Console.WriteLine($"  dropped the transmission: {p.CarriedMass:F0} kg");
+
+        // A payload check against the aircraft's real gross limit, which is the number
+        // that makes the knapsack a knapsack.
+        var af = Airframe.Workhorse();
+        double allUp = af.Mass.TotalMass + af.FuelCapacity + 187.0;
+        Console.WriteLine($"  full fuel and both parts: {allUp:F0} kg all up, " +
+                          $"{Salvage.PayloadRemaining(allUp):F0} kg of payload left");
+
+        // --- 2. A real haul, on the real aircraft -----------------------------
+        //
+        // 200 kg exactly, in four parts a player would plausibly come home with, so the
+        // ceiling numbers below sit alongside salvage_weight's and can be compared.
+        var haul = new Progress();
+        foreach (var (id, cond) in new[]
+                 { ("blade_main", 0.44), ("skid_set", 0.61), ("gearbox_tail", 0.37), ("avi_dg", 0.80) })
+            haul.Cargo.Take(new SalvagePart(Salvage.Catalog[id], cond));
+
+        double load = haul.CarriedMass;
+        Console.WriteLine();
+        Console.WriteLine($"  the haul: {string.Join(", ", haul.Cargo.Parts)}");
+        Console.WriteLine($"  {load:F0} kg, worth {haul.Cargo.Value:F0}");
+        if (Math.Abs(load - 200.0) > 1e-9)
+            return $"the haul came to {load:F1} kg, not the 200 the ceiling numbers are quoted at";
+
+        Console.WriteLine();
+        Console.WriteLine("  hover ceiling OGE, 125 m steps, mass routed through Progress.CarriedMass:");
+        double emptyCeiling = 0, loadedCeiling = 0;
+        foreach (double kg in new[] { 0.0, load })
+        {
+            double ceiling = 0;
+            for (double alt = 0; alt <= 5000; alt += 125)
+            {
+                var h = new Helicopter(Airframe.Workhorse(), new FlatEnvironment()) { Fuel = 500 };
+                if (kg > 0.1) h.Airframe.Mass.Add("cargo", new Vec3(-0.6, 0, -0.1), kg);
+                h.InvalidateMass();
+                h.PlaceInFlight(alt);
+                var ap = new Autopilot { CollectiveTrim = 0.6 };
+                var demand = new AutopilotDemand
+                    { Altitude = alt, ForwardSpeed = 0, LateralSpeed = 0, Heading = 0 };
+                for (int i = 0; i < 9600; i++)   // 40 s at 240 Hz
+                {
+                    h.Input = ap.Update(h, demand, Dt);
+                    h.Step(Dt);
+                }
+                if (Math.Abs(h.State.Altitude - alt) < 8 && h.Input.Collective < 0.985) ceiling = alt;
+                else break;
+            }
+            Console.WriteLine($"    {kg,7:F0} kg  {ceiling,6:F0} m");
+            if (kg < 0.1) emptyCeiling = ceiling; else loadedCeiling = ceiling;
+        }
+
+        double lost = emptyCeiling - loadedCeiling;
+        Console.WriteLine($"  the haul costs {lost:F0} m of hover ceiling " +
+                          $"({emptyCeiling:F0} -> {loadedCeiling:F0})");
+        if (lost <= 0)
+            return "a 200 kg haul did not lower the hover ceiling at all - " +
+                   "Progress.Cargo is not reaching the rotor";
+        if (lost < 300)
+            return $"a 200 kg haul cost only {lost:F0} m of ceiling";
+
+        // --- 3. And it climbs worse everywhere below the ceiling --------------
+        //
+        // The ceiling is where climb reaches zero; this is the same fact where the player
+        // actually lives. Same lever position in both aircraft, so the only difference is
+        // the two hundred kilos: mean rate of climb over the second half of a 40 s pull.
+        //
+        // NOT at full collective, and that is worth writing down. Pinning the lever at
+        // the stop droops Nr to 60% and the aircraft DESCENDS at 10 m/s, loaded or empty
+        // - the powerplant runs into the torque limit, the rotor decelerates, and the
+        // thrust goes with it. That is correct behaviour and it is what a real one does,
+        // but it measures the droop rather than the load. 0.55 holds Nr at 99.8% and 82%
+        // torque, inside the continuous rating, where a climb rate means something.
+        const double climbCollective = 0.55;
+        Console.WriteLine();
+        Console.WriteLine($"  rate of climb from 1500 m at {climbCollective:F2} collective " +
+                          "(the same lever in both):");
+        Console.WriteLine("       load        climb          Nr    torque");
+        double emptyRoc = 0, loadedRoc = 0;
+        foreach (double kg in new[] { 0.0, load })
+        {
+            var h = new Helicopter(Airframe.Workhorse(), new FlatEnvironment()) { Fuel = 500 };
+            if (kg > 0.1) h.Airframe.Mass.Add("cargo", new Vec3(-0.6, 0, -0.1), kg);
+            h.InvalidateMass();
+            h.PlaceInFlight(1500);
+            h.UseInternalGroundModel = false;
+            var ap = new Autopilot { CollectiveTrim = 0.6 };
+            var demand = new AutopilotDemand
+                { Collective = climbCollective, ForwardSpeed = 0, LateralSpeed = 0, Heading = 0 };
+
+            double startAlt = 0;
+            for (int i = 0; i < 9600; i++)   // 40 s at 240 Hz
+            {
+                h.Input = ap.Update(h, demand, Dt);
+                h.Step(Dt);
+                if (i == 4799) startAlt = h.State.Altitude;
+            }
+            double roc = (h.State.Altitude - startAlt) / 20.0;
+            Console.WriteLine($"    {kg,7:F0} kg {roc * 196.85,7:F0} fpm ({roc,4:F2} m/s)" +
+                              $" {h.Telemetry.RotorRpmPercent,6:F1}% {h.Telemetry.TorquePercent,7:F1}%");
+            if (h.Telemetry.RotorRpmPercent < 99.0)
+                return $"Nr drooped to {h.Telemetry.RotorRpmPercent:F1}% at {kg:F0} kg — " +
+                       "this is measuring the rotor running down, not the load";
+            if (kg < 0.1) emptyRoc = roc; else loadedRoc = roc;
+        }
+
+        double rocCost = emptyRoc - loadedRoc;
+        Console.WriteLine($"  the haul costs {rocCost * 196.85:F0} fpm of climb at 1500 m, " +
+                          $"{rocCost / Math.Max(emptyRoc, 1e-9):P0} of what the aircraft had");
+        if (emptyRoc <= 0)
+            return $"the empty aircraft did not climb at 1500 m ({emptyRoc:F2} m/s) — " +
+                   "the measurement is broken before the load is even aboard";
+        if (rocCost <= 0)
+            return $"the loaded aircraft climbed as well as the empty one " +
+                   $"({loadedRoc:F2} vs {emptyRoc:F2} m/s) - the load is not being felt";
+        if (rocCost / emptyRoc < 0.20)
+            return $"200 kg cost only {rocCost / emptyRoc:P0} of the climb rate";
+
+        return null;
+    }
+
+    // -------------------------------------------------- cargo survives a save
+
+    /// <summary>
+    /// A part in the back is still in the back after a save and a load.
+    ///
+    /// <para>Exactly, not approximately. Condition is the whole value of a part
+    /// (<c>Value</c> goes as condition^1.8) and it is the number the player weighed a
+    /// hundred and five kilos against, so a save that rounds it is a save that quietly
+    /// charges them for the round trip. The round trip here goes through the JSON, not
+    /// through the DTOs, because the JSON is what is actually on disk.</para>
+    ///
+    /// <para>Only id and condition are stored. That is deliberate and is tested: mass and
+    /// value come back from <c>Salvage.Catalog</c>, so retuning a part retunes every
+    /// existing save rather than only new ones.</para>
+    /// </summary>
+    public static string? CargoSurvivesSave()
+    {
+        var p = Progress.NewGame();
+        p.Add(Stock.Scrap, 31);
+
+        var haul = new (string Id, double Condition)[]
+        {
+            ("blade_main",  0.41234567890123),   // awkward on purpose
+            ("blade_main",  0.98765432109876),   // two of the same part, different wear
+            ("avi_dopp",    1.0),                // the ends of the range
+            ("skid_shoe",   0.0),
+            ("xmsn_input",  0.5),
+        };
+        foreach (var (id, cond) in haul)
+            p.Cargo.Take(new SalvagePart(Salvage.Catalog[id], cond));
+
+        double massBefore = p.CarriedMass;
+        Console.WriteLine($"  aboard: {p.Cargo.Count} parts, {p.Cargo.Mass:F0} kg, " +
+                          $"worth {p.Cargo.Value:F1}; carried mass {massBefore:F1} kg");
+
+        var save = new SaveData();
+        save.CaptureProgress(p);
+        string json = save.ToJson();
+        SaveData? read = SaveData.FromJson(json);
+        if (read is null) return "the save did not deserialise at all";
+        Progress q = read.ApplyProgress();
+
+        Console.WriteLine($"  save file carries {read.Cargo.Count} cargo entries, " +
+                          $"{json.Length} bytes of JSON in total");
+
+        if (q.Cargo.Count != p.Cargo.Count)
+            return $"{p.Cargo.Count} parts went in and {q.Cargo.Count} came out";
+
+        Console.WriteLine("    part                        before           after            kg");
+        for (int i = 0; i < p.Cargo.Count; i++)
+        {
+            SalvagePart a = p.Cargo.Parts[i], b = q.Cargo.Parts[i];
+            Console.WriteLine($"    {b.Def.Name,-24} {a.Condition,16:F14} {b.Condition,16:F14} {b.Mass,4:F0}");
+            if (b.Def.Id != a.Def.Id)
+                return $"part {i} came back as '{b.Def.Id}', not '{a.Def.Id}' - the order moved";
+            if (b.Condition != a.Condition)
+                return $"'{a.Def.Id}' went in at {a.Condition:R} and came back at {b.Condition:R}";
+            if (b.Mass != a.Mass || b.Value != a.Value)
+                return $"'{a.Def.Id}' came back with a different mass or value";
+        }
+
+        if (q.CarriedMass != massBefore)
+            return $"carried mass was {massBefore:R} kg and came back {q.CarriedMass:R} kg";
+        Console.WriteLine($"  carried mass round-tripped exactly: {q.CarriedMass:F1} kg");
+
+        // An older save has no cargo field at all. It must load, with nothing aboard,
+        // rather than throw - every save written before this field existed is one of these.
+        string older = json.Replace("\"cargo\"", "\"cargoWasNotAThingYet\"");
+        SaveData? old = SaveData.FromJson(older);
+        if (old is null) return "a save without a cargo field did not deserialise";
+        Progress r = old.ApplyProgress();
+        if (r.Cargo.Count != 0)
+            return $"a save with no cargo field produced {r.Cargo.Count} parts from nowhere";
+        Console.WriteLine("  a save written before cargo existed still loads: " +
+                          $"{r.Cargo.Count} parts, {r.CarriedMass:F1} kg of bulk stock intact");
+
+        // A part id that has since left the catalog is dropped, not fatal. A save that
+        // sheds a part is bad; a save that will not open is worse.
+        read.Cargo.Add(new CargoPartSave { Id = "blade_unobtainium", Condition = 0.9 });
+        Progress s = read.ApplyProgress();
+        if (s.Cargo.Count != p.Cargo.Count)
+            return $"an unknown part id changed the cargo count to {s.Cargo.Count}";
+        Console.WriteLine("  an id that is no longer in the catalog is dropped, and the save opens");
+
+        return null;
+    }
 }

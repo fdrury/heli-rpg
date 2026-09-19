@@ -37,6 +37,17 @@ public sealed class SaveData
     public Dictionary<string, SiteRecordSave> Sites { get; set; } = new();
     public List<string> Journal { get; set; } = new();
 
+    /// <summary>
+    /// Salvaged components aboard but not fitted.
+    ///
+    /// Only the id and the condition are stored. Everything else about a part - its mass,
+    /// what it fits, what it is worth - comes from <c>Salvage.Catalog</c>, which is code,
+    /// so retuning a part's mass retunes every save rather than only new ones. A part id
+    /// that has since left the catalog is dropped on load by <c>Cargo.Restore</c>: a save
+    /// that silently sheds a part is bad, and a save that will not load at all is worse.
+    /// </summary>
+    public List<CargoPartSave> Cargo { get; set; } = new();
+
     // ---- NPCs ----
     public List<NpcSave> Npcs { get; set; } = new();
 
@@ -97,13 +108,17 @@ public sealed class SaveData
         foreach (var (id, rec) in p.AllSites)
             Sites[id.ToString()] = new SiteRecordSave
             {
-                Visited = rec.Visited, Surveyed = rec.Surveyed,
+                Visited = rec.Visited, Surveyed = rec.Surveyed, Cleared = rec.Cleared,
                 FuelRemaining = rec.FuelRemaining, SalvageRemaining = rec.SalvageRemaining,
                 LastVisitedAt = rec.LastVisitedAt, VisitCount = rec.VisitCount,
             };
 
         Journal.Clear();
         Journal.AddRange(p.Journal_);
+
+        Cargo.Clear();
+        foreach (SalvagePart part in p.Cargo.Parts)
+            Cargo.Add(new CargoPartSave { Id = part.Def.Id, Condition = part.Condition });
 
         ContractsCompleted = p.ContractsCompleted;
         SearchStage = p.Search.Stage;
@@ -148,13 +163,15 @@ public sealed class SaveData
             if (!int.TryParse(idStr, out int id)) continue;
             p.RestoreSite(id, new SiteRecord
             {
-                Visited = rec.Visited, Surveyed = rec.Surveyed,
+                Visited = rec.Visited, Surveyed = rec.Surveyed, Cleared = rec.Cleared,
                 FuelRemaining = rec.FuelRemaining, SalvageRemaining = rec.SalvageRemaining,
                 LastVisitedAt = rec.LastVisitedAt, VisitCount = rec.VisitCount,
             });
         }
 
         p.RestoreJournal(Journal);
+
+        p.Cargo.Restore(Cargo.Select(c => (c.Id, c.Condition)));
 
         p.ContractsCompleted = ContractsCompleted;
         p.Search.Stage = SearchStage;
@@ -270,10 +287,21 @@ public sealed class KnowledgeSave
     public string Detail { get; set; } = "";
 }
 
+/// <summary>
+/// One salvaged part aboard. Id plus wear; the catalog supplies the rest.
+/// Matches the <c>(string Id, double Condition)</c> tuple <c>Cargo.Restore</c> takes.
+/// </summary>
+public sealed class CargoPartSave
+{
+    public string Id { get; set; } = "";
+    public double Condition { get; set; }
+}
+
 public sealed class SiteRecordSave
 {
     public bool Visited { get; set; }
     public bool Surveyed { get; set; }
+    public bool Cleared { get; set; }
     public double FuelRemaining { get; set; }
     public int SalvageRemaining { get; set; }
     public double LastVisitedAt { get; set; }

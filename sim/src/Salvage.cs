@@ -241,8 +241,8 @@ public readonly record struct FitPreview(
 /// rotor. The floors below are the thresholds <c>Damage.cs</c> ALREADY uses in
 /// <c>Airworthy</c>, <c>SkidsServiceable</c> and <c>AvionicsWorking</c>, so "hours left"
 /// means "hours until this stops doing its job", which is a fact rather than a flavour
-/// number. They are mirrored here because Damage.cs bakes them into expressions; see
-/// <see cref="UnserviceableAt"/>.</para>
+/// number. <see cref="UnserviceableAt"/> forwards to <c>DamageState.UnserviceableAt</c>
+/// so there is exactly one table.</para>
 ///
 /// <para>Linear part value. Pricing a part at <c>Value * Condition</c> made stripping a
 /// wreck for its heaviest components always correct, because a 0.30 transmission at 30%
@@ -277,25 +277,20 @@ public static class Salvage
     /// <summary>
     /// The health at which a component stops doing its job.
     ///
-    /// Mirrored from <c>DamageState</c>, which bakes these into <c>Airworthy</c>
-    /// (main rotor 0.25, transmission 0.20, engine 0.15), <c>SkidsServiceable</c> (0.25)
-    /// and <c>AvionicsWorking</c> (0.35). If those constants ever move, move these.
-    /// The three with no hard threshold in Damage.cs are chosen where their effect curve
-    /// gets genuinely dangerous rather than merely annoying.
+    /// <para>ONE source of truth, and it is <c>Damage.cs</c>. This used to be a second
+    /// copy of the table, mirrored by hand with comments pointing back at
+    /// <c>Airworthy</c>, <c>SkidsServiceable</c> and <c>AvionicsWorking</c> - which is
+    /// exactly the arrangement that lets "hours until this stops doing its job" quietly
+    /// stop meaning that. The thresholds are now named constants on
+    /// <see cref="DamageState"/> and this forwards to them, so the two files cannot
+    /// drift.</para>
+    ///
+    /// <para>Kept as a method here rather than deleted because every caller in this file
+    /// - <see cref="LifeHours"/>, <see cref="Preview"/>, the kneeboard - is asking a
+    /// salvage question, and routing them all through one call is what makes the
+    /// forwarding provable in a test.</para>
     /// </summary>
-    public static double UnserviceableAt(Component c) => c switch
-    {
-        Component.MainRotor    => 0.25,   // DamageState.Airworthy
-        Component.Transmission => 0.20,   // DamageState.Airworthy
-        Component.Engine       => 0.15,   // DamageState.Airworthy
-        Component.Skids        => 0.25,   // DamageState.SkidsServiceable
-        Component.Avionics     => 0.35,   // DamageState.AvionicsWorking
-        Component.TailRotor    => 0.25,   // below this the aircraft can only be flown fast
-        Component.Hydraulics   => 0.30,   // ActuatorSlowdown x2.5 and the SAS is mostly gone
-        Component.FuelSystem   => 0.25,   // 0.064 kg/s out of the tank
-        Component.Fuselage     => 0.20,   // drag x1.44
-        _ => 0.20,
-    };
+    public static double UnserviceableAt(Component c) => DamageState.UnserviceableAt(c);
 
     /// <summary>
     /// Health lost per flight hour by a brand new component, before the wear multiplier.
@@ -352,9 +347,18 @@ public static class Salvage
     /// <summary>
     /// Wear a component by flying it for some hours. Returns the health lost.
     ///
-    /// Stepped rather than inverted analytically because the caller wants to apply it
-    /// through <c>DamageState.Apply</c> so the damage log and the Damaged event still
-    /// fire - the wear loop should look exactly like every other source of damage.
+    /// <para>Stepped rather than inverted analytically because the caller applies the
+    /// result through the damage log, so the wear looks exactly like every other source
+    /// of damage. That caller is <c>DamageState.AccrueFlightHours</c>, and it is the ONLY
+    /// one: the aircraft's Hobbs meter runs inside <c>DamageState.UpdateSystems</c> while
+    /// the rotor turns and the hours are charged the moment it stops. There is one wear
+    /// model, and this is it.</para>
+    ///
+    /// <para>Do not call this per frame. A per-frame wear tick perturbed main rotor
+    /// health by 1.5e-4 after a minute of flying and moved the measured autorotation
+    /// descent from 3193 to 3859 fpm; the autorotation equilibrium is knife-edged enough
+    /// that a rounding error in blade condition relocates it. See
+    /// <c>DamageState.AccrueFlightHours</c> for the full account.</para>
     /// </summary>
     public static double WearOver(Component c, double health, double hours)
     {

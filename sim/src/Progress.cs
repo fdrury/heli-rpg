@@ -29,6 +29,7 @@ public sealed class SiteRecord
 {
     public bool Visited;
     public bool Surveyed;
+    public bool Cleared;              // hostile NPCs downed; site is now safe
     public double FuelRemaining = -1;   // -1 = not yet determined
     public int SalvageRemaining = -1;
     public double LastVisitedAt;
@@ -58,6 +59,17 @@ public sealed class Progress
     /// <summary>Main quest search thread. Persists through save/load.</summary>
     public SearchThread Search { get; } = new();
 
+    /// <summary>
+    /// Salvaged components aboard but not fitted: the heavy, awkward, valuable things.
+    ///
+    /// Lives here rather than beside the aircraft because it is part of the character
+    /// sheet (D-005: capability is what you have, not what level you are) and because
+    /// this is the object that gets saved. The consequence that matters is one line
+    /// down: <see cref="CarriedMass"/> counts it, so a rotor blade in the back is a
+    /// hundred and five kilos the rotor has to lift.
+    /// </summary>
+    public Cargo Cargo { get; } = new();
+
     /// <summary>In-world seconds since the game began.</summary>
     public double Clock { get; set; }
 
@@ -86,6 +98,19 @@ public sealed class Progress
     /// <summary>
     /// Mass of everything carried, kg. Fed straight into the flight model, because the
     /// point of a load system is that it is felt in the hover, not read off a screen.
+    ///
+    /// <para>Bulk stock is counted at a nominal mass per unit; <see cref="Cargo"/> is
+    /// counted at the real mass of the real parts, because that is where the interesting
+    /// numbers are. A main rotor blade is 105 kg and the aircraft has about 219 kg of
+    /// payload left with a full tank, so two blades is the whole budget - and 200 kg
+    /// aboard costs 625 m of measured hover ceiling (3250 m -> 2625 m). That is the
+    /// mechanism D-003a is describing when it says fuel is a load constraint rather than
+    /// a range constraint: the load is felt, and it closes the high country off.</para>
+    ///
+    /// <para>One place, on purpose. The alternative considered was a second
+    /// <c>MassItem</c> pushed in from the Godot layer for cargo alone, which would have
+    /// put the mass budget in two files and guaranteed they disagreed. The game layer
+    /// reads this one number and keeps a single "cargo" mass item in sync with it.</para>
     /// </summary>
     public double CarriedMass =>
         Amount(Stock.Scrap) * 1.0 +
@@ -93,7 +118,8 @@ public sealed class Progress
         Amount(Stock.Fuel) * 20.0 +     // a full jerrycan
         Amount(Stock.Medical) * 1.5 +
         Amount(Stock.Food) * 0.8 +
-        Amount(Stock.Ammunition) * 0.05;
+        Amount(Stock.Ammunition) * 0.05 +
+        Cargo.Mass;
 
     // -------------------------------------------------------------- knowledge
 
