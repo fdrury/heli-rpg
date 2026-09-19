@@ -190,6 +190,13 @@ repair patches in a slightly wrong shade, and soot damage driven by the damage m
 No UVs — the wear is computed from position and normal in object space so it stays fixed
 to the hull.
 
+**Benchmark pass #2** — `docs/wiki/benchmarks/benchmark-pass-2.md`. Compared against
+eleven games across nine dimensions. Audio synthesis (8/10) and save state depth (8/10)
+are ahead of the field. Progression (7/10, up from 5) and dialogue (7/10) are competitive.
+**Mission structure is the critical gap (2/10)** — the only dimension where every
+comparator that shipped as a narrative game is structurally ahead. Recommended a
+contract-board model (Elite/MSFS 2024/Far Cry 2) as the minimum viable fix.
+
 ## Where things get verified
 
 This repo is developed on a laptop that cannot comfortably render it. **Headless checks run
@@ -207,15 +214,14 @@ godot --headless --path game -- --looptest
 
 ## Next
 
-1. **A benchmark pass.** Periodic comparisons against other RPGs — skill trees, story,
-   graphics, audio, world size — recorded in the wiki. The last one fed D-005a; audio
-   and world-feel have moved a long way since.
-2. **Mission structure.** The core loop closes but there is no arc — no reason to go
-   anywhere except curiosity. A simple contract/task system that NPCs offer would give
-   each flight a purpose.
-3. **Interior lighting.** Buildings have dark window recesses but no light comes from
+1. **Mission structure.** The benchmark pass (see below) unanimously identifies this as the
+   critical gap — the only dimension scoring 2/10. The core loop closes but there is no
+   arc. A contract-board model (Elite, MSFS 2024, Far Cry 2) fits the existing systems and
+   can be built from site data and world state. Minimum viable: contract board at
+   settlements, a breadcrumb for the main search, and a journal page on the kneeboard.
+2. **Interior lighting.** Buildings have dark window recesses but no light comes from
    inside. A warm glow behind the glass at night would make settlements read as inhabited.
-4. **Autorotation glides half as far as it should.** Measured and localised, not fixed —
+3. **Autorotation glides half as far as it should.** Measured and localised, not fixed —
    `simlab autoglide`, D-041 and D-043. Best glide 1.99:1 at 3191 fpm against a real
    4:1 at 1700. Ruled out: vortex ring (severity exactly 0.00), inflow (λ 0.009, which is
    what momentum theory gives at μ 0.125), blade loading (C_T/σ 0.070). What remains is

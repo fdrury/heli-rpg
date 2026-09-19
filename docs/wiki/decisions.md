@@ -1535,3 +1535,42 @@ default, `dotnet build -c Release` does not update it) cost three additional ite
 
 **Reversibility:** high. All storm effects are additive layers in `StormEffects.cs` and
 `SceneMood.cs`; removing them restores the rain-equals-storm behaviour.
+
+## D-048 — Benchmark pass #2: mission structure is the critical gap · 2026-09-19
+
+**Decision.** Full write-up in `docs/wiki/benchmarks/benchmark-pass-2.md`. Compared
+against eleven games across nine dimensions: audio, graphics/world feel, progression,
+story/missions, world size, combat, save/load, dialogue, flight model.
+
+**Key findings:**
+1. **Mission structure is the critical gap (2/10).** Every comparator that shipped as a
+   narrative game had directed purpose by this stage. The infrastructure is ready (sites,
+   NPCs, dialogue, save/load, map), but no system gives the player a reason to fly to a
+   specific place.
+2. **Audio synthesis is ahead of the field (8/10).** No shipped comparator synthesises
+   vehicle audio from physics state. This is the project's most defensible differentiator,
+   pending Fred's ear test.
+3. **Progression has closed the gap from D-005a (5/10 → 7/10).** The kneeboard, fog of
+   war, refit system and threat intel together provide the cadence and screen that were
+   missing.
+4. **Graphics are competitive for scope (6/10).** Weather, building variety and airframe
+   wear are at or above the indie standard. Chasing photorealism is the wrong trade.
+
+**Action: build mission structure next.** The contract-board pattern (Elite Dangerous,
+MSFS 2024, Far Cry 2) fits ROTORWASH's existing systems. Minimum viable version:
+- Contract board at settlements (generated from site data and world state)
+- Breadcrumb main-search thread (10-15 authored beats, Subnautica's radio as the model)
+- Journal page on the kneeboard
+
+**Why not authored quests (New Vegas, Skyrim)?** A solo developer cannot produce 130
+branching quests. The contract-board model generates per-sortie purpose from the systems
+already built.
+
+**Why not pure sandbox (Kenshi)?** The vision document describes a search for a specific
+person. A sandbox without a search is a tech demo with a good flight model. The search
+is the story, and even a minimal version (a name, a frequency, a bearing, a clue at each
+stop) is enough to carry 20 hours.
+
+**Reversibility:** high. This decision prescribes a pattern, not an implementation. The
+contract board is data over existing systems; the search breadcrumbs are a short authored
+sequence. Both can be changed without touching the flight model, world, or combat.
