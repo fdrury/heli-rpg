@@ -107,6 +107,11 @@ public sealed partial class HelicopterController : RigidBody3D
     private MeshInstance3D? _rotorDisc;
     private readonly System.Collections.Generic.List<Node3D> _bladePivots = new();
     private double _lastDt = 1.0 / 120.0;
+    private Transform3D _holdTransform;
+    // True from the very first physics tick: the initial spawn has exactly the same
+    // problem as a teleport, and it is the one every session starts with.
+    private bool _awaitingGround = true;
+    private double _groundWait;
 
     public override void _Ready()
     {
@@ -221,6 +226,34 @@ public sealed partial class HelicopterController : RigidBody3D
             state.AngularVelocity = Vector3.Zero;
             _pendingTeleport = null;
             AdoptTrim(Sim.PlaceInFlightTrimmed(target.Origin.Y, 0, -target.Basis.GetEuler().Y));
+            _holdTransform = target;
+            _awaitingGround = true;
+        }
+
+        // Do not let go until there is a world to fall onto.
+        //
+        // Terrain collision streams in per chunk, and after a teleport the ground beneath
+        // the aircraft genuinely does not exist for about a third of a second. That is
+        // easily long enough for a falling body to pass through where it is about to be,
+        // and once through, it never comes back. Holding station until a ray finds
+        // something is cheaper and far more predictable than trying to make the streamer
+        // synchronous.
+        if (_awaitingGround)
+        {
+            if (_holdTransform == default) _holdTransform = state.Transform;
+            if (GroundExistsBelow(state)) { _awaitingGround = false; }
+            else
+            {
+                state.Transform = _holdTransform;
+                state.LinearVelocity = Vector3.Zero;
+                state.AngularVelocity = Vector3.Zero;
+                if ((_groundWait += dt) > 8.0)
+                {
+                    GD.PushWarning("[heli] no terrain collision after 8 s; releasing anyway");
+                    _awaitingGround = false;
+                }
+                return;
+            }
         }
 
         // --- Read the body state into the sim ---------------------------------
@@ -287,6 +320,15 @@ public sealed partial class HelicopterController : RigidBody3D
 
         // Keep the solver's mass properties in step with fuel burn and any refit.
         if (Mathf.Abs(Mass - (float)Sim.TotalMass) > 5f) ApplyMassProperties();
+    }
+
+    /// <summary>Is there anything solid under the aircraft yet?</summary>
+    private bool GroundExistsBelow(PhysicsDirectBodyState3D state)
+    {
+        Vector3 from = state.Transform.Origin + Vector3.Up * 4f;
+        var query = PhysicsRayQueryParameters3D.Create(from, from + Vector3.Down * 4000f);
+        query.Exclude = new Godot.Collections.Array<Rid> { GetRid() };
+        return state.GetSpaceState().IntersectRay(query).Count > 0;
     }
 
     public override void _Process(double delta)

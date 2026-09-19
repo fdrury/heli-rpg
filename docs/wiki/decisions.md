@@ -795,3 +795,20 @@ being repeatable — the same code reported +34.9 °/s of roll on one run and �
 next, and the sign flip read as a serious regression in the flight model. It was gusts. A
 derivative measured in gusty air is a measurement of the gusts. Two consecutive runs now
 give identical numbers to the decimal.
+
+## D-031 — The aircraft is held until there is a world to fall onto
+
+**Decision.** `HelicopterController` freezes the body after every spawn or teleport until a
+downward ray finds collision, with an eight-second escape hatch.
+
+**Why.** Terrain collision streams in per chunk, and after a teleport the ground beneath the
+aircraft genuinely does not exist for about a third of a second — measured, not guessed.
+That is easily long enough for a falling body to pass through where it is about to be, and
+once through it never comes back. It applies to the initial spawn too, which is the one
+every session starts with.
+
+Holding station until a ray finds something is cheaper and far more predictable than making
+the streamer synchronous, and it degrades safely: if collision never appears the aircraft is
+released anyway with a warning, rather than hanging in the air forever.
+
+**Reversible.** One flag and one early return.

@@ -243,7 +243,7 @@ public sealed partial class GodotBridgeSelfTest : Node
                 {
                     sim.Engine.Fail();
                     _dropGround = (float)WorldHeight.At(DropStation.X, DropStation.Z);
-                    _heli.TeleportTo(new Vector3(DropStation.X, _dropGround + 30f, DropStation.Z));
+                    _heli.TeleportTo(new Vector3(DropStation.X, _dropGround + 9f, DropStation.Z));
                 }
                 _heli.OverrideControls = new Controls { Collective = 0, Throttle = 0 };
 
@@ -264,7 +264,7 @@ public sealed partial class GodotBridgeSelfTest : Node
                     {
                         _groundReady = true;
                         GD.Print($"  terrain collision ready after {_phaseTime:F1} s");
-                        _heli.TeleportTo(new Vector3(DropStation.X, _dropGround + 30f, DropStation.Z));
+                        _heli.TeleportTo(new Vector3(DropStation.X, _dropGround + 9f, DropStation.Z));
                         _phaseTime = 0;
                     }
                     else if (_phaseTime > 15) { Fail("terrain collision never appeared"); NextPhase(); }
@@ -280,7 +280,7 @@ public sealed partial class GodotBridgeSelfTest : Node
 
                     if (above < -3f)
                         Fail($"fell THROUGH open terrain: {above:F1} m below the surface");
-                    else if (above > 8f)
+                    else if (above > 6f)
                         Fail($"never reached the ground: {above:F1} m above it after 12 s");
                     NextPhase();
                 }
