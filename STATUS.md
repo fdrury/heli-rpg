@@ -247,7 +247,25 @@ godot --headless --path game -- --looptest
 
 ## Next
 
-*(nothing blocking — pick from the open questions or the benchmark gaps)*
+Six agents are working in parallel right now on: salvage integration, the coning-inflow
+lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, and water.
+**Do not start any of those.** These are the things nobody is holding:
+
+1. **Wire `StoryPlaces` into `SiteInteraction`.** The role→site bindings resolve (16/16) and
+   nothing consults them. `StoryPlaces.For(site.Id)` gives `NpcId`/`NpcName` for
+   `GetOrCreateNpc`, and `GrantsOnSearch` for `AddSalvage`. The patch is written out at the
+   end of `docs/wiki/integration-debt.md`.
+2. **Wire `AlertState` into the world.** `sim/src/Alert.cs` gives each region a readiness
+   that rises when you are seen and decays over six hours, with `DetectionScale` and
+   `ReactionScale` meant to feed the threat envelopes — and nothing calls it. It needs
+   driving from wherever threats are updated, persisting in the save, and a line on the
+   kneeboard (`AlertState.Describe` returns the phrase).
+3. **Contract depth.** The board exists. Contracts that use the world state that now exists
+   — carry this part to that workshop, fly someone to a place that is currently quiet —
+   would connect mission structure to salvage and alert rather than sitting beside them.
+4. **The three degraded story roles.** `--worldreport` shows `DossHome`, `FerrenOffice` and
+   `ScaldMagazine` falling back because their region has no site of the right kind. The
+   placement fix improved this a lot; check whether it is now fixable properly.
 
 ## Open questions for Fred
 

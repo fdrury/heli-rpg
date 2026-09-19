@@ -1808,7 +1808,11 @@ cover the bridge, and `--selftest` is headless too and should have been in the b
 Kept, flagged and measured rather than deleted. The physics is real and D-041 is still open.
 Flying the aircraft correctly wins until the lateral bias is understood.
 
-## D-052 — Compressibility is NOT cleared after all
+## D-056 — Compressibility is NOT cleared after all
+
+*(Renumbered from a duplicate D-052. Two processes allocated the same number within a few
+minutes of each other, which is a hazard of parallel work on an append-only log; if it keeps
+happening the numbers should come from the commit rather than from whoever is writing.)*
 
 D-047 ruled compressibility out of the autorotation investigation because tip Mach measured
 0.73 against a 0.74 drag-divergence threshold. That measurement was wrong.
@@ -1821,7 +1825,7 @@ A reminder that a refutation is only as good as the instrument behind it, and th
 the third time aliasing on a two-bladed rotor has produced a confident wrong answer
 (tip-path plane, then shaft power in D-043, now tip Mach).
 
-## D-053 — `autoglide` was never measuring the rotor
+## D-057 — `autoglide` was never measuring the rotor
 
 The headline autorotation number was measured while the aircraft **slid sideways at 27–47
 m/s**, dragging 13.5 m² of side area through the air — at "60 kt" its world-frame forward
