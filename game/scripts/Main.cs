@@ -229,6 +229,15 @@ public sealed partial class Main : Node3D
                 { Name = "CombatTest" });
                 break;
             }
+            if (arg == "--savetest")
+            {
+                GD.Print("[main] running the save/load test");
+                _hud.Visible = false;
+                _threats.Disabled = true;
+                AddChild(new SaveTest(this, _heli, _play, _landing, _sites, _sidearm, _rotorTime)
+                { Name = "SaveTest" });
+                break;
+            }
             if (arg == "--screenshot")
             {
                 GD.Print("[main] running the screenshot pass");
