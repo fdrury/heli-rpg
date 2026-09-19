@@ -82,6 +82,10 @@ public static class SiteKit
             default: BuildOverlook(root, rng, site); break;
         }
 
+        // The authored-site layer: if this site plays a story role, the role's prop goes on
+        // top of the generic build. A no-op for every other site, which is almost all of them.
+        StoryPlaces.Decorate(root, site);
+
         return root;
     }
 
