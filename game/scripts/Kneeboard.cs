@@ -35,7 +35,7 @@ public sealed partial class Kneeboard : Control
     private Font _font = null!;
     private int _page;
 
-    private static readonly string[] Pages = { "AIRCRAFT", "KNOWN", "LOG", "MAP" };
+    private static readonly string[] Pages = { "AIRCRAFT", "KNOWN", "LOG", "MAP", "JOBS" };
 
     private static readonly Color Ink = new(0.84f, 0.86f, 0.78f);
     private static readonly Color Faint = new(0.55f, 0.58f, 0.52f);
@@ -106,6 +106,7 @@ public sealed partial class Kneeboard : Control
             case 1: DrawKnown(body, sheet); break;
             case 2: DrawLog(body, sheet); break;
             case 3: DrawMap(body, sheet); break;
+            case 4: DrawJobs(body, sheet); break;
         }
 
         Text(new Vector2(sheet.Position.X + 30, sheet.End.Y - 18),
@@ -493,6 +494,125 @@ public sealed partial class Kneeboard : Control
         DrawLine(new Vector2(bx, by - 3), new Vector2(bx, by + 3), Faint, 1.2f);
         DrawLine(new Vector2(bx + barLen, by - 3), new Vector2(bx + barLen, by + 3), Faint, 1.2f);
         Text(new Vector2(bx + barLen + 5, by + 4), "2 km", Faint, 10);
+    }
+
+    // ----------------------------------------------------------------- jobs
+
+    /// <summary>
+    /// Active contracts and the main search thread.
+    ///
+    /// This is the answer to "where should I fly next?" — the critical gap that benchmark
+    /// pass 2 identified. The search thread gives the long-term pull; the contracts give
+    /// the per-sortie purpose.
+    /// </summary>
+    private void DrawJobs(Vector2 o, Rect2 sheet)
+    {
+        Progress p = _play.Progress;
+        float maxW = sheet.Size.X - 72;
+
+        // ---------- Search thread (the main quest)
+        Text(o, "THE SEARCH", Ink, 17);
+        Text(o + new Vector2(0, 22), $"Stage {p.Search.Stage} of {SearchThread.Beats.Length}", Faint, 12);
+
+        float y = o.Y + 48;
+        string hint = p.Search.CurrentHint;
+        float hintWidth = maxW - 14;
+        y = WrapText(o.X + 6, y, hint, Warn, 13, hintWidth);
+
+        if (p.Search.Stage > 0 && p.Search.LastClue.Length > 0)
+        {
+            y += 6;
+            Text(new Vector2(o.X + 6, y), "Last clue:", Faint, 11);
+            y += 16;
+            string lastClue = p.Search.LastClue;
+            if (lastClue.Length > 120) lastClue = lastClue[..117] + "...";
+            y = WrapText(o.X + 14, y, lastClue, Faint, 12, hintWidth - 8);
+        }
+
+        // ---------- Active contracts
+        y += 18;
+        DrawLine(new Vector2(o.X, y), new Vector2(o.X + maxW, y),
+                 Faint * new Color(1, 1, 1, 0.4f), 1f);
+        y += 12;
+
+        var active = new List<Contract>();
+        foreach (var c in p.ActiveContracts) active.Add(c);
+
+        Text(new Vector2(o.X, y), $"ACTIVE JOBS ({active.Count})", Faint, 12);
+        y += 20;
+
+        if (active.Count == 0)
+        {
+            Text(new Vector2(o.X + 6, y), "No active contracts. Visit a settlement to find work.", Faint, 12);
+            y += 20;
+        }
+        else
+        {
+            foreach (var c in active)
+            {
+                if (y > sheet.End.Y - 80) break;
+
+                // Contract kind icon
+                string kindTag = c.Kind switch
+                {
+                    ContractKind.Deliver => "DELIVER",
+                    ContractKind.Survey => "SCOUT",
+                    ContractKind.Recover => "SEARCH",
+                    ContractKind.Relay => "MESSAGE",
+                    _ => "JOB",
+                };
+                Color kindCol = c.Kind switch
+                {
+                    ContractKind.Deliver => new Color(0.90f, 0.75f, 0.30f),
+                    ContractKind.Survey => new Color(0.55f, 0.75f, 0.90f),
+                    ContractKind.Recover => new Color(0.75f, 0.60f, 0.40f),
+                    ContractKind.Relay => new Color(0.63f, 0.84f, 0.60f),
+                    _ => Ink,
+                };
+
+                Text(new Vector2(o.X + 6, y), kindTag, kindCol, 11);
+                Text(new Vector2(o.X + 80, y), c.Title, Ink, 13);
+                y += 18;
+                Text(new Vector2(o.X + 80, y), $"→ {c.TargetName}", Faint, 12);
+                Text(new Vector2(o.X + maxW - 80, y), $"+{c.RewardAmount:F0} {c.RewardKind}", Faint, 11);
+                y += 22;
+            }
+        }
+
+        // ---------- Completed count
+        y += 6;
+        DrawLine(new Vector2(o.X, y), new Vector2(o.X + maxW, y),
+                 Faint * new Color(1, 1, 1, 0.4f), 1f);
+        y += 12;
+        Text(new Vector2(o.X, y), $"COMPLETED: {p.ContractsCompleted}", Faint, 12);
+    }
+
+    /// <summary>Word-wrap text into a given width, returns the Y after the last line.</summary>
+    private float WrapText(float x, float y, string text, Color col, int size, float maxWidth)
+    {
+        string[] words = text.Split(' ');
+        string line = "";
+        foreach (string word in words)
+        {
+            string test = line.Length > 0 ? line + " " + word : word;
+            float w = _font.GetStringSize(test, HorizontalAlignment.Left, -1, size).X;
+            if (w > maxWidth && line.Length > 0)
+            {
+                Text(new Vector2(x, y), line, col, size);
+                y += size + 4;
+                line = word;
+            }
+            else
+            {
+                line = test;
+            }
+        }
+        if (line.Length > 0)
+        {
+            Text(new Vector2(x, y), line, col, size);
+            y += size + 4;
+        }
+        return y;
     }
 
     private static string Truncate(string s, int max)

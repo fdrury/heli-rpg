@@ -54,6 +54,11 @@ public sealed class SaveData
     // ---- fog of war ----
     public byte[]? FogGrid { get; set; }
 
+    // ---- contracts ----
+    public List<ContractSave> Contracts { get; set; } = new();
+    public int ContractsCompleted { get; set; }
+    public int SearchStage { get; set; }
+
     // ================================================================ JSON
 
     private static readonly JsonSerializerOptions Opts = new()
@@ -99,6 +104,32 @@ public sealed class SaveData
 
         Journal.Clear();
         Journal.AddRange(p.Journal_);
+
+        ContractsCompleted = p.ContractsCompleted;
+        SearchStage = p.Search.Stage;
+
+        Contracts.Clear();
+        foreach (var c in p.Contracts)
+            Contracts.Add(new ContractSave
+            {
+                Id = c.Id, Kind = c.Kind,
+                Title = c.Title, Brief = c.Brief,
+                SourceSiteId = c.SourceSiteId,
+                TargetSiteId = c.TargetSiteId,
+                TargetName = c.TargetName,
+                CargoKind = c.CargoKind,
+                CargoAmount = c.CargoAmount,
+                RewardKind = c.RewardKind,
+                RewardAmount = c.RewardAmount,
+                StandingReward = c.StandingReward,
+                RewardKnowledgeId = c.RewardKnowledgeId,
+                RewardKnowledgeLabel = c.RewardKnowledgeLabel,
+                RewardKnowledgeDetail = c.RewardKnowledgeDetail,
+                PostedAt = c.PostedAt,
+                Accepted = c.Accepted,
+                Completed = c.Completed,
+                CompletedAt = c.CompletedAt,
+            });
     }
 
     public Progress ApplyProgress()
@@ -124,6 +155,34 @@ public sealed class SaveData
         }
 
         p.RestoreJournal(Journal);
+
+        p.ContractsCompleted = ContractsCompleted;
+        p.Search.Stage = SearchStage;
+
+        var contracts = new List<Contract>();
+        foreach (var cs in Contracts)
+            contracts.Add(new Contract
+            {
+                Id = cs.Id, Kind = cs.Kind,
+                Title = cs.Title, Brief = cs.Brief,
+                SourceSiteId = cs.SourceSiteId,
+                TargetSiteId = cs.TargetSiteId,
+                TargetName = cs.TargetName,
+                CargoKind = cs.CargoKind,
+                CargoAmount = cs.CargoAmount,
+                RewardKind = cs.RewardKind,
+                RewardAmount = cs.RewardAmount,
+                StandingReward = cs.StandingReward,
+                RewardKnowledgeId = cs.RewardKnowledgeId,
+                RewardKnowledgeLabel = cs.RewardKnowledgeLabel,
+                RewardKnowledgeDetail = cs.RewardKnowledgeDetail,
+                PostedAt = cs.PostedAt,
+                Accepted = cs.Accepted,
+                Completed = cs.Completed,
+                CompletedAt = cs.CompletedAt,
+            });
+        p.RestoreContracts(contracts);
+
         return p;
     }
 
@@ -240,4 +299,27 @@ public sealed class MemoryFactSave
     public string Key { get; set; } = "";
     public string Value { get; set; } = "";
     public double When { get; set; }
+}
+
+public sealed class ContractSave
+{
+    public string Id { get; set; } = "";
+    public ContractKind Kind { get; set; }
+    public string Title { get; set; } = "";
+    public string Brief { get; set; } = "";
+    public int SourceSiteId { get; set; }
+    public int TargetSiteId { get; set; }
+    public string TargetName { get; set; } = "";
+    public Stock CargoKind { get; set; }
+    public double CargoAmount { get; set; }
+    public Stock RewardKind { get; set; }
+    public double RewardAmount { get; set; }
+    public double StandingReward { get; set; }
+    public string? RewardKnowledgeId { get; set; }
+    public string? RewardKnowledgeLabel { get; set; }
+    public string? RewardKnowledgeDetail { get; set; }
+    public double PostedAt { get; set; }
+    public bool Accepted { get; set; }
+    public bool Completed { get; set; }
+    public double CompletedAt { get; set; }
 }

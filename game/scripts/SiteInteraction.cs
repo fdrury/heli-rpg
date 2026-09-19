@@ -63,6 +63,10 @@ public sealed partial class SiteInteraction : Node
     private readonly Dictionary<int, (NpcMind npc, DialogueBank bank)> _npcs = new();
     private int _mattieSiteId = -1;
 
+    // --- contract boards: cached per settlement, refreshed on clock cycle ---
+    private readonly Dictionary<int, (List<Contract> board, int cycle)> _boards = new();
+    private const double BoardRefreshInterval = 7200; // 2 game-hours between board refreshes
+
     public override void _Ready()
     {
         _heli = GetNode<HelicopterController>(HelicopterPath);
@@ -107,6 +111,8 @@ public sealed partial class SiteInteraction : Node
         UpdateParked();
         if (!InDialogue) RebuildActions();
         KeepMassInSync();
+        CheckSearchThread();
+        CheckContractCompletion();
     }
 
     private double _busyTotal;
@@ -182,6 +188,7 @@ public sealed partial class SiteInteraction : Node
         if (site.Kind == SiteKind.Relay) AddTuneRelay(site);
         if (site.Kind == SiteKind.Overlook) AddSurvey(site);
         if (site.Kind == SiteKind.Settlement) AddAskAround(site);
+        if (site.Kind == SiteKind.Settlement) AddContractBoard(site);
     }
 
     private void AddRefuel(Site site, SiteRecord rec)
@@ -463,6 +470,90 @@ public sealed partial class SiteInteraction : Node
             }));
     }
 
+    // --------------------------------------------------------------- contracts
+
+    private void AddContractBoard(Site site)
+    {
+        int cycle = (int)(Progress.Clock / BoardRefreshInterval);
+        if (!_boards.TryGetValue(site.Id, out var cached) || cached.cycle != cycle)
+        {
+            var stubs = BuildSiteStubs();
+            var board = ContractBoard.Generate(
+                site.Id, site.Name, site.Position.X, site.Position.Y,
+                stubs, Progress, Progress.Clock, cycle);
+            _boards[site.Id] = (board, cycle);
+            cached = (board, cycle);
+        }
+
+        foreach (var contract in cached.board)
+        {
+            if (contract.Accepted) continue;
+            _actions.Add(new SiteAction(
+                contract.Title,
+                contract.Brief,
+                () =>
+                {
+                    Progress.AcceptContract(contract);
+                    Notice?.Invoke($"Job: {contract.Title}");
+                    return true;
+                }));
+        }
+    }
+
+    private List<SiteStub> BuildSiteStubs()
+    {
+        var stubs = new List<SiteStub>();
+        foreach (var s in WorldMap.Sites)
+            stubs.Add(new SiteStub(s.Id, s.Name, (SiteKindTag)(int)s.Kind, s.Position.X, s.Position.Y));
+        return stubs;
+    }
+
+    private double _lastSearchCheck;
+
+    private void CheckSearchThread()
+    {
+        // Check every few seconds of game time, not every frame.
+        if (Progress.Clock - _lastSearchCheck < 60) return;
+        _lastSearchCheck = Progress.Clock;
+
+        var beat = Progress.Search.TryAdvance(Progress);
+        if (beat is null) return;
+
+        // Journal the clue.
+        Progress.Journal(beat.Journal);
+
+        // Learn the knowledge.
+        if (beat.KnowledgeId is not null)
+        {
+            Progress.Learn(new Knowledge(
+                KnowledgeKind.Rumour,
+                beat.KnowledgeId,
+                beat.KnowledgeLabel ?? "",
+                beat.KnowledgeDetail ?? ""));
+        }
+
+        Notice?.Invoke($"The search: {beat.Name}");
+        GD.Print($"[search] Stage {Progress.Search.Stage}: {beat.Name}");
+    }
+
+    private double _lastContractCheck;
+
+    private void CheckContractCompletion()
+    {
+        if (Progress.Clock - _lastContractCheck < 30) return;
+        _lastContractCheck = Progress.Clock;
+
+        var completed = Progress.CheckContracts();
+        foreach (var c in completed)
+        {
+            Notice?.Invoke($"Done: {c.Title}");
+            GD.Print($"[contract] Completed: {c.Title}");
+        }
+
+        // Prune old completed contracts after 1 game-day.
+        Progress.PruneContracts(86400);
+    }
+
     // ------------------------------------------------------------------ util
 
     private void BeginBusy(string label, double seconds, Action onComplete)
@@ -536,6 +627,11 @@ public sealed partial class SiteInteraction : Node
 
         // Journal
         Progress.RestoreJournal(progress.Journal_);
+
+        // Contracts
+        Progress.RestoreContracts(progress.Contracts);
+        Progress.ContractsCompleted = progress.ContractsCompleted;
+        Progress.Search.Stage = progress.Search.Stage;
 
         // Loadout
         Loadout.Restore(loadout.Installed, loadout.Bag);

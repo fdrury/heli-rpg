@@ -8,15 +8,14 @@ every choice and why; `docs/wiki/benchmarks/` is where it was measured against t
 
 ## Where it is now
 
-**The core loop closes, people talk, the machine levels up, and the map fills in.** You
-can fly a physically simulated Huey across a streamed 16 km world, find a named
-settlement, put it down, shut down, talk to whoever lives there, and scavenge modules
-that bolt onto the aircraft and change what it can do. Eight bays — attitude hold, RWR,
-chaff, flares, exhaust suppressor, long-range tank, cargo hook, rescue hoist — each with
-real mass at a real position, each felt in the flight model. The kneeboard's MAP page
-fills itself in as you fly: fog of war lifts from the topo chart, discovered sites appear
-as diamond markers, and threat envelopes for detected emitters paint red circles around
-no-go zones. Knowledge is progression, and the map is where it shows.
+**The core loop closes, people talk, the machine levels up, the map fills in, and now
+there is somewhere to go and a reason to get there.** You can fly a physically simulated
+Huey across a streamed 16 km world, find a named settlement, put it down, shut down, talk
+to whoever lives there, take a contract from the board, fly it, and come back for the
+payout. The main search — 12 authored beats about finding another pilot — gives the
+long-term pull; the contracts give the per-sortie purpose. Eight module bays, each felt in
+the flight model. The kneeboard's five pages show aircraft condition, knowledge, journal,
+map, and active jobs.
 
 60 fps at 1600x900 on a GTX 1650 Ti, which is well under the GTX 1080 target.
 
@@ -26,7 +25,7 @@ no-go zones. Knowledge is progression, and the map is where it shows.
 # the game
 tools/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe --path game
 
-# 41 headless tests (flight + loadout + combat + save + fog) - no engine needed
+# 49 headless tests (flight + loadout + combat + save + contract + fog) - no engine needed
 dotnet run --project tools/simlab -c Release -- all
 
 # render a 126 s sortie to builds/audio/sortie.wav and listen to it
@@ -107,9 +106,9 @@ where the perceived magic actually lives. The llama-server subprocess is wired u
 Windows Job Object for crash safety, the conversation UI draws in the HUD aesthetic with
 word-by-word reveal, and everything degrades to the baked layer when the model is absent.
 
-**Play** — refuel, repair, salvage, survey, tune a relay, ask around. Carried load is real
-mass and is felt in the hover. The kneeboard records facts, not inferences, and shows the
-empty bays.
+**Play** — refuel, repair, salvage, survey, tune a relay, ask around, contract board.
+Carried load is real mass and is felt in the hover. The kneeboard records facts, not
+inferences, and shows the empty bays.
 
 **Refit** — eight modules on real hardpoints (D-011). Each is a MassItem plus drag and
 fuel capacity, so the flight model feels every choice. Modules are found during salvage
@@ -169,6 +168,17 @@ radius 500 m, persisted through save/load. Scale bar and survey-percentage reado
 `FogOfWar` lives in sim/ (pure .NET, no Godot dependency) with byte-array serialisation;
 the game layer generates terrain and fog textures and draws markers via `_Draw()`.
 
+**Mission structure** — contract board at settlements and main-search breadcrumbs (D-049).
+Settlements generate 2-3 contracts from their neighbours: deliveries, scout missions,
+recovery jobs, and relay messages. Contracts reference real sites, use real stock types,
+and pay in things the game already tracks. The main search is 12 authored beats gated on
+world state (visited count, knowledge, time), telling the story of finding Kara Morrow —
+a pilot who vanished heading east with charts and frequencies worth more than fuel.
+Progress, contracts and search stage survive save/load. A fifth kneeboard page (JOBS)
+shows active contracts, the search thread's current hint, and completed count. Eight
+simlab tests verify generation, completion, payout, delivery logic, round-trip, search
+gating, determinism, and full integration.
+
 **Look-around** — cockpit head-look (D-041). In cockpit mode the pilot can look around
 inside the airframe: middle-mouse drag, hat switch / D-pad, or numpad 4/6/8/2 slew the
 view ±150° yaw, -40° to +60° pitch. Release springs back to forward. `L` padlocks onto
@@ -214,14 +224,9 @@ godot --headless --path game -- --looptest
 
 ## Next
 
-1. **Mission structure.** The benchmark pass (see below) unanimously identifies this as the
-   critical gap — the only dimension scoring 2/10. The core loop closes but there is no
-   arc. A contract-board model (Elite, MSFS 2024, Far Cry 2) fits the existing systems and
-   can be built from site data and world state. Minimum viable: contract board at
-   settlements, a breadcrumb for the main search, and a journal page on the kneeboard.
-2. **Interior lighting.** Buildings have dark window recesses but no light comes from
+1. **Interior lighting.** Buildings have dark window recesses but no light comes from
    inside. A warm glow behind the glass at night would make settlements read as inhabited.
-3. **Autorotation glides half as far as it should.** Measured and localised, not fixed —
+2. **Autorotation glides half as far as it should.** Measured and localised, not fixed —
    `simlab autoglide`, D-041 and D-043. Best glide 1.99:1 at 3191 fpm against a real
    4:1 at 1700. Ruled out: vortex ring (severity exactly 0.00), inflow (λ 0.009, which is
    what momentum theory gives at μ 0.125), blade loading (C_T/σ 0.070). What remains is

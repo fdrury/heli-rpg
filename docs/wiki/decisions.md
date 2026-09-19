@@ -1696,3 +1696,44 @@ scavenge.
 work that never read it. Anything proposing *who or what exists in the world* has to be
 checked against D-008 and D-012 first; those two are premise, not preference. The cost here
 was small only because it was caught before the file was committed.
+
+## D-051 — Mission structure: contract board and search thread (the 2/10 gap)
+
+Built to close the critical gap D-048 identified. Every comparator that shipped as a
+narrative game was structurally ahead of ROTORWASH at mission structure (2/10). The fix
+has three pieces:
+
+**1. Contract board at settlements.** Generated per-settlement from site data and world
+state, following the Elite Dangerous / MSFS 2024 / Far Cry 2 model. Each settlement
+offers 2-3 contracts drawn from its neighbours: deliveries (bring stock to a site),
+scouts (visit somewhere unvisited), recovery (search a wreck or depot), and relays
+(carry a message between settlements). Contracts reference real sites, use real stock
+types, and pay in things the game already tracks. Generation is deterministic by site
+seed and board cycle; boards refresh every 2 game-hours.
+
+**2. Main-search breadcrumbs.** Twelve authored beats telling the story of finding Sera
+Wray (flight engineer, per D-008 and D-050 — not a pilot). Three acts following the
+ferry route of SIERRA-FOUR-THREE across all eight regions. Gated on world state (visited
+count, knowledge), with counter-based gates as a floor; story.md specifies place-based
+triggers that require site-role resolution (not yet built). Each beat journals a clue,
+grants knowledge, and updates the kneeboard hint.
+
+**3. JOBS kneeboard page.** Fifth page showing the search thread (current hint, last
+clue), active contracts (kind, title, target, reward), and completed count. Follows the
+same drawing pattern as the other four pages.
+
+**What it does not do (and what story.md specifies for later):**
+- Site-role resolution (mapping story roles like "the Fenmoor airfield" to generated IDs)
+- Named NPCs at specific settlements (Doss, Nell, Osie, Ferren, Juno, Wray)
+- Radio broadcast system (the 06:40 weather sequence)
+- Artefact display (the manifest, the roster, the cairn list)
+- Rotor-hours ceiling mechanic (the clock on the search)
+- The final sortie with Wray in the right seat
+
+Eight simlab tests: generation, completion, payout, delivery logic, round-trip,
+search gating, determinism, and Progress integration. All pass.
+
+**Reversibility:** high. Contracts are data over existing systems; the search beats are a
+short authored sequence. Both can be changed without touching the flight model, world, or
+combat. The save format adds three fields (Contracts, ContractsCompleted, SearchStage)
+which are forward-compatible.

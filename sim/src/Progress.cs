@@ -53,6 +53,10 @@ public sealed class Progress
     private readonly Dictionary<string, Knowledge> _known = new();
     private readonly Dictionary<int, SiteRecord> _sites = new();
     private readonly List<string> _journal = new();
+    private readonly List<Contract> _contracts = new();
+
+    /// <summary>Main quest search thread. Persists through save/load.</summary>
+    public SearchThread Search { get; } = new();
 
     /// <summary>In-world seconds since the game began.</summary>
     public double Clock { get; set; }
@@ -133,6 +137,51 @@ public sealed class Progress
         r.LastVisitedAt = Clock;
     }
 
+    // --------------------------------------------------------------- contracts
+
+    public IReadOnlyList<Contract> Contracts => _contracts;
+
+    /// <summary>Number of contracts completed across the whole game.</summary>
+    public int ContractsCompleted { get; set; }
+
+    /// <summary>Accept a contract. It moves from the board into the active list.</summary>
+    public void AcceptContract(Contract c)
+    {
+        c.Accepted = true;
+        _contracts.Add(c);
+        Journal($"Accepted: {c.Title}");
+    }
+
+    /// <summary>Check all active contracts for completion. Returns newly completed ones.</summary>
+    public List<Contract> CheckContracts()
+    {
+        var completed = new List<Contract>();
+        foreach (var c in _contracts)
+        {
+            if (c.Completed || !c.Accepted) continue;
+            if (c.CheckCompletion(this))
+            {
+                c.PayOut(this);
+                ContractsCompleted++;
+                Journal($"Completed: {c.Title}");
+                completed.Add(c);
+            }
+        }
+        return completed;
+    }
+
+    /// <summary>Active (accepted, not completed) contracts.</summary>
+    public IEnumerable<Contract> ActiveContracts
+    {
+        get { foreach (var c in _contracts) if (c.Accepted && !c.Completed) yield return c; }
+    }
+
+    /// <summary>Remove completed contracts older than a threshold.</summary>
+    public void PruneContracts(double maxAge)
+    {
+        _contracts.RemoveAll(c => c.Completed && Clock - c.CompletedAt > maxAge);
+    }
+
     // ----------------------------------------------------------- save / load
 
     public IReadOnlyDictionary<Stock, double> AllStock => _stock;
@@ -153,6 +202,13 @@ public sealed class Progress
     {
         _journal.Clear();
         _journal.AddRange(entries);
+    }
+
+    /// <summary>Replace contracts wholesale. Save/load only.</summary>
+    public void RestoreContracts(IEnumerable<Contract> contracts)
+    {
+        _contracts.Clear();
+        _contracts.AddRange(contracts);
     }
 
     // ---------------------------------------------------------------- journal
@@ -188,8 +244,8 @@ public sealed class Progress
         p.Add(Stock.Parts, 1);
         p.Add(Stock.Food, 6);
         p.Learn(new Knowledge(KnowledgeKind.Rumour, "rumour.the_name",
-            "A name, and a partial frequency",
-            "The only two things you have that are worth anything. Neither of them is a place."));
+            "Wray. A name, and four legs in her handwriting.",
+            "The logbook, the nose, every inspection page. And a number that might be a frequency. Neither is a place."));
         p.Journal("Fuel state noted. Hugh is airworthy. Everything else is guesswork.");
         return p;
     }

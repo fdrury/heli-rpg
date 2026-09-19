@@ -45,6 +45,10 @@ public static class Program
         Run("autobalance", EnvelopeTests.AutorotationBalance);
         Run("radialsweep", EnvelopeTests.RadialInflowSweep);
         Run("driving", EnvelopeTests.DrivingRegion);
+        Run("alertrise", AlertTests.RiseAndDecay);
+        Run("alertsat", AlertTests.Saturates);
+        Run("alertlocal", AlertTests.StaysLocal);
+        Run("alerteffect", AlertTests.EffectsAreBounded);
         Run("gating", GatingTests.CountermeasureGating);
         Run("altgating", GatingTests.AltitudeGating);
         Run("dragk", EnvelopeTests.DragKSweep);
@@ -108,6 +112,14 @@ public static class Program
         Run("combat_attrition", CombatTests.NpcAttrition);
         Run("combat_sidearm", CombatTests.SidearmMechanics);
         Run("combat_pilot", CombatTests.PilotHealthCycle);
+        Run("contract_gen", ContractTests.Generation);
+        Run("contract_complete", ContractTests.Completion);
+        Run("contract_payout", ContractTests.Payout);
+        Run("contract_delivery", ContractTests.DeliveryCompletion);
+        Run("contract_roundtrip", ContractTests.RoundTrip);
+        Run("search_advance", ContractTests.SearchAdvance);
+        Run("contract_determinism", ContractTests.Determinism);
+        Run("contract_integration", ContractTests.ProgressIntegration);
         Run("save_progress", SaveTests.ProgressRoundTrip);
         Run("save_damage", SaveTests.DamageRoundTrip);
         Run("save_loadout", SaveTests.LoadoutRoundTrip);
