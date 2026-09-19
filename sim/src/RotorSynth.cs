@@ -70,6 +70,7 @@ public sealed class RotorSynth
     private double _slapEnvelope;
     private double _washLp, _windLp, _hissLp, _rumbleLp;
     private double _sRotor, _sCollective, _sTorque, _sAirspeed, _sN1, _sLoading, _sTipMach, _sVrs;
+    private double _dcX1, _dcY1;
     private readonly Random _rng;
 
     public RotorSynth(int sampleRate = 32000, int seed = 20260918)
@@ -175,7 +176,19 @@ public sealed class RotorSynth
 
             double sample = slapSample + wash + tail + turbine + gear + wind + thump;
             sample = Math.Tanh(sample * 1.35) * Volume;
-            buffer[i] = (float)sample;
+
+            // Block DC before it leaves.
+            //
+            // Several of the voices above are not zero-mean - the rumble filter integrates
+            // a squared envelope, and tanh of an offset signal is offset further - and the
+            // measured output sat about 0.023 away from zero. A constant offset buys
+            // nothing audible, eats headroom that the slap transients want, and thumps
+            // whenever the stream starts or stops. One-pole high-pass at a fraction of a
+            // hertz: inaudible, and the offset is gone.
+            double blocked = sample - _dcX1 + 0.9985 * _dcY1;
+            _dcX1 = sample;
+            _dcY1 = blocked;
+            buffer[i] = (float)blocked;
         }
     }
 
