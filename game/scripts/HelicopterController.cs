@@ -57,6 +57,14 @@ public sealed class GodotEnvironment : IEnvironment
 public sealed partial class HelicopterController : RigidBody3D
 {
     [Export] public bool StartRunning { get; set; } = true;
+
+    /// <summary>
+    /// Whether the flight model feels the world's weather.
+    ///
+    /// On for play. Off for anything that measures the aircraft, because a derivative
+    /// measured in gusts is a measurement of the gusts.
+    /// </summary>
+    [Export] public bool UseWorldWeather { get; set; } = true;
     [Export] public float StartAltitude { get; set; } = 120f;
 
     public Helicopter Sim { get; private set; } = null!;
@@ -193,10 +201,18 @@ public sealed partial class HelicopterController : RigidBody3D
         // Hand the weather to the flight model. The wind vector and the gust field have
         // been plumbed through to the rotor since the beginning and nothing ever set them,
         // so every flight until now has been in dead calm air at standard temperature.
-        Weather.Conditions wx = SceneMood.Now;
-        Environment.SteadyWind = wx.WindNed;
-        Environment.GustIntensity = wx.Gust;
-        Environment.Atmosphere.IsaDeviation = wx.IsaDeviation;
+        //
+        // Instruments opt out. A control-derivative measurement taken in gusty air is not a
+        // measurement of the control - the bridge self-test started reporting +34.9 deg/s
+        // of roll on one run and -56.3 on the next, from identical code, the moment the
+        // world acquired weather.
+        if (UseWorldWeather)
+        {
+            Weather.Conditions wx = SceneMood.Now;
+            Environment.SteadyWind = wx.WindNed;
+            Environment.GustIntensity = wx.Gust;
+            Environment.Atmosphere.IsaDeviation = wx.IsaDeviation;
+        }
 
         if (_pendingTeleport is Transform3D target)
         {

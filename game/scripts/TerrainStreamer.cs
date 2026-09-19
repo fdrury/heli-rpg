@@ -35,6 +35,10 @@ public sealed partial class TerrainStreamer : Node3D
     /// <summary>Chunks within this radius get a collision shape.</summary>
     [Export] public int CollisionRadius { get; set; } = 2;
 
+    /// <summary>How many chunks carry collision. Cheap for a test to assert on.</summary>
+    public int CollisionBodies { get; private set; }
+
+
     /// <summary>Node the streaming follows. Usually the helicopter.</summary>
     public Node3D? Target { get; set; }
 
@@ -384,7 +388,7 @@ public sealed partial class TerrainStreamer : Node3D
             {
                 // Triangles are already in chunk-local space, so the body sits at the
                 // chunk's CORNER and the collision shape carries no scale at all.
-                var shape = new ConcavePolygonShape3D { Data = build.CollisionTris };
+                var shape = new ConcavePolygonShape3D { Data = build.CollisionTris, BackfaceCollision = true };
                 var body = new StaticBody3D
                 {
                     Name = $"Body_{build.Coord.X}_{build.Coord.Y}",
@@ -393,6 +397,7 @@ public sealed partial class TerrainStreamer : Node3D
                 body.AddChild(new CollisionShape3D { Shape = shape });
                 AddChild(body);
                 chunk.Body = body;
+                CollisionBodies++;
             }
 
             _pending.Remove(build.Coord);

@@ -31,6 +31,12 @@ public sealed partial class GodotBridgeSelfTest : Node
 
     /// <summary>Every measurement starts from the same clean hover, high above the terrain.</summary>
     private static readonly Vector3 TestStation = new(0, 900, 0);
+
+
+    /// <summary>Open ground, deliberately nowhere near a site and its graded pad.</summary>
+    private static readonly Vector3 DropStation = new(3100, 0, -2450);
+    private float _dropGround;
+    private bool _groundReady;
     private const double SettleSeconds = 14.0;
     private bool _settled;
     private float _godotStartHeading;
@@ -44,6 +50,12 @@ public sealed partial class GodotBridgeSelfTest : Node
         GD.Print("=== Godot bridge self-test ===========================================");
         GD.Print($"  mass {_heli.Mass:F0} kg   inertia {_heli.Inertia}   com {_heli.CenterOfMass}");
         _heli.OverrideControls = Controls.Neutral;
+
+        // Calm air and standard atmosphere. This measures the aircraft, not the weather.
+        _heli.UseWorldWeather = false;
+        _heli.Environment.SteadyWind = Vec3.Zero;
+        _heli.Environment.GustIntensity = 0;
+        _heli.Environment.Atmosphere.IsaDeviation = 0;
         _heli.TeleportTo(TestStation);
         _phaseStartPos = TestStation;
     }
@@ -120,14 +132,16 @@ public sealed partial class GodotBridgeSelfTest : Node
 
             // ---- 2: right cyclic must roll right ------------------------------
             // Measured as a RATE over a short window. An uncontrolled helicopter departs
-            // in a couple of seconds, and once it passes 180 degrees the Euler angle
-            // wraps and the test starts reporting the opposite of the truth.
+            // in a couple of seconds, and once it passes 90 degrees the Euler angle
+            // wraps sign and the test starts reporting the opposite of the truth.
+            // 0.6 seconds at ~60 deg/s peak keeps the roll under 45 degrees,
+            // well clear of gimbal lock.
             case 2:
             {
                 _heli.OverrideControls = Trim(cyclicRoll: 0.22);
                 _peakRate = Math.Abs(sim.State.AngularVelocity.X) > Math.Abs(_peakRate)
                             ? sim.State.AngularVelocity.X : _peakRate;
-                if (_phaseTime > 1.2)
+                if (_phaseTime > 0.6)
                 {
                     Vector3 d = _heli.GlobalPosition - _phaseStartPos;
                     float lateral = d.Dot(new Vector3(_phaseStartRight.X, 0, _phaseStartRight.Z).Normalized());
@@ -206,6 +220,68 @@ public sealed partial class GodotBridgeSelfTest : Node
                         Fail("stability augmentation is not running on the player path");
                     if (Math.Abs(bank) > 30)
                         Fail($"left trim hands-off: {bank:F0} deg of bank inside 20 s");
+                    NextPhase();
+                }
+                break;
+            }
+
+            case 6:
+            {
+                // Does terrain actually stop a body?
+                //
+                // This has never been tested, and it was broken the whole time. Terrain
+                // collision was a HeightMapShape3D scaled by (8, 1, 8) to widen its one-unit
+                // sample spacing to the chunk's 512 m, and Godot fails that in the most
+                // misleading way there is: RAYCASTS hit the scaled shape at exactly the
+                // right height while BODIES fall straight through. Every probe said the
+                // ground was there. Nothing could stand on it.
+                //
+                // Landings never caught it because every site sits on a graded pad with its
+                // own collision. So: drop the aircraft onto open terrain, engine off, well
+                // away from anything, and require that it stops.
+                if (_phaseTime < 0.05)
+                {
+                    sim.Engine.Fail();
+                    _dropGround = (float)WorldHeight.At(DropStation.X, DropStation.Z);
+                    _heli.TeleportTo(new Vector3(DropStation.X, _dropGround + 30f, DropStation.Z));
+                }
+                _heli.OverrideControls = new Controls { Collective = 0, Throttle = 0 };
+
+                // Hold the aircraft up until the ground beneath it has streamed in.
+                //
+                // This is measuring whether terrain can STOP a body, not how fast chunks
+                // load - and after a teleport the ground genuinely does not exist for a
+                // second or so, which is long enough for a falling aircraft to pass through
+                // where it will shortly be. Worth knowing about in its own right, but it is
+                // a different bug from the one this phase is for.
+                if (!_groundReady)
+                {
+                    var space = _heli.GetWorld3D().DirectSpaceState;
+                    var from = new Vector3(DropStation.X, _dropGround + 60f, DropStation.Z);
+                    var q = PhysicsRayQueryParameters3D.Create(from, from + Vector3.Down * 200f);
+                    q.Exclude = new Godot.Collections.Array<Rid> { _heli.GetRid() };
+                    if (space.IntersectRay(q).Count > 0)
+                    {
+                        _groundReady = true;
+                        GD.Print($"  terrain collision ready after {_phaseTime:F1} s");
+                        _heli.TeleportTo(new Vector3(DropStation.X, _dropGround + 30f, DropStation.Z));
+                        _phaseTime = 0;
+                    }
+                    else if (_phaseTime > 15) { Fail("terrain collision never appeared"); NextPhase(); }
+                    break;
+                }
+
+                if (_phaseTime > 12)
+                {
+                    float y = _heli.GlobalPosition.Y;
+                    float above = y - _dropGround;
+                    GD.Print($"  terrain hit: resting {above:F1} m above ground " +
+                             $"({y:F1} vs terrain {_dropGround:F1})");
+
+                    if (above < -3f)
+                        Fail($"fell THROUGH open terrain: {above:F1} m below the surface");
+                    else if (above > 8f)
+                        Fail($"never reached the ground: {above:F1} m above it after 12 s");
                     NextPhase();
                 }
                 break;

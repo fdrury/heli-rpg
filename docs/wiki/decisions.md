@@ -754,3 +754,44 @@ Two bugs, both found by looking rather than reasoning:
   per-frame rule now, which is better behaviour regardless.
 
 **Reversible.** One node, added in one line of `AirframeBuilder.Build`.
+
+## D-029 — Terrain collision is an unscaled trimesh
+
+**Decision.** Terrain collision is a `ConcavePolygonShape3D` built at true world spacing,
+replacing a `HeightMapShape3D` on a scaled `CollisionShape3D`.
+
+**Why.** Nothing could stand on the terrain, and it had been that way from the beginning.
+
+`HeightMapShape3D` samples exactly one unit apart, and the only way to widen that is to
+scale the collision shape — here by **(8, 1, 8)**, since chunks are 512 m across and sampled
+65 times. Godot handles that badly, and it fails in the most misleading way available:
+**raycasts against the scaled shape return correct hits at exactly the right height, while
+bodies pass straight through it.**
+
+That combination is why it survived so long. Every probe agreed the ground was present and
+correctly placed — the on-foot test's ray reported `Body_0_-1 at y=138.0` against a terrain
+height of 138.0, which is exactly right — and the pilot sank through it anyway, accelerating
+until they were 8.5 km below a helicopter they had been standing eight metres from.
+
+Landings never caught it because every site sits on a graded pad with its own collision, so
+the aircraft only ever touched down on something that was not terrain.
+
+A trimesh carries no scale, so there is nothing to get wrong. About 8k triangles per chunk,
+for the two dozen chunks that carry collision.
+
+**New regression test.** The bridge self-test now drops the aircraft, engine off, onto open
+terrain far from any site, and requires that it stops. It rests 1.2 m above ground.
+
+**Noted, not fixed:** after a teleport the ground does not exist for roughly 0.3 s while the
+chunk streams in, which is long enough for a falling body to pass through where it is about
+to be. The test waits for collision before dropping; the game will need to as well.
+
+## D-030 — Instruments opt out of the weather
+
+**Decision.** `HelicopterController.UseWorldWeather` is off for the bridge self-test.
+
+**Why.** The moment the world acquired weather, the control-derivative measurement stopped
+being repeatable — the same code reported +34.9 °/s of roll on one run and −56.3 °/s on the
+next, and the sign flip read as a serious regression in the flight model. It was gusts. A
+derivative measured in gusty air is a measurement of the gusts. Two consecutive runs now
+give identical numbers to the decimal.
