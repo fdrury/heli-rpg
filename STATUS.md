@@ -26,7 +26,7 @@ a thing you do not know exists.
 # the game
 tools/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe --path game
 
-# 34 headless tests (flight + loadout + combat) - no engine needed
+# 39 headless tests (flight + loadout + combat + save) - no engine needed
 dotnet run --project tools/simlab -c Release -- all
 
 # render a 126 s sortie to builds/audio/sortie.wav and listen to it
@@ -41,6 +41,9 @@ godot --headless --path game -- --looptest
 # on-foot combat: land, dismount, shoot NPCs, called shots with Rotor Time
 godot --headless --path game -- --combattest
 
+# save at a site, trash state, load, verify round-trip
+godot --headless --path game -- --savetest
+
 # survey the generated world: terrain statistics, site placement, coverage
 godot --headless --path game -- --worldreport
 
@@ -53,7 +56,7 @@ godot --path game -- --screenshot
 
 Controls: `W`/`S` or throttle = collective · arrows or stick = cyclic · `A`/`D` or twist =
 pedals · `TAB` kneeboard · `1`-`4` actions · `Z`/`X` chaff/flares · `C` camera ·
-`F2` stability augmentation (requires module) · `R` respawn.
+`F2` stability augmentation (requires module) · `R` respawn · `F5` save · `F9` load.
 
 On foot: `WASD` move · `Shift` sprint · `LMB` fire · `RMB` Rotor Time · `R` reload ·
 `F` board Hugh.
@@ -137,9 +140,21 @@ text all draw in the existing HUD aesthetic. The combattest exercises the full c
 fly, land, shut down, dismount, spawn NPC, hip fire, aimed torso shot, Rotor Time
 headshot, reload, pilot damage, board.
 
+**Save / load** — F5 saves, F9 loads. JSON via `System.Text.Json`, single slot,
+human-readable. Save is gated: on ground, shut down, at a site, not in dialogue. The
+save captures everything that matters — fuel, damage, loadout (installed + bag), progress
+(inventory, knowledge, site records, journal), NPC minds (memory, dialogue usage), combat
+state (pilot HP, sidearm ammo, Rotor Time charge), threat intel (RWR detection flags),
+and position — and restores it with the engine off and rotor stopped, so none of the
+complex rotor/engine internal state needs serialising. `SaveData` lives in sim/ as a pure
+.NET DTO with no Godot dependency; the game layer handles position, NPC registry and
+threat state. Five simlab round-trip tests (progress, damage, loadout, NPC, full) and a
+headless Godot test (--savetest) that flies to a site, saves distinctive state, trashes
+everything, loads, and verifies fourteen properties survived the round trip.
+
 ## Next
 
-8. Save / load
+*(empty — all eight items complete)*
 
 ## Open questions for Fred
 

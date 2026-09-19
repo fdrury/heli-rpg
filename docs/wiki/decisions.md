@@ -951,3 +951,52 @@ there, so an unlatched check re-fires every frame. The new drop phase in the bri
 self-test logged **1141 identical strikes from one impact**, each re-applying full damage and
 each one worth a journal entry. Now one. A second strike on a second bounce is still a
 second strike, because the latch clears when the disc is clear.
+
+## D-036 — Save / load: parked-only, JSON, engine-off restore · 2026-09-19
+
+**Decision.** Save only when parked and shut down at a site. JSON via `System.Text.Json`,
+single slot (`user://saves/save1.json`), human-readable. On load the aircraft is placed
+with engine off and rotor stopped — no rotor/engine internals are serialised.
+
+**Architecture.** `SaveData` (sim/) is a pure .NET DTO with no Godot dependency. It owns
+nested DTOs for every subsystem: damage events, knowledge entries, site records, NPC minds,
+memory facts. Static helpers (`CaptureProgress`, `ApplyProgress`, etc.) marshal between
+the live objects and the DTO. The game layer (`Main.TrySave`/`TryLoad`) handles
+Godot-specific state: position as north/east/altitude/heading, NPC registry reconstruction,
+threat emitter detection flags, and loadout physics re-application.
+
+**What is saved.** Fuel, all nine component health values, damage log, installed + bagged
+modules, progress clock, inventory (fuel/scrap/parts), knowledge entries, site records
+(visited/searched/installed/removed flags), journal, NPC minds (site assignment, persona,
+memory facts, dialogue line usage), sidearm ammo + spare, pilot HP, Rotor Time charge,
+countermeasure counts (chaff/flares), and RWR detection flags (which emitters have been
+painted). Position as (north, east, altitude, heading).
+
+**What is NOT saved.** Rotor omega, blade flapping, inflow state, governor integral,
+actuator positions, engine temperature — because save is gated on parked+shutdown, all of
+these are zero or irrelevant. On load the aircraft spawns cold and dark, which is the
+correct state for a parked helicopter. This eliminated roughly 40 fields from the save
+format.
+
+**Save gate.** `CanSave` requires: `LandingController.OnGround`, rotor RPM < 65%,
+`SiteInteraction.AtSite` is not null, `SiteInteraction.Busy` is false, and dialogue panel
+is closed. This is consistent with the project's principle that "landing is the expensive
+act" — the save point is the reward for a successful approach.
+
+**NPC restore.** NPC minds are keyed by site ID. On load, the registry is rebuilt: Mattie
+is placed at the first settlement (determined by `IsFirstSettlement`), all others get
+settler personas seeded from their site. Memory facts and dialogue usage timestamps are
+restored so NPCs remember across save/load.
+
+**Threat intel.** `ThreatTrack.EverDetected` flags are saved as a list of emitter indices.
+On load, the flags are restored so RWR contact history persists — the sortie that nearly
+killed you still pays out its intel after a reload.
+
+**Verified.** Five simlab round-trip tests (progress, damage, loadout, NPC, full). One
+headless Godot test (`--savetest`) that flies to a fuel cache, saves with distinctive state
+(partial fuel, damage, knowledge, ammo, pilot health, RT charge), trashes everything,
+loads, and verifies fourteen properties survived.
+
+**Reversibility:** high. `SaveData` is one file with no dependents outside the save system.
+The restore methods on `Progress`, `Damage`, `Loadout`, `DialogueBank`, `PilotHealth` are
+each one or two lines. The game-layer save/load is ~150 lines in Main.
