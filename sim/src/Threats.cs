@@ -135,6 +135,42 @@ public sealed class ThreatField
         get { foreach (var t in _tracks) if (t.State == TrackState.Engaging) return true; return false; }
     }
 
+    /// <summary>
+    /// Can the crew perceive this track at all?
+    ///
+    /// This is what a radar warning receiver is FOR, and without it the box does nothing
+    /// mechanically - measured: a fit of flares plus RWR took exactly the same damage
+    /// through a gauntlet as flares alone, to the hundredth. An RWR does not make a missile
+    /// miss; it tells you one is coming, and everything the pilot does next depends on
+    /// knowing.
+    ///
+    /// A gun announces itself - tracer, noise, and it is close. A radar lock is silent
+    /// without a receiver. A MANPADS is silent either way, which is the entire reason it is
+    /// the frightening one.
+    /// </summary>
+    public bool Perceivable(ThreatTrack t) => t.Emitter.Kind switch
+    {
+        ThreatKind.Gun => true,
+        ThreatKind.Manpads => false,
+        _ => Fitted.HasFlag(Countermeasure.RadarWarning),
+    };
+
+    /// <summary>
+    /// Locks the crew actually knows about. Anything reacting to a threat - the player, the
+    /// HUD, an autopilot - must use this rather than <see cref="AnyLocked"/>, which is
+    /// omniscient and only honest for a debug overlay.
+    /// </summary>
+    public bool AnyLockedKnown
+    {
+        get
+        {
+            foreach (ThreatTrack t in _tracks)
+                if (Perceivable(t) && (t.State == TrackState.Locked || t.State == TrackState.Engaging))
+                    return true;
+            return false;
+        }
+    }
+
     public bool AnyLocked
     {
         get { foreach (var t in _tracks) if (t.State is TrackState.Locked or TrackState.Engaging) return true; return false; }

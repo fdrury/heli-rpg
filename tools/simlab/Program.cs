@@ -45,6 +45,8 @@ public static class Program
         Run("autobalance", EnvelopeTests.AutorotationBalance);
         Run("radialsweep", EnvelopeTests.RadialInflowSweep);
         Run("driving", EnvelopeTests.DrivingRegion);
+        Run("gating", GatingTests.CountermeasureGating);
+        Run("altgating", GatingTests.AltitudeGating);
         Run("dragk", EnvelopeTests.DragKSweep);
         Run("assist", TrimTests.AssistLadder);
         Run("sassweep", TrimTests.SasSweep);

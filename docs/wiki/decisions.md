@@ -1612,3 +1612,54 @@ Four suspects down. What remains unexplained is the *magnitude* of outboard drag
 moderate lift with no stall, no compressibility and no tip-loss effect — which now points at
 the blade-element integration itself rather than at any coefficient. The rig to attack it
 (`simlab driving`) exists and is cheap to run.
+
+## D-049 — Chaff and the warning receiver are a pair, and that was not designed in
+
+D-010 makes air defence the gate on the world: better-guarded country opens up as the player
+finds countermeasures. That is a load-bearing claim — it is what gives the map an order and
+what makes a salvaged dispenser worth a long flight — and **nothing was testing it**.
+`--threatreport` measures how much cover the terrain gives, which answers where you can
+hide, not what happens when you cannot.
+
+`simlab gating` flies a fixed synthetic gauntlet of ten emitters and varies only the fit.
+Synthetic rather than sampled from the real map on purpose: a known corridor isolates the
+countermeasures, where the real world mixes in terrain, route choice and where sites landed,
+so a change in any of those would read as a change in the fit.
+
+**A radar warning receiver did nothing whatsoever.** Flares plus RWR took exactly the same
+damage as flares alone, to the hundredth — the flag was not referenced anywhere in the
+mechanics. The fix is not to make the box reduce damage: an RWR does not make a missile
+miss, it tells you one is coming. So `ThreatField.Perceivable` and `AnyLockedKnown` now
+model what the crew can actually *know*: a gun announces itself, a radar lock is silent
+without a receiver, and a MANPADS is silent either way, which is the entire reason it is the
+frightening one.
+
+With perception modelled, and a policy that dispenses the right countermeasure for the
+threat rather than everything at everything:
+
+| fit | damage through the gauntlet |
+|---|---|
+| nothing | 19.08 |
+| flares | 13.63 |
+| flares + RWR | 13.63 |
+| chaff + flares, **no** RWR | 13.63 |
+| chaff + flares + RWR | **8.59** |
+| everything | 5.57 |
+
+**Neither chaff nor the receiver is worth anything alone; together they are worth 37%.** That
+dependency was not designed — it falls out of modelling perception honestly, and it is a far
+better progression beat than two separate upgrades would have been. Finding one without the
+other should feel like half a key.
+
+**The altitude half of the gate already works.** With terrain cover on, an unprotected
+aircraft takes 0.77 damage at 50 m against 18.76 at 400 m. Flying low is a genuine
+alternative to carrying equipment, which is the trade the world layout rests on.
+
+**One honest limit:** the cover proxy saturates at 0.95, so 400 m and 900 m read identically
+here. Separating them needs the real terrain, which is what `--threatreport` is for.
+
+**A mistake worth recording.** The first policy fired everything at every known lock, and
+flares-plus-RWR came out *worse* than flares alone (18.80 against 14.24): the receiver told
+the crew about radar threats, they spent flares that do nothing to a radar missile, and had
+none left for the one that mattered. Realistic as a pilot error, useless as a measurement of
+the fit — the same lesson as D-042, one layer up.
