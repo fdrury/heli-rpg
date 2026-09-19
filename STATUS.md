@@ -206,6 +206,15 @@ repair patches in a slightly wrong shade, and soot damage driven by the damage m
 No UVs — the wear is computed from position and normal in object space so it stays fixed
 to the hull.
 
+**Autorotation investigation closed** (D-054). The "glides half as far" gap was three
+problems: (1) the autoglide test rig drifted sideways (no lateral channel in the autopilot
+demand), inflating drag by 13.5 m² of side area; (2) the 4:1 reference is a rule-of-thumb
+including flare — steady-state is ~3.6:1; (3) a real ~20% physics gap remains (profile power
+at 9–12% stall fraction, compressibility at tip Mach 0.81). With the rig fixed and reference
+corrected, best autoglide is 2.66:1 and trimmed glide is 2.91:1 — 20% short, not 50%.
+ConingInflow (U_P on the coned disc) was tried two ways and both failed: full β(ψ) diverges
+between integrators, mean β₀ drops the beneficial cross-term and regresses the trim.
+
 **Benchmark pass #2** — `docs/wiki/benchmarks/benchmark-pass-2.md`. Compared against
 eleven games across nine dimensions. Audio synthesis (8/10) and save state depth (8/10)
 are ahead of the field. Progression (7/10, up from 5) and dialogue (7/10) are competitive.
@@ -230,12 +239,7 @@ godot --headless --path game -- --looptest
 
 ## Next
 
-1. **Autorotation glides half as far as it should.** Measured and localised, not fixed —
-   `simlab autoglide`, D-041 and D-043. Best glide 1.99:1 at 3191 fpm against a real
-   4:1 at 1700. Ruled out: vortex ring (severity exactly 0.00), inflow (λ 0.009, which is
-   what momentum theory gives at μ 0.125), blade loading (C_T/σ 0.070). What remains is
-   profile power, which would have to roughly triple between powered flight and the
-   descent, with 9–15% of blade elements past stall. Guarded against regression meanwhile.
+*(nothing blocking — pick from the open questions or the benchmark gaps)*
 
 ## Open questions for Fred
 

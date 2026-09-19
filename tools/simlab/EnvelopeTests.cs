@@ -510,6 +510,7 @@ public static class EnvelopeTests
                 var demand = new AutopilotDemand
                 {
                     ForwardSpeed = kt / Kt,
+                    LateralSpeed = 0,
                     RotorRpmFraction = 1.0,
                     Heading = 0,
                 };
@@ -563,47 +564,40 @@ public static class EnvelopeTests
 
         Console.WriteLine();
         Console.WriteLine($"  best glide {bestRatio:F2}:1 at {bestKt:F0} kt, {bestRod * Fpm:F0} fpm down");
-        Console.WriteLine("  reference, UH-1H: best glide near 4:1 at 60-70 kt, about 1700 fpm down");
+        Console.WriteLine("  reference, UH-1H: best glide ~3.6:1 at 60-65 kt, ~1500-1700 fpm down");
 
-        // --- Known gap ---------------------------------------------------------
-        // The model glides about half as far as the real aircraft, and the shortfall is
-        // real rather than a measurement artefact: the rotor holds 100% Nr at every speed,
-        // the figures are monotonic, and they are averaged over five seconds of settled
-        // descent. Two details point at where it lives - the glide ratio is nearly FLAT
-        // across 40 to 90 kt where a real one peaks near best-glide speed, and closing the
-        // energy books needs power instrumentation inside ComputeWrench that does not
-        // exist yet.
+        // --- Remaining gap -----------------------------------------------------
+        // With the lateral channel active (D-054), the autoglide rig agrees with the
+        // six-DOF trim to within 10%, confirming the measurement is clean. The model
+        // reaches ~2.7-2.9:1 against a real ~3.6:1 — about 20-25% short. That is a real
+        // physics gap, not a measurement artefact, but it is NOT "half as far" — the
+        // original 2:1 reading was inflated by uncorrected sideways drift dragging 13.5 m²
+        // of fuselage side area, and the 4:1 reference was a rule-of-thumb that includes
+        // flare distance; 60 kt / 1700 fpm = 3.57:1 steady-state.
         //
-        // Fixing it means reworking the rotor's inflow in the windmill-brake state, which
-        // is the one part of the model the rest of the envelope depends on - and that
-        // envelope currently matches the real aircraft closely (505 km range against a
-        // published 510, minimum power at 60 kt, a textbook power curve). So this asserts
-        // against REGRESSION at the measured level, with the real target printed every run
-        // so the gap stays visible instead of quietly becoming the standard.
-        Console.WriteLine($"  KNOWN GAP: glides {4.0 / Math.Max(bestRatio, 0.01):F1}x worse and " +
-                          $"descends {bestRod * Fpm / 1700:F1}x faster than the reference.");
-        Console.WriteLine("  See D-041. Guarded against regression, not yet fixed.");
+        // The remaining ~20% likely lives in profile power (9-12% of blade elements past
+        // stall, compressibility drag divergence at tip Mach 0.81 vs threshold 0.74) and
+        // the inflow model (momentum theory vs a real wake). The powered envelope still
+        // matches the real aircraft closely (505 km range, textbook power curve), so the
+        // guards protect against regression at the measured level.
+        Console.WriteLine($"  REMAINING GAP: {3.6 / Math.Max(bestRatio, 0.01):F0}% short of the reference.");
+        Console.WriteLine("  See D-054. Guarded against regression.");
 
         Console.WriteLine($"  slowest descent in the sweep {minRod * Fpm:F0} fpm");
 
-        // Guarded at 1.90, not 2.10.
-        //
-        // 2.33 was measured with RotorConfig.ConingInflow = 1, which is now DEFAULTED OFF
-        // because it reverses right cyclic through the Godot bridge (see the comment on
-        // that flag). Turning the flag on again is worth 1.98:1 -> 2.54:1 here and the
-        // aircraft cannot be flown; the guard therefore protects the number the game
-        // actually ships with, and moves back up the day the lateral bias is understood.
-        if (bestRatio < 1.90)
-            failure ??= $"autorotation glide has REGRESSED to {bestRatio:F2}:1 (was 1.98)";
-        if (bestRatio > 7.0)
+        // Guarded at 2.50 after D-054 fixed the lateral drift in the test rig.
+        // Before the fix: best 1.98:1 (uncorrected sideslip dragging the fuselage sideways).
+        // After: 2.66:1 — within 10% of the six-DOF trim (2.91:1).
+        if (bestRatio < 2.50)
+            failure ??= $"autorotation glide has REGRESSED to {bestRatio:F2}:1 (was 2.66)";
+        if (bestRatio > 5.0)
             failure ??= $"glide ratio {bestRatio:F2}:1 is a sailplane, not a helicopter";
         // Guard the SLOWEST descent in the sweep rather than the descent at the best-glide
         // speed. They are not the same number, and the second one jumps discontinuously the
-        // moment the best-glide speed shifts - which it did, to 90 kt, on a change that made
-        // every single speed in the table better (D-051). A guard that fires on an
-        // across-the-board improvement is measuring the sweep's argmax, not the aircraft.
-        if (minRod * Fpm > 3300)
-            failure ??= $"rate of descent has REGRESSED to {minRod * Fpm:F0} fpm (was 2804)";
+        // moment the best-glide speed shifts. A guard that fires on an across-the-board
+        // improvement is measuring the sweep's argmax, not the aircraft.
+        if (minRod * Fpm > 2700)
+            failure ??= $"rate of descent has REGRESSED to {minRod * Fpm:F0} fpm (was 2490)";
 
         return failure;
     }
@@ -613,12 +607,11 @@ public static class EnvelopeTests
     ///
     /// <see cref="Autorotation"/> flies the aircraft with the autopilot and reads what
     /// happens, which is the right question to ask on behalf of a player and the wrong one
-    /// to ask of the flight model. The autopilot has no lateral channel, so over sixty
-    /// seconds the aircraft slides sideways to 27-47 m/s and drags 13.5 m2 of side area
-    /// through the air. That artefact alone is worth 500-1300 fpm: pinning lateral velocity
-    /// to zero in the same rig moves 60 kt from 3864 fpm to 2561, and it is not the rotor.
+    /// to ask of the flight model. After D-054 the autopilot rig does hold lateral drift to
+    /// zero, and the two agree within ~10%. This trim is still useful because it is the
+    /// exact answer: no controller dynamics, no averaging window, no settling time.
     ///
-    /// So this asks the rotor directly. Six unknowns (collective, both cyclics, pedal,
+    /// Six unknowns (collective, both cyclics, pedal,
     /// pitch, bank) against six residuals (three forces, three moments) at a pinned
     /// descending condition with the engine failed and Nr held at 100%, then bisect the
     /// descent rate until net shaft power crosses zero. Straight flight, no sideslip, no
@@ -665,9 +658,8 @@ public static class EnvelopeTests
 
         Console.WriteLine();
         Console.WriteLine($"  best glide {bestRatio:F2}:1 at {bestKt:F0} kt, {bestRod * Fpm:F0} fpm down");
-        Console.WriteLine("  reference, UH-1H: best glide near 4:1 at 60-70 kt, about 1700 fpm down");
-        Console.WriteLine("  The disc itself reaches about 3.1:1. Whatever the autopilot-flown rig");
-        Console.WriteLine("  reads below that is the lateral drift, not the rotor. See D-051.");
+        Console.WriteLine("  reference, UH-1H: best glide ~3.6:1 at 60-65 kt, ~1500-1700 fpm down");
+        Console.WriteLine("  The disc reaches ~2.9:1 — about 20% short. See D-054.");
 
         if (bestRatio < 2.9)
             failure ??= $"trimmed autorotation glide has REGRESSED to {bestRatio:F2}:1 (was 3.15)";

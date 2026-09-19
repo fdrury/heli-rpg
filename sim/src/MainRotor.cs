@@ -208,6 +208,21 @@ public sealed class MainRotor
 
         double azimuthAtEntry = Azimuth;
 
+        // Mean coning angle: the DC component of flapping, which is exactly β₀ for any
+        // blade count because the 1/rev harmonics cancel in the multi-blade sum. Used
+        // below in the ConingInflow U_P correction so that the classical μ·β₀·cos(ψ)
+        // term — air blowing through a coned disc — is computed from the cone geometry
+        // alone, without a feedback path from the cyclic flapping back into U_P. The full
+        // β(ψ) in the sinB term created a high-sensitivity loop that produced different
+        // results in the sim's integrator and Godot's rigid-body solver, reversing lateral
+        // control through the bridge (D-051, RotorConfig comment). The cone angle changes
+        // slowly (it is the 0th harmonic), so the previous step's value is exact enough.
+        double coningAngle = 0;
+        for (int b = 0; b < nb; b++) coningAngle += Beta[b];
+        coningAngle /= nb;
+        double sinCone = Math.Sin(coningAngle);
+        double cosCone = Math.Cos(coningAngle);
+
         for (int step = 0; step < sub; step++)
         {
             Azimuth += omega * dtSub;
@@ -277,8 +292,16 @@ public sealed class MainRotor
                     // (2.86:1 -> 3.06:1) with hover power unchanged at 814 kW. See D-051.
                     double uR = Vec3.Dot(vElem, er);
                     double kCone = cfg.ConingInflow;
-                    double sB = sinB * kCone, cB = 1.0 + (cosB - 1.0) * kCone;
-                    double uP = viLocal * cB - (cB * Vec3.Dot(vElem, _zd) + sB * uR);
+                    // Use the mean CONING angle, not the instantaneous flap angle, for the
+                    // sinB and cosB factors. The coning effect (air through a cone) depends
+                    // on the disc's cone geometry, not on where the cyclic tilts it. Using
+                    // the full β(ψ) here fed cyclic flapping back into U_P at 1/rev, creating
+                    // a feedback that the two integrators (sim and Godot) resolved differently
+                    // — reversing lateral control through the bridge. The mean coning angle
+                    // keeps the μ·β₀·cos(ψ) term that helps autorotation and drops the
+                    // cross-terms that caused the divergence. See D-054.
+                    double sBc = sinCone * kCone, cBc = 1.0 + (cosCone - 1.0) * kCone;
+                    double uP = viLocal * cBc - (cBc * Vec3.Dot(vElem, _zd) + sBc * uR);
 
                     double u2 = uT * uT + uP * uP;
                     if (u2 < 1e-6) continue;

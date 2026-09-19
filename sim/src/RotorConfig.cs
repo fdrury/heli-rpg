@@ -54,32 +54,36 @@ public sealed class RotorConfig
     public double RadialInflow { get; set; } = 0.0;
 
     /// <summary>
-    /// How much of the element velocity is resolved on the FLAPPED BLADE's normal rather
+    /// How much of the element velocity is resolved on the CONED DISC's normal rather
     /// than on the shaft axis. 1 is correct blade-element theory; 0 reproduces the older,
     /// shaft-normal behaviour, and it is a knob only so the difference stays measurable.
     ///
     /// Blade-element theory defines U_P along the coned blade's normal, which carries the
-    /// classical mu*beta*cos(psi) term - the in-plane freestream blowing up through the
+    /// classical mu*beta_0*cos(psi) term - the in-plane freestream blowing up through the
     /// front of a coned disc and down through the back. Dropping it costs almost nothing
     /// in powered flight, where beta is small and the term averages out over a revolution,
     /// but in a descent it is a real part of the upflow the driving region of the disc
     /// runs on: measured on the six-DOF autorotation trim, 2475 -> 2319 fpm at 70 kt
     /// (2.86:1 -> 3.06:1) with hover power unchanged (815 -> 814 kW).
     /// </summary>
-    // DEFAULT 0 - the term is correct physics and currently breaks lateral control.
+    // DEFAULT 0. The term is correct physics and helps autorotation, but two attempts to
+    // enable it have failed (D-054):
     //
-    // At 1.0 it buys a real autorotation improvement (best glide 1.98:1 -> 2.54:1) and
-    // costs right cyclic: the Godot bridge self-test measures -31.7 deg/s of roll for a
-    // RIGHT cyclic input, with the sim and the rigid body disagreeing (-31.7 against
-    // +11.2), where at 0.0 they agree exactly at +49.8. The spanwise term puts a 1/rev
-    // variation into U_P, which through the usual 90-degree gyroscopic lag becomes lateral
-    // flapping - so it biases roll by construction, and the bias is currently large enough
-    // to reverse the control. Flipping its sign makes both numbers worse (-64.1 deg/s,
-    // glide 1.94:1), so it is not a simple sign error.
+    // (a) Full instantaneous β(ψ): feeds cyclic flapping back into U_P, creating a
+    //     high-gain loop whose result depends on which integrator runs it — the sim's
+    //     semi-implicit Euler gives +11.2 deg/s of roll for right cyclic while Godot's
+    //     rigid-body solver gives −31.7. Not a simple sign error.
     //
-    // Kept, flagged and measured rather than deleted: the physics is real and the
-    // autorotation gap (D-041) is still open. Flying the aircraft correctly wins until
-    // somebody works out why the lateral bias is that big.
+    // (b) Mean coning angle (β₀) only: eliminates the feedback loop, but also drops the
+    //     0/rev cross-term from (a₁ × forward speed) that was the main source of the
+    //     autorotation improvement. Measured: trimmed autorotation REGRESSES from 3.15:1
+    //     to 2.92:1 while hover power stays at 814 kW. The 1/rev coning term helps
+    //     the autopilot-flown rig (1.98 → 2.08) by accident — it changes the collective-
+    //     to-Nr relationship in a way the Nr loop benefits from — but the trim, which
+    //     is the honest answer, is worse.
+    //
+    // Kept as a knob. The U_P code uses the mean coning angle (approach b), so turning
+    // it on is safe to fly but doesn't help the physics. See D-054.
     public double ConingInflow { get; set; } = 0.0;
 
     public double NominalOmega { get; init; } = 27.0;

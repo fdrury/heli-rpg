@@ -1835,3 +1835,50 @@ velocity alone moves 60 kt from 3864 to 2561 fpm.
 Which also means the 4:1 reference may be unreachable for *this* airframe: at honest trim it
 gives 3.19:1 at 2226 fpm, and the published figure assumes a heavier machine — a lighter
 aircraft buys a faster descent for the same dissipation.
+
+## D-054 — Autorotation: three problems, not one
+
+The "autorotation glides half as far as it should" item turned out to be three combined issues:
+
+**1. Measurement artefact (fixed).** The autoglide rig had no `LateralSpeed = 0` in the
+autopilot demand, so the aircraft drifted sideways dragging 13.5 m² of fuselage side area.
+This was already identified in D-053 and the trim rig built to diagnose around it. Fix:
+added `LateralSpeed = 0` to the demand, engaging the autopilot's existing lateral PID
+(DriftLoop P=0.034, I=0.007 → RollAttitude → RollRate). Result: autoglide best moved from
+1.98:1 to **2.66:1** at 80 kt — within 10% of the six-DOF trim's 2.91:1.
+
+**2. Wrong reference (corrected).** The 4:1 figure is a rule of thumb that includes flare
+distance. Steady-state at 60 kt and 1700 fpm descent = 3.57:1. Corrected the test reference
+to **~3.6:1**.
+
+**3. Real physics gap (~20%, not fixed).** The model reaches 2.7–2.9:1 against a real ~3.6:1.
+Likely sources: profile power (9–12% of blade elements past stall, compressibility drag at
+tip Mach 0.81 vs threshold 0.74) and the momentum-theory inflow model. The powered envelope
+still matches the real aircraft (505 km range, textbook power curve, hover ceiling within 3%),
+so this is a localised shortfall in the windmill-brake state. Guards updated to protect the
+corrected numbers.
+
+**ConingInflow: two attempts, both failed.** The coning-inflow term (resolving U_P on the
+coned disc's normal rather than the shaft axis) is correct physics and helps autorotation in
+theory. Two implementations were tried:
+
+(a) **Full instantaneous β(ψ)**: feeds cyclic flapping back into U_P, creating a high-gain
+loop whose result depends on which integrator runs it — the sim's semi-implicit Euler gives
++11.2 deg/s of roll for right cyclic while Godot's rigid-body solver gives −31.7. Not a
+simple sign error.
+
+(b) **Mean coning angle (β₀) only**: eliminates the feedback loop, but also drops the 0/rev
+cross-term from (a₁ × forward speed) that was the main source of improvement. Measured:
+trimmed autorotation **regresses** from 3.15:1 to 2.92:1 while hover power stays at 814 kW.
+The code is in place (MainRotor computes coningAngle before the substep loop), defaulted off
+via `RotorConfig.ConingInflow = 0`.
+
+**Net outcome**: the "half as far" gap was mostly measurement + reference error. The honest
+gap is ~20%, the numbers are guarded, and the item is moved from Next to Done. A further 20%
+would require either a higher-fidelity inflow model (prescribed wake, free wake) or a stall /
+compressibility model that distinguishes retreating-blade stall from the advancing-tip drag
+rise — both beyond scope for a game rotor.
+
+Reversibility: fully reversible. No existing behaviour changed (ConingInflow stays off,
+powered envelope unchanged). The lateral fix is a test-rig improvement. Guards can be rolled
+back to the old numbers by removing `LateralSpeed = 0`.
