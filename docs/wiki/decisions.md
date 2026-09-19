@@ -486,3 +486,53 @@ flown straight is not.
 So the two systems do different jobs, and both are needed: **clustering makes arrival an
 event, threat makes the going there a journey.** Fuel does neither, and per D-003a has
 stopped pretending to.
+
+### D-019 — The refit system, built · 2026-09-18
+
+Built to D-011. Eight modules, eight bays, each with real physics.
+
+**Architecture.** `Loadout` (sim layer, pure .NET) owns the module catalog and tracks
+installed/bag state. `SiteInteraction` handles the physics effects on install/remove
+(MassItem, DragArea, FuelCapacity). `Main` wires the game-system effects (SAS authority,
+countermeasure flags on ThreatField) via events, so SiteInteraction never references
+ThreatWorld directly.
+
+| Module | Mass | Position (FRD) | Notes |
+|---|---|---|---|
+| Attitude hold | 12 kg | (2.3, 0, -0.55) | Enables SAS; F2 now requires the module |
+| Radar warning | 8 kg | (2.1, 0.5, -0.65) | Countermeasure.RadarWarning flag |
+| Chaff | 18 kg | (-5.8, 0.3, -0.85) | 30 rounds on install; tail-boom CG shift |
+| Flares | 22 kg | (-5.8, -0.3, -0.85) | 30 rounds on install; tail-boom CG shift |
+| Exhaust suppressor | 35 kg | (-1.5, 0, -2.0) | +0.15 m² forward drag; makes IR seekers 65% less effective |
+| Long range tank | 45 kg | (0.4, 0, -0.15) | +350 kg fuel capacity; a full tank weighs 1195 kg |
+| Cargo hook | 28 kg | (0.1, 0, 0.4) | Capability placeholder for underslung loads |
+| Rescue hoist | 40 kg | (0.8, -1.3, -0.5) | Capability placeholder; left-side CG shift |
+
+**How modules are found.** ~15% of wrecks, airfields and depots yield a specific module,
+determined by site seed (deterministic — same world every time). Found during salvage on
+the first search. Each module can only be found once; subsequent sites with the same
+module are silently skipped. The distribution is weighted toward early-game modules
+(SAS, RWR, chaff, flares) so the player finds something useful first.
+
+**Installation.** At workshops and airfields only. Costs 1-3 parts depending on
+complexity. Takes 8-20 seconds (proportional to mass). Removal takes 6 seconds and
+returns the module to the bag. Both are gated by the existing `Settled` check — rotor
+stopped, on the ground, at the site.
+
+**What it replaced.** The F3 bench-fit key is gone. SAS (F2) now requires the module to
+be installed. Countermeasures go through the refit system. The kneeboard's FITTED
+section reads from real `Loadout` state instead of hardcoded booleans. The only three
+bays that cannot yet be exercised (cargo hook, rescue hoist, and the functionality of
+the long-range tank beyond fuel capacity) are capability placeholders — the bays exist,
+the mass and drag are real, the gameplay feature is the next layer.
+
+**The design promise D-011 made, verified.** All eight modules installed adds 208 kg,
+shifts the CG, and modifies the inertia tensor. Tail-boom modules (chaff, flares) shift
+the CG aft; forward modules (SAS, RWR) shift it forward. The exhaust suppressor adds
+measurable drag. The long-range tank increases fuel capacity by 350 kg. None of this is
+faked — it flows through the same MassProperties and DragArea the structural items use.
+Eight new sim tests verify these properties.
+
+**Reversibility:** high. The module catalog is data. Loadout is a pair of HashSets.
+Installation effects are symmetric (add on install, remove on uninstall). New modules
+are one record and one switch case.

@@ -140,21 +140,16 @@ public sealed partial class Kneeboard : Control
 
         // Showing what is NOT installed is the point. You cannot want a thing you do not
         // know exists, and this is the only place the player finds out these bays are here.
-        var bays = new (string name, bool fitted, string what)[]
+        // Driven by real Loadout state (D-011), not hardcoded booleans.
+        var loadout = _play.Loadout;
+        foreach (var mod in Loadout.All)
         {
-            ("Attitude hold", _heli.SasAuthority > 0.5f, "holds the aircraft where you put it"),
-            ("Radar warning", false, "tells you when you are painted"),
-            ("Chaff", false, "against radar"),
-            ("Flares", false, "against heat"),
-            ("Exhaust suppressor", false, "makes you cold"),
-            ("Long range tank", false, "more fuel, less lift"),
-            ("Cargo hook", false, "carry it underneath"),
-            ("Rescue hoist", false, "no landing required"),
-        };
-        foreach (var (name, fitted, what) in bays)
-        {
-            Text(new Vector2(col2 + 6, y2), fitted ? name : name, fitted ? Good : Faint, 13);
-            Text(new Vector2(col2 + 170, y2), fitted ? "fitted" : "empty bay", fitted ? Good : Faint, 12);
+            bool fitted = loadout.IsInstalled(mod.Id);
+            bool inBag = loadout.InBag(mod.Id);
+            string status = fitted ? "fitted" : inBag ? "in bag" : "empty bay";
+            Color col = fitted ? Good : inBag ? Warn : Faint;
+            Text(new Vector2(col2 + 6, y2), mod.Name, col, 13);
+            Text(new Vector2(col2 + 170, y2), status, col, 12);
             y2 += 18;
         }
     }

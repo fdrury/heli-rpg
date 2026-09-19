@@ -90,7 +90,7 @@ public static class AirframeBuilder
             },
             Dark = new StandardMaterial3D
             {
-                AlbedoColor = new Color(0.085f, 0.09f, 0.085f),
+                AlbedoColor = new Color(0.135f, 0.142f, 0.132f),
                 Roughness = 0.55f,
                 Metallic = 0.25f,
             },

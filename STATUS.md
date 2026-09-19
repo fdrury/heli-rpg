@@ -8,13 +8,15 @@ every choice and why; `docs/wiki/benchmarks/` is where it was measured against t
 
 ## Where it is now
 
-**The core loop closes, and people talk.** You can fly a physically simulated Huey
-across a streamed 16 km world, find a named settlement, put it down, shut down, and
-talk to whoever lives there. Mattie waits at the first Basin settlement; everyone else
-is a settler with a name and a persona generated from the site. The conversation UI
-draws in the HUD aesthetic, reveals text word by word, and the local-model coda
-appends seamlessly when the binary is present — or the baked line ends naturally and
-nothing is lost.
+**The core loop closes, people talk, and the machine levels up.** You can fly a
+physically simulated Huey across a streamed 16 km world, find a named settlement, put
+it down, shut down, talk to whoever lives there, and scavenge modules that bolt onto
+the aircraft and change what it can do. Eight bays — attitude hold, RWR, chaff,
+flares, exhaust suppressor, long-range tank, cargo hook, rescue hoist — each with real
+mass at a real position, each felt in the flight model. Install an exhaust suppressor
+and the drag rises; fit a long-range tank and the fuel capacity jumps but the hover
+ceiling drops. The kneeboard shows every bay, fitted or empty, because you cannot want
+a thing you do not know exists.
 
 60 fps at 1600x900 on a GTX 1650 Ti, which is well under the GTX 1080 target.
 
@@ -24,7 +26,7 @@ nothing is lost.
 # the game
 tools/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe --path game
 
-# 21 headless flight tests - no engine needed
+# 29 headless tests (flight + loadout) - no engine needed
 dotnet run --project tools/simlab -c Release -- all
 
 # render a 126 s sortie to builds/audio/sortie.wav and listen to it
@@ -48,7 +50,7 @@ godot --path game -- --screenshot
 
 Controls: `W`/`S` or throttle = collective · arrows or stick = cyclic · `A`/`D` or twist =
 pedals · `TAB` kneeboard · `1`-`4` actions · `Z`/`X` chaff/flares · `C` camera ·
-`F2` stability augmentation · `F3` bench-fit countermeasures · `R` respawn.
+`F2` stability augmentation (requires module) · `R` respawn.
 
 ## Done
 
@@ -95,9 +97,16 @@ word-by-word reveal, and everything degrades to the baked layer when the model i
 mass and is felt in the hover. The kneeboard records facts, not inferences, and shows the
 empty bays.
 
+**Refit** — eight modules on real hardpoints (D-011). Each is a MassItem plus drag and
+fuel capacity, so the flight model feels every choice. Modules are found during salvage
+at wrecks, airfields and depots (~15% of eligible sites), then installed at workshops or
+airfields for a parts cost. Countermeasures (RWR, chaff, flares, exhaust suppressor)
+and the attitude hold unit are no longer toggled with keys — they are things you find
+and bolt on. The kneeboard's FITTED section reads from real loadout state, and empty
+bays show the player what to look for.
+
 ## Next
 
-4. The refit system — modules on real hardpoints (D-011)
 5. On-foot: third person, Rotor Time
 6. Weather, night, and the flying that goes with them
 

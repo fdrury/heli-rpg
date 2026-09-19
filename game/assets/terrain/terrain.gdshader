@@ -41,7 +41,7 @@ uniform float detail_fade_end = 1150.0;
 // twelve the near field uses. A helicopter spends most of its time at 100-500 m, so most
 // of the screen is always far field - it has to carry the image, not just be cheap.
 uniform float macro_scale = 0.0045;
-uniform float macro_strength = 0.55;
+uniform float macro_strength = 0.42;
 
 uniform float slope_rock_start = 0.68;
 uniform float slope_rock_end = 0.44;
@@ -58,15 +58,15 @@ uniform float field_frequency = 0.00048;
 // Averaged far-field colours, used once detail sampling has faded out. Chosen by eye to
 // match the textures under the grade rather than measured, because what matters is that
 // the transition is invisible.
-uniform vec3 far_grass : source_color = vec3(0.265, 0.285, 0.168);
+uniform vec3 far_grass : source_color = vec3(0.252, 0.256, 0.158);
 uniform vec3 far_dirt : source_color = vec3(0.290, 0.238, 0.172);
 uniform vec3 far_rock : source_color = vec3(0.225, 0.214, 0.198);
 uniform vec3 far_gravel : source_color = vec3(0.288, 0.272, 0.238);
 
-uniform float saturation = 0.58;
-uniform vec3 grade_tint : source_color = vec3(1.06, 1.01, 0.86);
-uniform vec3 dead_tint : source_color = vec3(0.62, 0.55, 0.36);
-uniform float dead_amount = 0.42;
+uniform float saturation = 0.64;
+uniform vec3 grade_tint : source_color = vec3(1.03, 1.00, 0.91);
+uniform vec3 dead_tint : source_color = vec3(0.86, 0.76, 0.54);
+uniform float dead_amount = 0.55;
 
 uniform float normal_strength = 1.1;
 
@@ -166,7 +166,11 @@ void fragment() {
         // Match the detail texture to the far-field colour before blending, so the two
         // agree in tone and the fade is invisible rather than a visible ring.
         vec3 dcol_matched = dcol * (col / max(dcol, vec3(0.03)));
-        col = mix(col, mix(dcol, dcol_matched, 0.65), detail);
+        // Weighted hard toward the colour-matched version. At 0.65 the raw texture kept
+        // enough of its own green that the near field read as lawn while the far field
+        // read as dry olive - a seam you could see from the air. The detail textures are
+        // here for TEXTURE; the palette above decides the colour.
+        col = mix(col, mix(dcol, dcol_matched, 0.88), detail);
         nrm = mix(nrm, dnrm, detail);
         rgh = mix(rgh, drgh, detail);
     }
@@ -174,8 +178,8 @@ void fragment() {
     // --- Grade ------------------------------------------------------------
     // Dead ground: large, soft patches where whatever was growing has given up. This is
     // most of what stops the landscape reading as farmland.
-    float dead = smoothstep(0.42, 0.78, field) * dead_amount;
-    col = mix(col, col * dead_tint * 1.6, dead * (grass_w * 0.85 + dirt_w * 0.3));
+    float dead = smoothstep(0.32, 0.82, field) * dead_amount;
+    col = mix(col, col * dead_tint * 1.18, dead * (grass_w * 0.85 + dirt_w * 0.3));
 
     col = desaturate(col, saturation) * grade_tint;
     col *= mix(0.80, 1.14, fbm(uv * 0.00026));   // very large scale brightness drift

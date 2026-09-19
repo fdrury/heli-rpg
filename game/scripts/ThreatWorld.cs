@@ -254,11 +254,17 @@ public sealed partial class ThreatWorld : Node
     public bool DispenseChaff() => Field.DispenseChaff();
     public bool DispenseFlares() => Field.DispenseFlares();
 
-    /// <summary>Fit a countermeasure. In the finished game this happens at a workshop.</summary>
+    /// <summary>Fit a countermeasure. Called by the refit system (D-011) on install.</summary>
     public void Fit(Countermeasure c, int rounds = 0)
     {
         Field.Fitted |= c;
         if (c.HasFlag(Countermeasure.Chaff)) Field.ChaffRemaining += rounds;
         if (c.HasFlag(Countermeasure.Flares)) Field.FlaresRemaining += rounds;
+    }
+
+    /// <summary>Remove a countermeasure. Called by the refit system (D-011) on removal.</summary>
+    public void Unfit(Countermeasure c)
+    {
+        Field.Fitted &= ~c;
     }
 }

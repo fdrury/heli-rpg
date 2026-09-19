@@ -61,6 +61,14 @@ public static class Program
         Run("codavalidation", DialogueTests.Validation);
         Run("codastreaming", DialogueTests.Streaming);
         Run("npcmemory", DialogueTests.Memory);
+        Run("loadout_catalog", LoadoutTests.CatalogConsistency);
+        Run("loadout_mass", LoadoutTests.InstallMass);
+        Run("loadout_cg", LoadoutTests.CgShift);
+        Run("loadout_drag", LoadoutTests.DragEffect);
+        Run("loadout_fuel", LoadoutTests.FuelCapacity);
+        Run("loadout_full", LoadoutTests.FullLoadout);
+        Run("loadout_lifecycle", LoadoutTests.BagAndInstall);
+        Run("loadout_distribution", LoadoutTests.ModuleDistribution);
         Run("masking", ThreatTests.Masking);
         Run("altbands", ThreatTests.AltitudeBands);
         Run("countermeasures", ThreatTests.Countermeasures);

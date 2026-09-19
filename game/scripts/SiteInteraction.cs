@@ -35,6 +35,12 @@ public sealed partial class SiteInteraction : Node
     public bool InDialogue => Dialogue?.IsOpen ?? false;
 
     public Progress Progress { get; } = Progress.NewGame();
+    public Loadout Loadout { get; } = new();
+
+    /// <summary>Raised when a module is installed. Main wires the system-specific effects.</summary>
+    public event Action<ModuleDef>? ModuleInstalled;
+    /// <summary>Raised when a module is removed. Main wires the system-specific effects.</summary>
+    public event Action<ModuleDef>? ModuleRemoved;
 
     /// <summary>Actions available at this instant. Empty when airborne or away from a site.</summary>
     public IReadOnlyList<SiteAction> Actions => _actions;
@@ -170,6 +176,9 @@ public sealed partial class SiteInteraction : Node
         if (site.Kind is SiteKind.Wreck or SiteKind.Depot or SiteKind.Farmstead or SiteKind.Airfield)
             AddSalvage(site, rec);
 
+        if (site.Kind is SiteKind.Workshop or SiteKind.Airfield)
+            AddRefit(site);
+
         if (site.Kind == SiteKind.Relay) AddTuneRelay(site);
         if (site.Kind == SiteKind.Overlook) AddSurvey(site);
         if (site.Kind == SiteKind.Settlement) AddAskAround(site);
@@ -295,11 +304,87 @@ public sealed partial class SiteInteraction : Node
                     if (_rng.Randf() < 0.18f) { Progress.Add(Stock.Fuel, 1); found += ", a full can"; }
                     if (_rng.Randf() < 0.12f) { Progress.Add(Stock.Medical, 1); found += ", a medical kit"; }
 
+                    // Module discovery: certain sites yield a specific module (D-011).
+                    // The module is determined by the site seed and drops on first search.
+                    string? modId = Loadout.ModuleAtSite(site.Id);
+                    if (modId is not null && Loadout.Find(modId))
+                    {
+                        var mod = Loadout.Catalog[modId];
+                        found += $", {mod.Name}!";
+                        Progress.Learn(new Knowledge(KnowledgeKind.Schematic,
+                            $"module.{modId}", mod.Name, mod.Description));
+                        Progress.Journal($"Found hardware: {mod.Name}. It can be installed at a workshop.");
+                    }
+
                     Progress.Journal($"Searched {site.Name}: {found}.");
                     Notice?.Invoke(found);
                 });
                 return true;
             }));
+    }
+
+    // --------------------------------------------------------------- refit (D-011)
+
+    private void AddRefit(Site site)
+    {
+        // Install: show one action per module in the bag that the player can afford.
+        foreach (var mod in Loadout.All)
+        {
+            if (!Loadout.InBag(mod.Id)) continue;
+            bool canPay = Progress.Amount(Stock.Parts) >= mod.PartsCost;
+            _actions.Add(new SiteAction(
+                $"Install {mod.Name}  -  {mod.PartsCost} parts",
+                canPay ? mod.Description : "You do not have the parts.",
+                () =>
+                {
+                    if (!canPay) return false;
+                    Progress.Spend(Stock.Parts, mod.PartsCost);
+                    BeginBusy($"Installing {mod.Name}", 8 + mod.Mass * 0.3, () =>
+                    {
+                        var def = Loadout.Install(mod.Id);
+                        if (def is null) return;
+
+                        // Physics: mass, drag, fuel capacity
+                        _heli.Sim.Airframe.Mass.Add($"mod_{def.Id}", def.Position, def.Mass);
+                        _heli.Sim.Airframe.DragArea += def.DragDelta;
+                        _heli.Sim.Airframe.FuelCapacity += def.FuelCapacityDelta;
+                        _heli.Sim.InvalidateMass();
+
+                        Progress.Journal($"Installed {def.Name} at {site.Name}.");
+                        Notice?.Invoke($"{def.Name} fitted");
+                        ModuleInstalled?.Invoke(def);
+                    });
+                    return true;
+                }, canPay));
+        }
+
+        // Remove: show one action per installed module.
+        foreach (var mod in Loadout.All)
+        {
+            if (!Loadout.IsInstalled(mod.Id)) continue;
+            _actions.Add(new SiteAction(
+                $"Remove {mod.Name}",
+                "Back in the bag.",
+                () =>
+                {
+                    BeginBusy($"Removing {mod.Name}", 6, () =>
+                    {
+                        var def = Loadout.Remove(mod.Id);
+                        if (def is null) return;
+
+                        // Reverse the physics
+                        _heli.Sim.Airframe.Mass.Remove($"mod_{def.Id}");
+                        _heli.Sim.Airframe.DragArea -= def.DragDelta;
+                        _heli.Sim.Airframe.FuelCapacity -= def.FuelCapacityDelta;
+                        _heli.Sim.InvalidateMass();
+
+                        Progress.Journal($"Removed {def.Name} at {site.Name}.");
+                        Notice?.Invoke($"{def.Name} removed");
+                        ModuleRemoved?.Invoke(def);
+                    });
+                    return true;
+                }));
+        }
     }
 
     private void AddTuneRelay(Site site)

@@ -40,8 +40,7 @@ public sealed partial class Main : Node3D
 
         QualityTier.DetectAndApply();
 
-        BuildSky();
-        BuildLighting();
+        SceneMood.Apply(this);
 
         _terrain = new TerrainStreamer
         {
@@ -205,83 +204,56 @@ public sealed partial class Main : Node3D
         _heli.Sim.Damage.Damaged += e =>
             GD.Print($"[damage] {e.Component} -{e.Amount:P0} ({e.Cause}) {e.Note}");
 
+        // Refit system (D-011): wire module-specific effects that span systems.
+        // Physics (mass, drag, fuel capacity) is handled by SiteInteraction directly;
+        // these hooks handle the game-system integrations.
+        _play.ModuleInstalled += mod =>
+        {
+            GD.Print($"[refit] installed {mod.Name} (+{mod.Mass:F0} kg)");
+            switch (mod.Id)
+            {
+                case "sas":
+                    _heli.SasAuthority = 1f;
+                    break;
+                case "rwr":
+                    _threats.Fit(Countermeasure.RadarWarning);
+                    break;
+                case "chaff":
+                    _threats.Fit(Countermeasure.Chaff, 30);
+                    break;
+                case "flares":
+                    _threats.Fit(Countermeasure.Flares, 30);
+                    break;
+                case "suppressor":
+                    _threats.Fit(Countermeasure.ExhaustSuppressor);
+                    break;
+            }
+        };
+
+        _play.ModuleRemoved += mod =>
+        {
+            GD.Print($"[refit] removed {mod.Name}");
+            switch (mod.Id)
+            {
+                case "sas":
+                    _heli.SasAuthority = 0f;
+                    break;
+                case "rwr":
+                    _threats.Unfit(Countermeasure.RadarWarning);
+                    break;
+                case "chaff":
+                    _threats.Unfit(Countermeasure.Chaff);
+                    break;
+                case "flares":
+                    _threats.Unfit(Countermeasure.Flares);
+                    break;
+                case "suppressor":
+                    _threats.Unfit(Countermeasure.ExhaustSuppressor);
+                    break;
+            }
+        };
+
         GD.Print("[main] Rotorwash flight test ready");
-    }
-
-    // ------------------------------------------------------------ environment
-
-    private void BuildSky()
-    {
-        var sky = new ProceduralSkyMaterial
-        {
-            SkyTopColor = new Color(0.26f, 0.36f, 0.48f),
-            SkyHorizonColor = new Color(0.72f, 0.70f, 0.62f),
-            GroundBottomColor = new Color(0.14f, 0.14f, 0.12f),
-            GroundHorizonColor = new Color(0.56f, 0.53f, 0.46f),
-            SunAngleMax = 26f,
-            SunCurve = 0.14f,
-            // A dusty sky: the horizon is pale and warm, the zenith is a muted blue.
-            // Clear deep-blue skies read as holiday; this one reads as weather.
-            SkyEnergyMultiplier = 0.95f,
-        };
-
-        var env = new Godot.Environment
-        {
-            BackgroundMode = Godot.Environment.BGMode.Sky,
-            Sky = new Sky { SkyMaterial = sky },
-            AmbientLightSource = Godot.Environment.AmbientSource.Sky,
-            AmbientLightSkyContribution = 1.0f,
-            AmbientLightEnergy = 1.15f,
-            TonemapMode = Godot.Environment.ToneMapper.Aces,
-            TonemapExposure = 1.12f,
-            SsaoEnabled = QualityTier.Current >= QualityTier.Tier.Medium,
-            GlowEnabled = QualityTier.Current >= QualityTier.Tier.Medium,
-            FogEnabled = true,
-            FogLightColor = new Color(0.66f, 0.65f, 0.60f),
-            FogDensity = 0.00085f,
-            FogAerialPerspective = 0.7f,
-            FogSkyAffect = 0.35f,
-
-            // Global grade. The world is drying out and coming apart, so the image is
-            // pulled off full saturation and warmed slightly. Applied here rather than in
-            // every material so one knob moves the whole look.
-            AdjustmentEnabled = true,
-            AdjustmentSaturation = 0.89f,
-            AdjustmentContrast = 1.06f,
-            AdjustmentBrightness = 1.0f,
-        };
-
-        // Realtime global illumination is the Ultra-tier feature. It is genuinely
-        // expensive on anything without hardware ray tracing, so the floor hardware gets
-        // the same scene lit by the same lights, just without the bounce.
-        if (QualityTier.Current >= QualityTier.Tier.Ultra)
-        {
-            env.SdfgiEnabled = true;
-            env.SdfgiUseOcclusion = true;
-            env.SsilEnabled = true;
-            env.VolumetricFogEnabled = true;
-            env.VolumetricFogDensity = 0.012f;
-        }
-
-        AddChild(new WorldEnvironment { Name = "WorldEnvironment", Environment = env });
-    }
-
-    private void BuildLighting()
-    {
-        var sun = new DirectionalLight3D
-        {
-            Name = "Sun",
-            LightEnergy = 1.25f,
-            LightColor = new Color(1.0f, 0.955f, 0.875f),
-            ShadowEnabled = true,
-            DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel4Splits,
-            DirectionalShadowMaxDistance = QualityTier.Current >= QualityTier.Tier.High ? 700 : 300,
-            ShadowBias = 0.04f,
-        };
-        // Mid-afternoon, sun over the shoulder of the default heading: enough elevation
-        // to light the ground, low enough to give terrain and airframes real form shadows.
-        sun.RotationDegrees = new Vector3(-46, 152, 0);
-        AddChild(sun);
     }
 
     // ------------------------------------------------------------- aircraft
@@ -318,7 +290,7 @@ public sealed partial class Main : Node3D
 
         // The airframe proper: a parametric loft rather than a pile of boxes.
         // See AirframeBuilder for why it is built this way.
-        AirframeBuilder.Build(heli, af, AirframeBuilder.DefaultMaterials(new Color(0.33f, 0.36f, 0.30f)));
+        AirframeBuilder.Build(heli, af, AirframeBuilder.DefaultMaterials(new Color(0.40f, 0.42f, 0.35f)));
 
         return heli;
     }
@@ -384,17 +356,16 @@ public sealed partial class Main : Node3D
             case Key.X:
                 if (!_threats.DispenseFlares()) GD.Print("[threat] no flares");
                 break;
-            case Key.F3:
-                // Bench fit, until the refit system exists. Every one of these is meant to
-                // be a thing you find and bolt on, not a key you press.
-                _threats.Fit(Countermeasure.RadarWarning);
-                _threats.Fit(Countermeasure.Chaff, 30);
-                _threats.Fit(Countermeasure.Flares, 30);
-                GD.Print("[threat] bench-fitted RWR, chaff and flares");
-                break;
             case Key.F2:
-                _heli.SasAuthority = _heli.SasAuthority > 0.5f ? 0f : 1f;
-                GD.Print($"[heli] stability augmentation {(_heli.SasAuthority > 0 ? "ENGAGED" : "off")}");
+                if (_play.Loadout.IsInstalled("sas"))
+                {
+                    _heli.SasAuthority = _heli.SasAuthority > 0.5f ? 0f : 1f;
+                    GD.Print($"[heli] stability augmentation {(_heli.SasAuthority > 0 ? "ENGAGED" : "off")}");
+                }
+                else
+                {
+                    GD.Print("[heli] no attitude hold unit installed");
+                }
                 break;
             case Key.Escape:
                 GetTree().Quit();
