@@ -218,6 +218,11 @@ public static class Program
         Run("nav_distance", NavigationTests.Distance);
         Run("nav_relbearing", NavigationTests.RelBearing);
         Run("nav_roundtrip", NavigationTests.RoundTrip);
+        Run("ceiling_degrades", CeilingTests.Degrades);
+        Run("ceiling_repair", CeilingTests.CapsRepair);
+        Run("ceiling_repairall", CeilingTests.CapsRepairAll);
+        Run("ceiling_reset", CeilingTests.Reset);
+        Run("ceiling_save", CeilingTests.SaveRoundTrip);
         Run("strip_enqueue", RadioStripTests.Enqueue);
         Run("strip_wordreveal", RadioStripTests.WordReveal);
         Run("strip_hold", RadioStripTests.Hold);

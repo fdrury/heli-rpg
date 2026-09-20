@@ -10,13 +10,17 @@ every choice and why; `docs/wiki/benchmarks/` is where it was measured against t
 
 **The core loop closes, people talk, the machine levels up, the map fills in, there is
 somewhere to go and a reason to get there — and now a voice on the radio that knows what
-you did, and a world that speaks to you in flight.** You can fly a physically simulated Huey across a streamed archipelago, find a
-named settlement, put it down, shut down, talk to whoever lives there, take a contract from
-the board, fly it, and come back for the payout. The main search — 12 authored beats about
-finding Sera Wray, a flight engineer, and a set of matched blades — gives the long-term
-pull; the contracts give the per-sortie purpose. Eight module bays, each felt in the flight
-model. The kneeboard's six pages show aircraft condition, knowledge, journal, map, active
-jobs, and the search thread — the four-leg ferry route that is the arc's spine.
+you did, a world that speaks to you in flight, and a clock on the airframe that makes
+every hour count.** You can fly a physically simulated Huey across a streamed archipelago,
+find a named settlement, put it down, shut down, talk to whoever lives there, take a
+contract from the board, fly it, and come back for the payout. The main search — 12
+authored beats about finding Sera Wray, a flight engineer, and a set of matched blades —
+gives the long-term pull; the contracts give the per-sortie purpose. The main rotor's
+repair ceiling falls with flight hours, so the aircraft you fly in hour fifteen genuinely
+shakes and genuinely will not hold a hot hover — and new blades are the one thing that
+fixes it. Eight module bays, each felt in the flight model. The kneeboard's six pages show
+aircraft condition, knowledge, journal, map, active jobs, and the search thread — the
+four-leg ferry route that is the arc's spine.
 
 **The world is eight islands** (D-077), 33 km corner to corner, with ten committed water
 crossings between them and one home island where The Pan and Long Acre join. Tier costs
@@ -251,6 +255,13 @@ METAR-style broadcast mentioning knots, the tell Doss described. This is the mom
 game stops being a sandbox: the world speaks to you in flight. `RadioStrip` lives in sim/
 (pure .NET, no Godot dependency); six simlab tests verify queue management, word-reveal
 timing, suppression, and the beat 5 gate. Story.md build order items 1–7 are now complete.
+
+**Rotor ceiling** — the clock on the search (D-086). `MainRotorCeiling` degrades with
+total flight hours (0.0019/h, floor 0.55) and caps how far `Repair` can restore the main
+rotor. At 94 h the ceiling is 82%; at 240 h it floors at 55% — flyable but rough. New
+blades (`ResetRotorHours`) reset it to 1.0, and that is the only event in the game that
+does. The kneeboard THREAD page shows the real ceiling and hours since track. Five simlab
+tests verify the formula, repair cap, RepairAll cap, reset, and save round-trip.
 
 **Look-around** — cockpit head-look (D-070). In cockpit mode the pilot can look around
 inside the airframe: middle-mouse drag, hat switch / D-pad, or numpad 4/6/8/2 slew the

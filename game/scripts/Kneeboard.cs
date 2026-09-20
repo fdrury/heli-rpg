@@ -743,12 +743,12 @@ public sealed partial class Kneeboard : Control
         Text(new Vector2(o.X + 6, y), "AIRBAND CANDIDATES", Faint, 12);
         Text(new Vector2(o.X + 200, y), $"{freqCount} of 34 logged", freqCol, 13);
 
-        // Main rotor condition
+        // Main rotor condition — the repair ceiling (story.md §1.3).
+        // This is the maximum health that repair can restore to, not the
+        // current health. It falls with flight hours and never recovers
+        // without new blades.
         y += 28;
-        double rotorHealth = sim.Damage.Health(Component.MainRotor);
-        double floor = DamageState.MainRotorFloor;
-        double ceiling = (rotorHealth - floor) / (1.0 - floor);
-        if (ceiling < 0) ceiling = 0;
+        double ceiling = sim.Damage.MainRotorCeiling;
         double hours = sim.Damage.TotalFlightHours;
 
         Color rotorCol = ceiling > 0.6 ? Good : ceiling > 0.3 ? Warn : Bad;

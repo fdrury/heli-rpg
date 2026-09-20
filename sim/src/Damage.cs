@@ -123,6 +123,18 @@ public sealed class DamageState
     public const double AvionicsFloor     = 0.35;
     public const double FuselageFloor     = 0.20;   // drag x1.44
 
+    // ------------------------------------------------------ rotor ceiling
+    //
+    // The repair ceiling on the main rotor (story.md §1.3). Repair can
+    // restore health up to this limit and no further. The ceiling falls
+    // with total flight hours, flooring at 0.55 — a flyable, unpleasant
+    // aircraft that never kills you and never locks you out.
+
+    /// <summary>Health lost per rotor-turning hour. 240 h drains 0.45.</summary>
+    public const double CeilingRate  = 0.0019;
+    /// <summary>The ceiling never falls below this. Still flyable, just rough.</summary>
+    public const double CeilingFloor = 0.55;
+
     /// <summary>The health at which a component stops doing its job.</summary>
     public static double UnserviceableAt(Component c) => c switch
     {
@@ -302,7 +314,8 @@ public sealed class DamageState
     /// </summary>
     public void Repair(Component c, double amount)
     {
-        _health[(int)c] = System.Math.Clamp(_health[(int)c] + amount, 0.0, 1.0);
+        double cap = c == Component.MainRotor ? MainRotorCeiling : 1.0;
+        _health[(int)c] = System.Math.Clamp(_health[(int)c] + amount, 0.0, cap);
         _pending[(int)c] = 0;
         if (c == Component.Transmission)
         {
@@ -316,7 +329,13 @@ public sealed class DamageState
 
     public void RepairAll()
     {
-        for (int i = 0; i < _health.Length; i++) { _health[i] = 1.0; _pending[i] = 0; }
+        double ceiling = MainRotorCeiling;
+        for (int i = 0; i < _health.Length; i++)
+        {
+            double cap = i == (int)Component.MainRotor ? ceiling : 1.0;
+            _health[i] = cap;
+            _pending[i] = 0;
+        }
         _chipLight = false;
         ResetSystems();
     }
@@ -591,6 +610,25 @@ public sealed class DamageState
     {
         get => _totalFlightHours;
         set => _totalFlightHours = value;
+    }
+
+    /// <summary>
+    /// The maximum health that <see cref="Repair"/> can restore the main rotor to.
+    /// Falls with flight hours at <see cref="CeilingRate"/> per hour, flooring at
+    /// <see cref="CeilingFloor"/>. New blades (<see cref="ResetRotorHours"/>) reset
+    /// it to 1.0. Story.md §1.3.
+    /// </summary>
+    public double MainRotorCeiling
+        => System.Math.Clamp(1.00 - CeilingRate * _totalFlightHours, CeilingFloor, 1.00);
+
+    /// <summary>
+    /// New blades installed: zero the hours, restore the ceiling to 1.0.
+    /// This is the only event in the game that does this (story.md §1.3).
+    /// </summary>
+    public void ResetRotorHours()
+    {
+        _totalFlightHours = 0;
+        _rotorSeconds = 0;
     }
 
     /// <summary>

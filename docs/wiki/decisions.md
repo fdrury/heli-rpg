@@ -2742,3 +2742,37 @@ works.
 **Reversibility:** high. Remove `RadioStrip.cs`, revert `SearchBeat.RadioText` and the
 inserted beat, remove `DrawRadioStrip` from FlightHud, and remove the three wiring lines
 in Main.cs. No other system depends on the radio strip.
+
+### D-086 — Main rotor repair ceiling: the clock on the search · 2026-09-20
+
+**Decision.** `DamageState.MainRotorCeiling` degrades linearly with `TotalFlightHours`
+at 0.0019 per hour, flooring at 0.55. `Repair` and `RepairAll` cannot push the main
+rotor past this ceiling. `ResetRotorHours()` zeros the hours and restores the ceiling
+to 1.0 — this is the payoff when new blades are installed, and the only event in the
+game that does it. Story.md §1.3.
+
+**Why this is the right mechanic.** The ceiling falls 0.45 over 240 rotor hours
+(~20 real hours with the rotor turning). It is already felt: `RotorThrustFactor`
+(0.80 + 0.20 × health) and `RotorImbalance` ((1 − health) × 0.09) are wired into the
+flight model, so a falling ceiling means the aircraft genuinely shakes and genuinely
+will not hold a hot out-of-ground-effect hover. At the floor (0.55), thrust factor is
+0.89 and imbalance is 0.041 — unpleasant but flyable, which meets D-007's "forgiving"
+requirement. The kneeboard THREAD page shows `ceiling 82% · 94 h since track` — a
+fact, not an inference (D-005a).
+
+**Constants:** `CeilingRate = 0.0019`, `CeilingFloor = 0.55`. The rate is a first
+estimate; story.md §1.3 recommends measuring it against a standard sortie profile at
+several ceiling values to validate the feel, the same way D-014 tuned terrain relief.
+
+**The kneeboard THREAD page** now reads the actual `DamageState.MainRotorCeiling`
+rather than deriving a proxy from current health. The bar and percentage reflect the
+repair limit, not the current condition — which is what the player needs to plan around.
+
+**Five simlab tests:** `ceiling_degrades` (formula at 0/94/120/240/1000 h),
+`ceiling_repair` (repair capped, other components unaffected), `ceiling_repairall`
+(RepairAll also capped), `ceiling_reset` (new blades restore 1.0), `ceiling_save`
+(round-trip through SaveData preserves hours and ceiling).
+
+**Reversibility:** high. Remove the ceiling constants and property, revert the one-line
+changes to `Repair`/`RepairAll`, revert the kneeboard to the health-derived proxy, and
+delete the test file. No other system depends on the ceiling.
