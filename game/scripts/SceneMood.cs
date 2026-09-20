@@ -67,6 +67,10 @@ public static class SceneMood
         // that needs edits to three other files in order to exist is a node that cannot be
         // added without a merge conflict.
         root.AddChild(new CockpitRadio { Name = "CockpitRadio" });
+        // D-080: acoustics and site ambience. The reverb bus must exist before any
+        // positional player routes to it, so EnvironmentAcoustics goes first.
+        root.AddChild(new EnvironmentAcoustics { Name = "EnvironmentAcoustics" });
+        root.AddChild(new SiteAmbience { Name = "SiteAmbience" });
     }
 
     private static WorldEnvironment BuildEnvironment()

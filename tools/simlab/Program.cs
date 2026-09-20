@@ -200,6 +200,12 @@ public static class Program
         Run("sling_hover", SlingTests.HoverCost);
         Run("sling_jettison", SlingTests.Jettison);
         Run("sling_bucket", SlingTests.Bucket);
+        Run("acoustics_open", AcousticsTests.OpenGround);
+        Run("acoustics_valley", AcousticsTests.Valley);
+        Run("acoustics_water", AcousticsTests.OverWater);
+        Run("acoustics_agl", AcousticsTests.HighAgl);
+        Run("acoustics_ambience", AcousticsTests.SiteAmbience);
+        Run("acoustics_wind", AcousticsTests.WindResponse);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 

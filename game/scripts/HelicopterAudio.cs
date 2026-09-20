@@ -66,6 +66,8 @@ public sealed partial class HelicopterAudio : Node3D
             // A helicopter is heard long before it is seen, and that is a gameplay fact:
             // anything with ears knows you are coming.
             MaxPolyphony = 1,
+            // D-080: route through the Reverb bus so the aircraft picks up terrain acoustics.
+            Bus = EnvironmentAcoustics.BusName,
         };
         AddChild(_player);
         _player.Play();

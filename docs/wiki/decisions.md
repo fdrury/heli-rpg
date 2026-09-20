@@ -2488,3 +2488,58 @@ valley with aircraft wreckage in it looks like.
 **Reversibility:** high. Revert the two edits — one line in IncidentsFor, one `if`
 block wrapping the ring-average loop in SitePads — and the old placement returns.
 The world is seed-generated and all constraints are verified by `--worldreport`.
+
+---
+
+### D-080 — Terrain-driven reverb and site ambient sound · 2026-09-20
+
+The audio benchmark's top gap: no reverb, no occlusion, and sites make no sound at all.
+Landing and shutting down produced total silence at exactly the moment the player is most
+receptive to being told where they are. This closes two of the five identified gaps.
+
+**Architecture** (sim layer, no Godot dependency):
+
+- **`AcousticSpace`** — samples the height field in two concentric rings (50 m and 200 m)
+  around the listener and computes enclosure, water proximity, reverb parameters (room
+  size, damping, wet level) and a distance low-pass frequency. A valley with walls rising
+  above the listener gives high enclosure; open ground and high AGL give none; water gives
+  low damping and broad reflections.
+
+- **`AmbientSynth`** — synthesises the voice of a place from its `SiteKind`. Settlements
+  get a generator drone (drifting ~58 Hz fundamental) and activity murmur. Wrecks get
+  metal creaking (impulsive noise at a wind-proportional rate). Relays get 50 Hz
+  transformer hum. All site kinds get wind-through-structures (whistle + rattle) scaled
+  by metal content and wind speed. A cooling tick fires when the aircraft is shut down at
+  a site. Overlooks are intentionally silent — the absence of sound IS their character.
+
+**Architecture** (game layer):
+
+- **`EnvironmentAcoustics`** — creates a "Reverb" audio bus in code, adds
+  `AudioEffectReverb` and `AudioEffectLowPassFilter`, and updates both each physics frame
+  from `AcousticSpace` output with 3 Hz smoothing.
+
+- **`SiteAmbience`** — manages one `AudioStreamPlayer3D` per nearby site (600 m audible
+  range), each fed by its own `AmbientSynth` instance. Positional, so the settlement
+  generator builds in the correct ear as you approach. Sites outside 800 m are released.
+
+- **Helicopter audio** routes through the Reverb bus so terrain acoustics shape the rotor
+  sound — a helicopter in a valley bounces off the walls.
+
+**Six simlab tests:**
+- `acoustics_open`: flat ground → near-zero enclosure and wet level
+- `acoustics_valley`: terrain rising above the listener → enclosure > 0.2
+- `acoustics_water`: terrain below water level → water proximity > 0.5
+- `acoustics_agl`: high AGL suppresses enclosure even with valley walls below
+- `acoustics_ambience`: every site kind produces bounded, non-clipping output; all except
+  Overlook are audible
+- `acoustics_wind`: wreck ambience is louder in wind (more creaking, rattling)
+
+**What this does NOT do** (deliberately deferred):
+- Occlusion (a building between you and the source attenuating it) — would require
+  per-source raycasts and the gain is small for the typical flyover listening distance
+- Doppler / distance timbre on the rotor (separate concern, not terrain-driven)
+- On-foot-specific audio (footsteps, ticking cooling aircraft at the player's ear)
+
+**Reversibility:** high. Remove the two `AddChild` lines in `SceneMood.Apply`, revert
+`HelicopterAudio.Bus` to "Master", and delete the four new files. No other system depends
+on the reverb bus.

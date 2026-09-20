@@ -97,8 +97,10 @@ on flat sheltered ground.
 blade slap sits at the blade-pass frequency the physics predicts and is loudest in a
 loaded turn. The announcer's voice is a formant-based murmur through a radio band-pass
 (D-078): nobody understands the words, but the rhythm and timbre read as a man on the
-radio. Carrier hiss between sentences. Four synth engines total: rotor, weather, warnings,
-voice.
+radio. Carrier hiss between sentences. Five synth engines total: rotor, weather, warnings,
+voice, ambient. Terrain-driven reverb sizes the space (valley, open, over water) and
+every site kind has its own voice — generators at settlements, creaking metal at wrecks,
+transformer hum at relays — so landing and shutting down tells you where you are (D-080).
 
 **Threat** — five classes, each owning an altitude band, with real terrain masking: a ray
 walked from every emitter to the aircraft through the actual height field. A SAM cannot see
@@ -328,10 +330,15 @@ lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, a
    floor, and `SitePads` no longer ring-averages wreck heights (a crash site sits where
    it came down). DrowningWreck (#60 Salt Sink) now sits at −10.1 m, 5.1 m below the
    waterline. Zero shortfalls, 16/16 story roles bound, zero problems.
-8. **The world has no acoustics.** Still the top item in `benchmarks/audio.md`: no reverb,
-   no occlusion, and sites make no sound at all. Landing somewhere and shutting down
-   produces silence at exactly the moment the player is most receptive to being told where
-   they are.
+8. ~~**The world has no acoustics.**~~ **DONE** (D-080). `AcousticSpace` samples the terrain
+   height field in two rings around the listener, computing enclosure and water proximity,
+   which drive a dynamically configured reverb bus (room size, damping, wet level) and a
+   distance low-pass filter. `AmbientSynth` gives every site kind its own voice: generator
+   drone + activity murmur (settlements), metal creaking (wrecks), electrical hum (relays),
+   wind through structures, and a cooling tick when the aircraft shuts down at a site. Both
+   live in `sim/` with no Godot dependency; six simlab tests verify open ground, valley,
+   water, AGL fade, every site kind's waveform, and wind response. The helicopter audio now
+   routes through the Reverb bus so terrain acoustics shape its sound.
 
 ## Open questions for Fred
 
