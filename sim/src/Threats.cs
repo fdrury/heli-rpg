@@ -105,6 +105,16 @@ public sealed class ThreatField
     public int ChaffRemaining { get; set; }
     public int FlaresRemaining { get; set; }
 
+    /// <summary>
+    /// Regional readiness. When set, detection range stretches and reaction time shrinks
+    /// in regions that have seen the aircraft before. The mapping from emitter ID to region
+    /// ID is supplied by the game layer via <see cref="EmitterRegion"/>.
+    /// </summary>
+    public AlertState? Alert { get; set; }
+
+    /// <summary>Maps an emitter ID to its region ID, for alert lookups.</summary>
+    public Func<int, int>? EmitterRegion { get; set; }
+
     /// <summary>Raised when something actually hits.</summary>
     public event Action<ThreatEvent>? Struck;
 
@@ -227,7 +237,18 @@ public sealed class ThreatField
             t.Range = Math.Sqrt(dn * dn + de * de);
             t.BearingFromAircraft = Airfoil.WrapPi(Math.Atan2(-de, -dn) - heading);
 
-            bool inRange = t.Range < e.DetectionRange;
+            // Alert stretches detection range modestly — enough to feel, not enough to
+            // redraw routes the player has already learned. See AlertState.DetectionScale.
+            double detScale = 1.0;
+            double reactScale = 1.0;
+            if (Alert is not null && EmitterRegion is not null)
+            {
+                int rid = EmitterRegion(e.Id);
+                detScale = Alert.DetectionScale(rid);
+                reactScale = Alert.ReactionScale(rid);
+            }
+
+            bool inRange = t.Range < e.DetectionRange * detScale;
             t.InAltitudeBand = altitudeAgl >= e.MinAltitude && altitudeAgl <= e.MaxAltitude;
             t.LineOfSight = inRange && lineOfSight(e);
 
@@ -302,7 +323,7 @@ public sealed class ThreatField
                 && e.Kind != ThreatKind.SearchRadar
                 && e.Kind != ThreatKind.Aerostat
                 && t.Range < e.EngagementRange
-                && t.TimeInState > LaunchDelay(e.Kind))
+                && t.TimeInState > LaunchDelay(e.Kind) * reactScale)
             {
                 t.State = TrackState.Engaging;
                 t.TimeInState = 0;

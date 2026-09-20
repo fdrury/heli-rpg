@@ -2051,3 +2051,45 @@ because the payout comes from the settlement.
 dependency; removing it restores the pre-D-056 behaviour with no other changes needed.
 The `Cleared` field in `SiteRecord` is additive and ignored when the encounter system is
 absent. Six simlab tests cover the rules.
+
+---
+
+## D-057: regional alert state
+
+**Decision:** Being detected by threat emitters raises a region's readiness. Readiness
+persists across sorties and feeds back into the threat system as two effects:
+`DetectionScale` (detection range ×1.0 to ×1.25) and `ReactionScale` (launch delay ×1.0
+to ×0.5). Six-hour game-time half-life.
+
+**What it does:**
+
+* `ThreatWorld._PhysicsProcess` calls `AlertState.Detected(regionId, realDelta)` for every
+  emitter that has line-of-sight and confidence above 0.05. Real-time delta so a single
+  crossing reads as ~0.30 ("someone saw you") rather than near-1.0 under the 12× game
+  clock.
+* `AlertState.Decay(gameDelta)` runs every frame with game-time delta, giving the six-hour
+  half-life in game-hours — a night's rest (30 real minutes) roughly halves it.
+* Launches call `Engaged(regionId)` for a one-time spike of 0.12.
+* `ThreatField.Update` multiplies detection range by `DetectionScale` and launch delay by
+  `ReactionScale`, both looked up via a cached emitter→region mapping built at placement.
+* The kneeboard MAP header shows raised regions by name and phrase from
+  `AlertState.Describe`.
+* `SaveData.AlertLevels` persists the regional readiness through save/load; absence of the
+  field in an old save is quiet, which is the correct default.
+
+**Why this design:**
+
+The threat system had no memory — the tenth flight through a valley cost exactly what the
+first did. D-008 and D-010 say there is only one aircraft in the world, so being seen
+should be information that persists. The saturating formula (rising additions are dampened
+by `1 - level`) prevents unbounded stacking — twenty passes is only 1.6× worse than five,
+not four times. Effects are bounded: detection never stretches beyond ×1.25 (enough to feel,
+not enough to redraw routes), and reaction never falls below ×0.5 (terrain masking still
+works, just needs more margin). The split time base (real-time detection, game-time decay)
+was calibrated against the 12× clock so that a transit-length exposure reads as "noticed"
+and staying away for one game-day clears most of it.
+
+**Reversibility:** high. Setting `ThreatField.Alert` to null restores the pre-D-057
+behaviour. `DetectionScale` returns 1.0 and `ReactionScale` returns 1.0 when alert is null.
+The `AlertLevels` field in `SaveData` is optional and ignored when absent. Four existing
+simlab tests verify the alert model; one new test (`save_alert`) verifies the round trip.

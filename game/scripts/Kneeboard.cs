@@ -243,8 +243,26 @@ public sealed partial class Kneeboard : Control
         if (_fog is null) return;
 
         Text(o, "CHART", Ink, 17);
-        Text(o + new Vector2(0, 22),
-             $"{_fog.RevealedFraction:P0} surveyed", Faint, 12);
+
+        // Alert readout: which regions are expecting you
+        string alertLine = "";
+        if (_threats?.Alert is AlertState alert)
+        {
+            foreach (var kv in alert.Raised(0.05))
+            {
+                int rid = kv.Key;
+                if (rid >= 0 && rid < WorldMap.Regions.Count)
+                {
+                    string name = WorldMap.Regions[rid].Name;
+                    string desc = AlertState.Describe(kv.Value);
+                    alertLine += (alertLine.Length > 0 ? " · " : "") + $"{name}: {desc}";
+                }
+            }
+        }
+
+        string subtitle = $"{_fog.RevealedFraction:P0} surveyed";
+        if (alertLine.Length > 0) subtitle += "    " + alertLine;
+        Text(o + new Vector2(0, 22), subtitle, Faint, 12);
 
         // Fit a square map into the available body area
         float bodyW = sheet.Size.X - 60;

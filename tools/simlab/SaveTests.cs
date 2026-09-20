@@ -224,6 +224,40 @@ public static class SaveTests
         return null;
     }
 
+    /// <summary>Alert levels: raised regions survive the round trip.</summary>
+    public static string? AlertRoundTrip()
+    {
+        var alert = new AlertState();
+        for (double t = 0; t < 120; t += 0.1) alert.Detected(3, 0.1);
+        alert.Engaged(3);
+        alert.Detected(5, 30);
+        double before3 = alert.Level(3);
+        double before5 = alert.Level(5);
+
+        var save = new SaveData();
+        save.CaptureAlert(alert);
+        string json = save.ToJson();
+
+        var loaded = SaveData.FromJson(json);
+        if (loaded is null) return "deserialisation returned null";
+
+        var restored = new AlertState();
+        loaded.ApplyAlert(restored);
+
+        double after3 = restored.Level(3);
+        double after5 = restored.Level(5);
+        double after0 = restored.Level(0);
+
+        if (Math.Abs(after3 - before3) > 0.001)
+            return $"region 3: {before3:F4} -> {after3:F4}";
+        if (Math.Abs(after5 - before5) > 0.001)
+            return $"region 5: {before5:F4} -> {after5:F4}";
+        if (after0 > 0.001)
+            return $"region 0 should be quiet but is {after0:F4}";
+
+        return null;
+    }
+
     /// <summary>Full SaveData: serialise everything, deserialise, verify key fields.</summary>
     public static string? FullRoundTrip()
     {

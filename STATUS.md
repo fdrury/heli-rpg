@@ -225,6 +225,15 @@ the display. When any module is installed or removed, a numeric delta card brief
 mass, fuel capacity, drag changes and resulting total weight, so the trade is legible. The
 attitude indicator and right panel (Nr, torque, fuel) are always visible.
 
+**Alert state** — regional readiness driven by the threat field (D-057). Being detected
+by an emitter raises that region's readiness; being engaged spikes it; readiness decays
+with a six-hour game-time half-life. Two effects feed back into the threat system:
+`DetectionScale` stretches emitter detection range by up to 25% and `ReactionScale`
+halves launch delay at full readiness, so a region you have been through before reacts
+faster without redrawing routes the player has already learned. The kneeboard MAP page
+shows raised regions by name and phrase. Alert levels persist through save/load. One
+new simlab test (`save_alert`) verifies the round trip.
+
 **Autorotation investigation closed** (D-054). The "glides half as far" gap was three
 problems: (1) the autoglide test rig drifted sideways (no lateral channel in the autopilot
 demand), inflating drag by 13.5 m² of side area; (2) the 4:1 reference is a rule-of-thumb
@@ -262,20 +271,12 @@ Six agents are working in parallel right now on: salvage integration, the coning
 lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, and water.
 **Do not start any of those.** These are the things nobody is holding:
 
-0. **`SiteInteraction.cs` is the bottleneck — clear it first.** Four finished, tested
-   systems are waiting on hooks in that one file: salvage yields, the 430 lines of named
-   NPC dialogue, the richer generic register, and knowledge-on-search. All four are written
-   out precisely at the top of `docs/wiki/integration-debt.md`. Do them in one pass. The
-   salvage one in particular is the *only* thing between a complete economy and the game.
-1. **Wire `StoryPlaces` into `SiteInteraction`.** The role→site bindings resolve (16/16) and
-   nothing consults them. `StoryPlaces.For(site.Id)` gives `NpcId`/`NpcName` for
-   `GetOrCreateNpc`, and `GrantsOnSearch` for `AddSalvage`. The patch is written out at the
-   end of `docs/wiki/integration-debt.md`.
-2. **Wire `AlertState` into the world.** `sim/src/Alert.cs` gives each region a readiness
-   that rises when you are seen and decays over six hours, with `DetectionScale` and
-   `ReactionScale` meant to feed the threat envelopes — and nothing calls it. It needs
-   driving from wherever threats are updated, persisting in the save, and a line on the
-   kneeboard (`AlertState.Describe` returns the phrase).
+0. ~~**`SiteInteraction.cs` bottleneck.**~~ **DONE.** All four hooks (salvage yields, named
+   NPCs, richer generic register, knowledge-on-search) are wired in.
+1. ~~**Wire `StoryPlaces` into `SiteInteraction`.**~~ **DONE.** `StoryPlaces.For(site.Id)` is
+   consulted in both `GetOrCreateNpc` and `AddSalvage`.
+2. ~~**Wire `AlertState` into the world.**~~ **DONE.** Driven from ThreatWorld, feeds
+   DetectionScale/ReactionScale into the threat field, persisted in save, shown on kneeboard.
 3. **Contract depth.** The board exists. Contracts that use the world state that now exists
    — carry this part to that workshop, fly someone to a place that is currently quiet —
    would connect mission structure to salvage and alert rather than sitting beside them.

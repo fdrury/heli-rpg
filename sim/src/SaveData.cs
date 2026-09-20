@@ -62,6 +62,14 @@ public sealed class SaveData
     public int FlaresRemaining { get; set; }
     public List<int> DetectedEmitters { get; set; } = new();
 
+    /// <summary>
+    /// Regional readiness levels that outlive the sortie. Keyed by region ordinal
+    /// (RegionKind cast to int); values are 0 to 1. Regions that have calmed below 1e-4
+    /// are omitted. A save written before this field existed will load with all regions
+    /// quiet, which is correct — alert is the kind of state where absence is the default.
+    /// </summary>
+    public Dictionary<string, double> AlertLevels { get; set; } = new();
+
     // ---- fog of war ----
     public byte[]? FogGrid { get; set; }
 
@@ -235,6 +243,21 @@ public sealed class SaveData
     }
 
     public void ApplyLoadout(Loadout l) => l.Restore(Installed, Bag);
+
+    public void CaptureAlert(AlertState alert)
+    {
+        AlertLevels.Clear();
+        foreach (var kv in alert.Raised(0.001))
+            AlertLevels[kv.Key.ToString()] = kv.Value;
+    }
+
+    public void ApplyAlert(AlertState alert)
+    {
+        alert.Clear();
+        foreach (var (key, level) in AlertLevels)
+            if (int.TryParse(key, out int rid))
+                alert.Set(rid, level);
+    }
 
     public static NpcSave CaptureNpc(int siteId, NpcMind npc, DialogueBank bank)
     {

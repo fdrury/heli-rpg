@@ -30,6 +30,7 @@ public sealed partial class ThreatWorld : Node
     [Export] public float LosInterval { get; set; } = 0.30f;
 
     public ThreatField Field { get; } = new();
+    public AlertState Alert { get; } = new();
 
     /// <summary>
     /// Switch the whole field off. Used by the bridge self-test, which measures control
@@ -42,6 +43,7 @@ public sealed partial class ThreatWorld : Node
     private HelicopterController _heli = null!;
     private SiteInteraction? _play;
     private readonly Dictionary<int, bool> _losCache = new();
+    private readonly Dictionary<int, int> _emitterRegion = new();
     private double _losTimer;
     private double _rwrSilenceTimer;
 
@@ -56,12 +58,18 @@ public sealed partial class ThreatWorld : Node
 
         Place();
 
+        Field.Alert = Alert;
+        Field.EmitterRegion = eid => _emitterRegion.GetValueOrDefault(eid, 0);
+
         Field.Struck += OnStruck;
         Field.Launch += t =>
         {
             IncomingWarning = t;
             IncomingAge = 0;
             GD.Print($"[threat] LAUNCH from {t.Emitter.Name} ({t.Emitter.Kind}) at {t.Range:F0} m");
+            // Being engaged is loud — the region is now very awake.
+            if (_emitterRegion.TryGetValue(t.Emitter.Id, out int rid))
+                Alert.Engaged(rid);
         };
         Field.FirstDetection += OnFirstDetection;
 
@@ -100,7 +108,9 @@ public sealed partial class ThreatWorld : Node
                 var pos = site.Position + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
 
                 // Sim world is NED: north = -godot Z, east = +godot X.
-                Field.Add(ThreatField.Make(id++, $"{site.Name} {Label(kind)}", kind, -pos.Y, pos.X));
+                int eid = id++;
+                _emitterRegion[eid] = (int)site.Region;
+                Field.Add(ThreatField.Make(eid, $"{site.Name} {Label(kind)}", kind, -pos.Y, pos.X));
             }
         }
 
@@ -112,7 +122,9 @@ public sealed partial class ThreatWorld : Node
             if (region.Tier < 3) continue;
             Site? host = WorldMap.Nearest(region.Centre, SiteKind.Overlook);
             if (host is null) continue;
-            Field.Add(ThreatField.Make(id++, $"{region.Name} aerostat", ThreatKind.Aerostat,
+            int aeid = id++;
+            _emitterRegion[aeid] = (int)region.Kind;
+            Field.Add(ThreatField.Make(aeid, $"{region.Name} aerostat", ThreatKind.Aerostat,
                                        -host.Position.Y, host.Position.X));
         }
     }
@@ -161,6 +173,19 @@ public sealed partial class ThreatWorld : Node
             speed: _heli.Sim.Telemetry.AirspeedTrue,
             dt: delta,
             lineOfSight: e => _losCache.GetValueOrDefault(e.Id));
+
+        // Alert: emitters that see you raise their region's readiness.
+        // Real-time dt for detection (calibrated against actual exposure), game-time dt
+        // for decay (so a six-hour half-life is six game-hours, not six real-hours).
+        foreach (ThreatTrack t in Field.Tracks)
+        {
+            if (t.LineOfSight && t.Confidence > 0.05 && t.InAltitudeBand
+                && _emitterRegion.TryGetValue(t.Emitter.Id, out int rid))
+            {
+                Alert.Detected(rid, delta);
+            }
+        }
+        Alert.Decay(delta * 12.0);
     }
 
     /// <summary>

@@ -104,6 +104,13 @@ public sealed class AlertState
     /// <summary>Forget everything. For a new game, not for a new sortie.</summary>
     public void Clear() => _level.Clear();
 
+    /// <summary>Restore a region's readiness from a save file.</summary>
+    public void Set(int regionId, double level)
+    {
+        if (level > 1e-4) _level[regionId] = Math.Clamp(level, 0.0, 1.0);
+        else _level.Remove(regionId);
+    }
+
     // ----------------------------------------------------------------- effects
 
     /// <summary>

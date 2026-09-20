@@ -57,46 +57,28 @@ which modules. `Salvage` uses a fixed integer mix for exactly that reason.
 
 ---
 
-## ⚠ `SiteInteraction.cs` is the bottleneck — four systems wait on one file
+## ~~⚠ `SiteInteraction.cs` is the bottleneck~~ **ALL FOUR DONE**
 
-Salvage, the nine NPC voices, the authored story sites and search-knowledge grants **all**
-need hooks in `game/scripts/SiteInteraction.cs`, and every one of them is finished and
-tested on the other side. Whoever next holds that file should do all four in one pass; they
-are a few lines each and they interlock.
+All four hooks are now wired in `SiteInteraction.cs`:
 
-**1. Salvage yields.** `AddSalvage` (line ~278) still rolls its own `switch` on `SiteKind`
-with its own RNG, so found parts arrive as `Stock.Parts` at a nominal 6.5 kg and nothing ever
-enters `Progress.Cargo`. Replace with `Salvage.SearchesAt` / `Salvage.Search` using
-`(SalvageSiteKind)(int)site.Kind` and `site.Tier` — the two enums are kept in the same
-declaration order so the cast is valid. **This is the only thing between the salvage economy
-and the game.** Everything downstream already works: mass (a 200 kg haul costs 625 m of
-hover ceiling), fitting, wear (unairworthy at 53 flight hours) and the save.
-
-**2. Named NPCs.** `GetOrCreateNpc` (line ~679) hands everyone the same generic bank. The
-nine named characters now have 430 authored lines between them:
-`DialogueCorpus.Named(storySite.NpcId)` where `StoryPlaces.For(site.Id)` returns a
-`StorySite`.
-
-**3. The richer generic register.** For everyone else, one line:
-`DialogueCorpus.Settler(site.Id, site.Name, (DialogueCorpus.RegionTag)(int)site.Region, (SiteKindTag)(int)site.Kind)`
-plus the matching `SettlerLines(...)`. `RegionTag` mirrors `RegionKind` in declaration order
-for exactly that cast. Generic people currently sound identical in an Ashfield fuel cache and
-a Basin farmstead.
-
-**4. Knowledge on search.** `StoryPlaces.For(site.Id)?.GrantsOnSearch` should be granted when
-a story site is searched — that is how the search thread advances from places rather than
-from visit counts.
+1. ~~**Salvage yields.**~~ `AddSalvage` calls `Salvage.SearchesAt`/`Salvage.Search` and puts
+   `SalvagePart` into `Progress.Cargo`.
+2. ~~**Named NPCs.**~~ `GetOrCreateNpc` consults `StoryPlaces.For(site.Id)` and
+   `DialogueCorpus.Named(npcId)`.
+3. ~~**Richer generic register.**~~ `DialogueCorpus.Settler` and `SettlerLines` with
+   `RegionTag` and `SiteKindTag`.
+4. ~~**Knowledge on search.**~~ `StoryPlaces.For(site.Id)?.GrantsOnSearch` is granted in
+   `AddSalvage`.
 
 ---
 
-## `AlertState` → nothing drives it
+## ~~`AlertState` → nothing drives it~~ **DONE** (D-057)
 
-`sim/src/Alert.cs` gives every region a readiness that rises while the player is detected,
-jumps when they are engaged, and decays with a six-hour half-life; `DetectionScale` and
-`ReactionScale` are meant to feed the threat envelopes. **Nothing calls any of it.** It needs
-driving from wherever threats update, persisting in the save, and a line on the kneeboard
-(`AlertState.Describe` returns the phrase). The radio announcer is being written to gossip
-about which regions have seen the aircraft, so this also has a second consumer waiting.
+`ThreatWorld` now drives `AlertState`: detection per emitter with LOS, engagement spikes on
+launch, game-time decay every frame. `DetectionScale` and `ReactionScale` feed into
+`ThreatField.Update` via cached emitter→region mapping. Persisted in `SaveData.AlertLevels`.
+Kneeboard MAP header shows raised regions. The radio announcer (`RadioDj`) already reads
+`AlertState.Raised()` — it now has live data to work with.
 
 ---
 
