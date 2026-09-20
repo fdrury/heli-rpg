@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace Rotorwash.Sim;
@@ -117,6 +118,10 @@ public enum DjTopic
     TemperatureNote,
     /// <summary>Cloud base, when it is on the deck.</summary>
     CeilingNote,
+    /// <summary>What the pilot has been doing, as the district heard about it.</summary>
+    Deed,
+    /// <summary>Something the pilot did a while ago, brought up again unprompted.</summary>
+    DeedCallback,
     /// <summary>The time of year.</summary>
     Season,
     /// <summary>The time of day, as a mood rather than a number.</summary>
@@ -278,6 +283,59 @@ public readonly record struct DjRegionHeat(string Name, double Level)
 /// that never existed, the game layer can throttle how often it assembles one, and nothing
 /// in this file can reach into a system it does not own and read something it should not.
 /// </summary>
+/// <summary>
+/// A thing the pilot did that somebody might have seen.
+///
+/// The station is the only voice in the world that talks back to the player, and the cheap
+/// version of that is a feed: the game tells the announcer what happened and he reads it
+/// out. That version is worthless within an hour, because the player learns he is listening
+/// to his own event log with an accent on it.
+///
+/// What makes it worth building is the gap between what the player did and what the district
+/// heard. The station has no telemetry. It has a man in a hut with a card index and a
+/// neighbour, and everything he knows arrived by somebody walking over and telling him. So a
+/// deed is not news the moment it happens - it needs someone to have seen it, it needs time
+/// to travel, it goes stale, and the number in it drifts on the way.
+/// </summary>
+public enum DjDeedKind
+{
+    /// <summary>Cargo put down where people were waiting for it.</summary>
+    Delivered,
+    /// <summary>Bucket work. Everybody sees a helicopter dropping water.</summary>
+    WaterDrop,
+    /// <summary>Somebody brought out.</summary>
+    Rescued,
+    /// <summary>Put it down hard, and walked away from it.</summary>
+    Crashed,
+    /// <summary>Came home with holes in it.</summary>
+    ShotAt,
+    /// <summary>Stripped a wreck for parts.</summary>
+    Salvaged,
+    /// <summary>Turned work down.</summary>
+    Declined,
+    /// <summary>Came over low enough to take the washing off the line.</summary>
+    Buzzed,
+}
+
+/// <summary>
+/// One deed, as it happened. What the announcer says about it is a different thing - see
+/// <see cref="RadioDj.AsTold"/>.
+/// </summary>
+/// <param name="Kind">What was done.</param>
+/// <param name="AtClockSeconds">When, in game time.</param>
+/// <param name="Place">Where, named the way people name it. Null means nobody can place it,
+/// and a line that needs a place will not be drawn - the announcer never invents one.</param>
+/// <param name="Amount">Whatever the line wants a figure for: sacks, litres, people. The
+/// figure the announcer gives is not this one.</param>
+/// <param name="Witnesses">How many people saw it. Zero means it never happened as far as
+/// the district is concerned, however dramatic it was.</param>
+public readonly record struct DjDeed(
+    DjDeedKind Kind,
+    double AtClockSeconds,
+    string? Place = null,
+    double Amount = 0,
+    int Witnesses = 1);
+
 public readonly record struct DjWorld(
     double ClockSeconds,
     SkyCondition Sky,
@@ -291,7 +349,8 @@ public readonly record struct DjWorld(
     IReadOnlyList<DjRegionHeat> Heat,
     bool SearchComplete,
     string? TrackTitle,
-    string? TrackArtist)
+    string? TrackArtist,
+    IReadOnlyList<DjDeed>? Deeds = null)
 {
     /// <summary>Hour of the day, 0..24, fractional.</summary>
     public double Hour => (ClockSeconds / 3600.0) % 24.0;
@@ -509,6 +568,90 @@ public static class RadioDj
     /// unhurried news-reading rather than advertising - the right pace for a man with more
     /// airtime than material, and slow enough that the strip is readable at 100 kt.
     /// </summary>
+    // ------------------------------------------------------------------ deeds
+
+    /// <summary>
+    /// How long word takes to reach the mast. Forty minutes.
+    ///
+    /// Not a delay for its own sake. It is what stops the station being a HUD element: if
+    /// the announcer mentions the drop while the player is still in the climb-out, the
+    /// player learns the radio is wired to the game and stops hearing a person. Forty
+    /// minutes means he is always talking about the sortie before last, which is exactly
+    /// how a district actually sounds, and it means a player who wants to hear about
+    /// himself has to keep the station on rather than listen for a cue.
+    /// </summary>
+    public const double DeedTravelSeconds = 40 * 60.0;
+
+    /// <summary>After three days it is not news any more. It may still be brought up.</summary>
+    public const double DeedStaleSeconds = 3 * 86400.0;
+
+    /// <summary>After three weeks even he stops bringing it up.</summary>
+    public const double DeedCallbackSeconds = 21 * 86400.0;
+
+    /// <summary>
+    /// Whether the station could know about this yet.
+    ///
+    /// Three ways to fail, and the first is the one that matters: <b>nobody saw it</b>. A
+    /// player who takes the long way round over empty country and puts a load down at a
+    /// place with two people in it does not get talked about, and that is a real and
+    /// earnable thing rather than a punishment - it is the same honesty as
+    /// <c>ThreatWorld.Perceivable</c>, where a MANPADS that never fired is a MANPADS the
+    /// crew never knew about.
+    /// </summary>
+    public static bool Knowable(in DjDeed deed, double nowSeconds)
+    {
+        if (deed.Witnesses <= 0) return false;
+        double age = nowSeconds - deed.AtClockSeconds;
+        return age >= DeedTravelSeconds && age <= DeedStaleSeconds;
+    }
+
+    /// <summary>Old enough that he is reminiscing rather than reporting.</summary>
+    public static bool Callbackable(in DjDeed deed, double nowSeconds)
+    {
+        if (deed.Witnesses <= 0) return false;
+        double age = nowSeconds - deed.AtClockSeconds;
+        return age > DeedStaleSeconds && age <= DeedCallbackSeconds;
+    }
+
+    /// <summary>
+    /// The figure as the district tells it, which is not the figure.
+    ///
+    /// A number that has been through four people is not the number any more, and the drift
+    /// is the joke: he reports fifty-one sacks with total confidence because that is what he
+    /// was told, and the player knows perfectly well it was forty.
+    ///
+    /// Two properties this has to have. It must be <b>deterministic in the deed</b> - a
+    /// rumour is a fixed wrong story, not a fresh wrong story each time he mentions it, and
+    /// an announcer who says a different number every airing is broken rather than
+    /// unreliable. And the drift must <b>shrink as witnesses rise</b>: a thing forty people
+    /// watched comes through nearly straight, and a thing one person half-saw from a field
+    /// arrives embroidered. That makes the distortion information - how far off he is tells
+    /// the player how alone he was out there.
+    /// </summary>
+    public static double AsTold(in DjDeed deed)
+    {
+        if (deed.Amount <= 0) return deed.Amount;
+
+        // splitmix64 on the deed's identity. Not Random: this must be stable across runs,
+        // across saves and across .NET versions (the same reason Salvage mixes by hand).
+        ulong x = (ulong)(long)Math.Round(deed.AtClockSeconds * 1000.0);
+        x ^= (ulong)(int)deed.Kind * 0x9E3779B97F4A7C15UL;
+        x ^= (ulong)(deed.Place?.GetHashCode() ?? 0) * 0xBF58476D1CE4E5B9UL;
+        x += 0x9E3779B97F4A7C15UL;
+        ulong z = x;
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+        z ^= z >> 31;
+        double unit = (z >> 11) * (1.0 / 9007199254740992.0);   // [0,1)
+
+        // +/-35% at a single witness, falling away as the square root of the crowd.
+        double spread = 0.35 / Math.Sqrt(Math.Max(deed.Witnesses, 1));
+        double told = deed.Amount * (1.0 + (unit * 2.0 - 1.0) * spread);
+
+        // People report round numbers. Nobody says "forty-one point three sacks".
+        return told >= 20 ? Math.Round(told / 5.0) * 5.0 : Math.Round(told);
+    }
+
     public const double WordsPerSecond = 2.55;
 
     /// <summary>A beat either side of a line, so segments do not run into each other.</summary>
@@ -534,8 +677,11 @@ public static class RadioDj
 /// asserting a count and hoping.
 ///
 /// Tokens: <c>{REGION}</c> a region that has actually seen the aircraft, <c>{CALLER}</c> a
-/// listener, <c>{NEIGHBOUR}</c> the man over the fence, <c>{TRACK}</c> what is playing. Every
-/// one has a fallback in <see cref="DjHost.Resolve"/>; none may ever reach the strip unfilled.
+/// listener, <c>{NEIGHBOUR}</c> the man over the fence, <c>{TRACK}</c> what is playing,
+/// <c>{PLACE}</c> where a deed happened and <c>{AMOUNT}</c> the figure as the district tells
+/// it. Every one has a fallback in <see cref="DjHost.Resolve"/>; none may ever reach the
+/// strip unfilled. <c>{REGION}</c>, <c>{PLACE}</c> and <c>{AMOUNT}</c> drop the whole line
+/// rather than fall back, because the fallback for a place is inventing one.
 /// </summary>
 public static class DjCorpus
 {
@@ -731,6 +877,122 @@ public static class DjCorpus
         "Warm, and close with it. There will be something in it later. There usually is when it goes close like this.",
         "Above average temperature. Considerably. I have a card from eleven years ago with the same figure on it and I have it out on the desk, looking at me.",
         "Warm. The dog has gone under the hut and will not be coming out, and I have decided to interpret that as the forecast.");
+
+
+    // ------------------------------------------------------------------ deeds
+
+    /// <summary>
+    /// What the district heard the pilot had been doing.
+    ///
+    /// The register is deliberately not congratulation. He does not know the player, does
+    /// not address the player, and has no idea anybody is listening in a cockpit - he is
+    /// reading out what someone told him over the fence, at the same weight as the market
+    /// report and the business with the gate. That distance is the whole effect: being
+    /// talked about by somebody who is not talking TO you is how you find out that a world
+    /// noticed you.
+    ///
+    /// <c>{AMOUNT}</c> is the figure as told, not the figure as flown - see
+    /// <see cref="RadioDj.AsTold"/>.
+    /// </summary>
+    public static readonly Dictionary<DjDeedKind, DjLine[]> Deed = new()
+    {
+        [DjDeedKind.Delivered] = Keyed(DjTopic.Deed, "Delivered",
+            "The helicopter put a load into {PLACE}. {AMOUNT} sacks, I am told, though I am also told by {NEIGHBOUR} that it was nothing like {AMOUNT} sacks, and I am reading the card I was given.",
+            "A delivery by air at {PLACE} this week. {CALLER} says the pilot did not get out of it, just set it down, waited, and went. I do not know what I expected.",
+            "They had the helicopter in at {PLACE} with {AMOUNT} sacks. Everyone there has described the noise to me and nobody has described the load, which tells you where people put their attention.",
+            "{PLACE} got a lift in. {AMOUNT} of something. The card says sacks and the handwriting is not mine, so it could equally say socks, and I have chosen sacks.",
+            "The aircraft brought a load into {PLACE}. That is the fourth place this month that has had something arrive from above rather than along, and I do find that worth saying out loud.",
+            "A load down at {PLACE}. {AMOUNT}, near enough. I asked whether it was paid for and was told that was not my business, which is correct, and I am mentioning it anyway.",
+            "The helicopter has been working. {PLACE} had a delivery off it and the people at {PLACE} are, and I quote, getting used to it. Getting used to it. Eleven years I have been telling this district things and nobody has ever got used to anything.",
+            "{PLACE} has had the aircraft in with {AMOUNT} sacks aboard. I have put the card at the front of the box, where it will stay until something displaces it, and nothing will."),
+
+        [DjDeedKind.WaterDrop] = Keyed(DjTopic.Deed, "WaterDrop",
+            "There was a fire near {PLACE} and the helicopter was on it with a bucket. {AMOUNT} runs, they reckon. Nobody counted properly because everybody was watching, which I understand.",
+            "Water off the helicopter at {PLACE}. {CALLER} says it came in over the trees so low that the trees went flat and stayed flat for a moment after it had gone.",
+            "The fire above {PLACE} is out. It was put out with a bucket on a wire and I am told the whole thing took the afternoon. I would have liked to see it and I was here, doing this.",
+            "{AMOUNT} bucket loads onto the ground at {PLACE}. There is a hole in the reservoir wall where it kept dipping and there is a dispute starting about whose hole it is.",
+            "They had the aircraft on the fire at {PLACE}. Everybody who has told me about it has told me about the steam, and not one of them has told me whether the fire went out, so I asked, and it did.",
+            "Water bombing at {PLACE}, if that is the phrase, and I think it is. {AMOUNT} runs to the water and back. The dog heard it before I did and the dog was outside.",
+            "The helicopter spent a day on the fire at {PLACE} and then left without speaking to anybody. I have had four separate people tell me that last part specifically.",
+            "A fire at {PLACE}, dealt with from the air. I am going to say this plainly because it does not happen often: something went wrong in this district and something arrived and fixed it."),
+
+        [DjDeedKind.Rescued] = Keyed(DjTopic.Deed, "Rescued",
+            "Somebody was brought out of {PLACE} by air. They are alright. That is the end of the item and I am aware it is the shortest item I have ever read.",
+            "The helicopter lifted somebody from {PLACE}. I have been asked not to give the name and I am not going to, and I would like whoever asked to know that I would not have anyway.",
+            "There was a lift out of {PLACE}. {CALLER} was there and has described it to me twice, and the second time was better.",
+            "A person came off the hill above {PLACE} in the helicopter and is in one piece. I have a card for it. I have never had a card for that before.",
+            "They got somebody out of {PLACE}. The weather that day was the weather I stood here and described as unflyable, so I would like to correct the record, formally, and I am not pleased about it.",
+            "Somebody out of {PLACE}, by air, alive. The market report follows. I am going to leave a gap first, because those two things should not go together and I cannot reorder the cards.",
+            "The aircraft took a casualty off {PLACE}. Everyone is very keen to tell me how fast it got there and nobody can tell me who flew it, which is the way of it.",
+            "A rescue at {PLACE}. I will say the word rescue, because that is the word on the card and I have decided not to soften it this once."),
+
+        [DjDeedKind.Crashed] = Keyed(DjTopic.Deed, "Crashed",
+            "The helicopter came down near {PLACE}. The pilot walked away from it, which is the only part of that sentence anybody needs.",
+            "There has been a hard landing at {PLACE}, and I am using the words I was given. {CALLER} used different words and I am not using those.",
+            "The aircraft is down at {PLACE}. Not down as in gone - down as in sitting in a field with people standing round it, which in this district is a social occasion.",
+            "It came down at {PLACE}. Everybody is fine. The machine, I am told, is a matter of opinion.",
+            "The helicopter put itself into the ground at {PLACE}. I have had six reports and they disagree on everything except that it is still there and it is not flying.",
+            "A crash at {PLACE}. That is a blunt word and I have thought about it and it is the right one. The pilot is alright.",
+            "There is a helicopter in a field at {PLACE} that was not in a field at {PLACE} on Tuesday. I am told there is no cause for alarm and I am passing that on in the spirit it was given.",
+            "It went down near {PLACE}. Nobody hurt. I am now going to read the market report, which will feel strange for both of us."),
+
+        [DjDeedKind.ShotAt] = Keyed(DjTopic.Deed, "ShotAt",
+            "Somebody shot at the helicopter over {PLACE}. It kept going. I have no view on any of this and that is a lie, and I am leaving it in.",
+            "There was firing at {PLACE} when the aircraft went through. I am reporting it because it happened, and not because I want it discussed on my fence for a month, which it will be.",
+            "They put rounds up at the helicopter near {PLACE}. {CALLER} heard it from four miles off and got word to me before the aircraft had cleared the ridge.",
+            "Shooting at {PLACE}, at the aircraft, from the ground. It came home. I know it came home because it has been heard since, and that is the only reason I know anything.",
+            "The helicopter was fired on over {PLACE}. I want to be careful here. I am not saying who. I am saying it happened, and that it did not work.",
+            "Something went up at the helicopter around {PLACE}. There are people in this district who will hear that and be pleased, and I would ask them to consider who has been bringing the sacks.",
+            "Ground fire at {PLACE}. The aircraft went straight through it and out the other side. {NEIGHBOUR} says that is nerve and I say that is probably not having anywhere else to go.",
+            "They shot at it near {PLACE}. I have put that on a card and I have put the card in the box and I have been standing here looking at the box."),
+
+        [DjDeedKind.Salvaged] = Keyed(DjTopic.Deed, "Salvaged",
+            "The helicopter has been at the wreck at {PLACE}. Stripping it. {CALLER} watched for an hour, says it was extremely boring, and stayed the whole hour.",
+            "Somebody has been taking {PLACE} apart from the air. {AMOUNT} trips, by the count of the man who lives nearest and counts things.",
+            "The aircraft was down at {PLACE} again, at the old wreck. There is a view locally that this is scavenging, and there is a view locally that everything is scavenging.",
+            "Work at {PLACE}, on the wreck. It flew out {AMOUNT} loads of it. What it was I do not know, and I have asked.",
+            "They have been at the wreck at {PLACE}. I remember when that came down. I did an item on it. I have the card and the date on it is wrong and I have had eleven years of correspondence about that date.",
+            "The helicopter has been lifting out of {PLACE}. Whatever is in that wreck, there is less of it now.",
+            "Salvage at {PLACE}. {AMOUNT} lifts. Nobody has stopped them and nobody is going to, and I will say the quiet part, which is that nobody there can reach it on foot.",
+            "The aircraft has been working the wreck at {PLACE}. I am told the noise carries a long way across that flat ground, and I am told this by people who do not object to it."),
+
+        [DjDeedKind.Declined] = Keyed(DjTopic.Deed, "Declined",
+            "{PLACE} asked for the helicopter and did not get it. I am not reading that as a slight. I am reading it as a helicopter having one of itself.",
+            "The people at {PLACE} wanted a lift and were turned down. They have asked me to say so on the air. I have thought about whether that is what this station is for and I have decided that it is.",
+            "A job at {PLACE} was refused. There will be a reason. There usually is, and it is usually fuel, and nobody ever believes it is fuel.",
+            "{PLACE} put a request in for the aircraft and the answer was no. {CALLER} is very worked up about it, and {CALLER} does not own the aircraft.",
+            "The helicopter has said no to {PLACE}. I would remind the district that it has said yes rather a lot, and that nobody got word to me about any of those.",
+            "Work declined at {PLACE}. I have the card. I am reading the card. I am not going to editorialise, and I have now used up my entire supply of not editorialising for the week.",
+            "No lift for {PLACE}. They are not the first and they have taken it better than the first did.",
+            "{PLACE} has been refused. I would point out, gently, that there is one helicopter, and that there are rather a lot of places, and that this arithmetic is not going to improve."),
+
+        [DjDeedKind.Buzzed] = Keyed(DjTopic.Deed, "Buzzed",
+            "The helicopter came over {PLACE} low. Very low. Low enough that I have had a complaint, and it is the first complaint I have ever had about anything that flies.",
+            "It went over {PLACE} at what I am told was roof height. The washing came off the line at two separate houses and both of them got word to me, separately, about their own washing.",
+            "Low pass over {PLACE}. {NEIGHBOUR} says it was showing off. {NEIGHBOUR} has never seen a helicopter up close and neither have I, and I would like that noted as context.",
+            "The aircraft came through {PLACE} underneath the height of the church. People are split. I am not split, but I am not saying which way, because I have to live here.",
+            "It came over {PLACE} low enough to be described to me in terms of individual rivets, which I doubt, and which I am passing on anyway because I enjoyed it.",
+            "A very low pass at {PLACE}. Children delighted. Livestock not. There is a letter coming and I will read it when it arrives, in full, because that is the arrangement.",
+            "It went through {PLACE} low and fast and did not stop. I have three accounts and they get lower and faster in the order I received them, which is how accounts work.",
+            "The helicopter beat up {PLACE}, and that is the term, and I have had to ask somebody what the term was. Nobody has complained. One person has asked when it is next expected."),
+    };
+
+    /// <summary>
+    /// Bringing up something from weeks ago, unprompted, in the middle of something else.
+    ///
+    /// This is the half that makes the deed system a memory rather than a news feed. A
+    /// station that only ever reports the last three days is still a feed; a man who is
+    /// still going on about the thing at a place a fortnight later is a person.
+    /// </summary>
+    public static readonly DjLine[] DeedCallback = Bank(DjTopic.DeedCallback,
+        "I keep thinking about that business at {PLACE}. I do not have anything to add. I am just saying that I keep thinking about it.",
+        "Nothing new on the helicopter. There was the thing at {PLACE}, which we did at the time, and since then nothing.",
+        "{CALLER} asked me again about {PLACE}. I have told {CALLER} everything I know about {PLACE} and I told it the first time.",
+        "That card from {PLACE} is still at the front of the box. I have had a fortnight to file it properly and I have not.",
+        "People are still talking about {PLACE}. I have noticed that the story has got better since it happened, which stories do, and I have the original card here and I am not going to spoil anybody's evening with it.",
+        "Somebody at the market brought up {PLACE} again. It has been weeks. I said so, and they said they knew, and we both stood there.",
+        "I went back through the box last night and read the {PLACE} card again. That is how the evening went. I am telling you because you asked what I do up here, which nobody has, ever.",
+        "There has been nothing like {PLACE} since {PLACE}. That is not a complaint. It is simply the state of the card index.");
 
     /// <summary>Cloud base, when it is on the deck. He will not read out a number he has guessed.</summary>
     public static readonly DjLine[] CeilingNote = Bank(DjTopic.CeilingNote,
@@ -1418,6 +1680,9 @@ public static class DjCorpus
             foreach (DjLine l in TemperatureCold) yield return l;
             foreach (DjLine l in TemperatureWarm) yield return l;
             foreach (DjLine l in CeilingNote) yield return l;
+            foreach (DjLine[] bank in Deed.Values)
+                foreach (DjLine l in bank) yield return l;
+            foreach (DjLine l in DeedCallback) yield return l;
             foreach (DjLine[] bank in Season.Values) foreach (DjLine l in bank) yield return l;
             foreach (DjLine[] bank in Daypart.Values) foreach (DjLine l in bank) yield return l;
             foreach (DjLine l in LostProperty) yield return l;
@@ -1530,7 +1795,8 @@ public static class DjAudit
     };
 
     /// <summary>The only substitution tokens that may appear in an authored line.</summary>
-    public static readonly string[] KnownTokens = { "{REGION}", "{CALLER}", "{NEIGHBOUR}", "{TRACK}" };
+    public static readonly string[] KnownTokens =
+        { "{REGION}", "{CALLER}", "{NEIGHBOUR}", "{TRACK}", "{PLACE}", "{AMOUNT}" };
 
     /// <summary>One thing wrong with one line.</summary>
     public readonly record struct Finding(string LineId, string Rule, string Phrase, string Text)
@@ -1878,6 +2144,13 @@ public sealed class DjHost
         Offer(DjTopic.VisibilityNote, 1.10, w.VisibilityM < 6000);
         Offer(DjTopic.TemperatureNote, 0.85, Math.Abs(w.IsaDeviation) > 5.0);
         Offer(DjTopic.CeilingNote, 0.85, w.CloudBaseM < 500);
+        // The headline the player actually cares about, and the reason to leave the radio
+        // on. Weighted well above the chatter because it is hard-gated on there being a
+        // deed the district could know about AND that he has not already used up - most
+        // breaks have no deed available at all, so a high weight here is not him being
+        // obsessed, it is him leading with the only news there is.
+        Offer(DjTopic.Deed, 3.20, PickDeed(w) is not null);
+        Offer(DjTopic.DeedCallback, 0.70, PickCallback(w) is not null);
         Offer(DjTopic.Season, 0.50);
         Offer(DjTopic.Daypart, 0.90);
 
@@ -1912,6 +2185,54 @@ public sealed class DjHost
         return options[^1].Topic;
     }
 
+    // ------------------------------------------------------------------ deeds
+
+    /// <summary>How many times he has already aired each deed. Keyed by the deed itself.</summary>
+    private readonly Dictionary<DjDeed, int> _deedAirings = new();
+
+    /// <summary>
+    /// He will go back to the same story three times and then leave it alone.
+    ///
+    /// Once is a report and nobody hears it, because a player is not listening to every
+    /// break. Unlimited is the failure this whole system is trying to avoid - a station that
+    /// will not shut up about one delivery is a station the player turns off. Three times
+    /// across the three days a deed stays fresh is roughly how often a small place actually
+    /// mentions a thing, and it means a player who had the radio off during the first airing
+    /// still gets told.
+    /// </summary>
+    public const int MaxAiringsPerDeed = 3;
+
+    /// <summary>
+    /// The deed he would talk about now: the most recent one the district could know about
+    /// and that he has not worn out.
+    /// </summary>
+    private DjDeed? PickDeed(in DjWorld w)
+    {
+        if (w.Deeds is null) return null;
+        DjDeed? best = null;
+        foreach (DjDeed d in w.Deeds)
+        {
+            if (!RadioDj.Knowable(d, w.ClockSeconds)) continue;
+            if (_deedAirings.TryGetValue(d, out int n) && n >= MaxAiringsPerDeed) continue;
+            if (best is null || d.AtClockSeconds > best.Value.AtClockSeconds) best = d;
+        }
+        return best;
+    }
+
+    /// <summary>An old deed with a place on it, for the reminiscing bank.</summary>
+    private DjDeed? PickCallback(in DjWorld w)
+    {
+        if (w.Deeds is null) return null;
+        DjDeed? best = null;
+        foreach (DjDeed d in w.Deeds)
+        {
+            if (!RadioDj.Callbackable(d, w.ClockSeconds)) continue;
+            if (string.IsNullOrWhiteSpace(d.Place)) continue;   // the bank is all {PLACE}
+            if (best is null || d.AtClockSeconds > best.Value.AtClockSeconds) best = d;
+        }
+        return best;
+    }
+
     private static bool HasNamedRegion(in DjWorld w) => CountNamed(w) > 0;
 
     private static int CountNamed(in DjWorld w)
@@ -1931,6 +2252,7 @@ public sealed class DjHost
         string key = topic.ToString();
         IReadOnlyList<DjLine> pool;
         DjRegionHeat region = default;
+        DjDeed? deed = null;
 
         switch (topic)
         {
@@ -1986,6 +2308,24 @@ public sealed class DjHost
                 pool = DjCorpus.AircraftBusy;
                 break;
 
+            case DjTopic.Deed:
+            {
+                DjDeed? pick = PickDeed(w);
+                if (pick is null) return null;
+                deed = pick;
+                pool = DjCorpus.Deed[pick.Value.Kind];
+                key = $"Deed.{pick.Value.Kind}";
+                break;
+            }
+            case DjTopic.DeedCallback:
+            {
+                DjDeed? pick = PickCallback(w);
+                if (pick is null) return null;
+                deed = pick;
+                pool = DjCorpus.DeedCallback;
+                break;
+            }
+
             case DjTopic.IntoTrack: pool = DjCorpus.IntoTrack; break;
             case DjTopic.OutOfTrack: pool = DjCorpus.OutOfTrack; break;
             case DjTopic.SignOn: pool = DjCorpus.SignOn; break;
@@ -2003,7 +2343,18 @@ public sealed class DjHost
         if (drawn is null) return null;
 
         DjLine line = drawn.Value;
-        string text = Resolve(line.Text, w, region);
+        string text = Resolve(line.Text, w, region, deed);
+
+        // A deed line that could not be filled in - no place, and the line needed one -
+        // resolves to nothing rather than to a sentence with a hole in it. Count the airing
+        // only when he actually said it.
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (deed is not null)
+        {
+            _deedAirings.TryGetValue(deed.Value, out int n);
+            _deedAirings[deed.Value] = n + 1;
+        }
+
         _aired.Add(line.Id);
         return new DjSegment(line.Id, topic, text, RadioDj.ReadSeconds(text));
     }
@@ -2088,8 +2439,25 @@ public sealed class DjHost
     /// substituted is stripped rather than shown, because a visible <c>{REGION}</c> on the
     /// HUD strip is worse than any line this file could possibly contain.
     /// </summary>
-    private string Resolve(string text, in DjWorld w, in DjRegionHeat region)
+    private string Resolve(string text, in DjWorld w, in DjRegionHeat region, DjDeed? deed = null)
     {
+        if (text.Contains("{PLACE}", StringComparison.Ordinal))
+        {
+            // Same rule as {REGION}: he never invents a place. A deed nobody could put a
+            // name to is a deed he cannot read out, and the line is dropped.
+            string? place = deed?.Place;
+            if (string.IsNullOrWhiteSpace(place)) return string.Empty;
+            text = text.Replace("{PLACE}", place, StringComparison.Ordinal);
+        }
+
+        if (text.Contains("{AMOUNT}", StringComparison.Ordinal))
+        {
+            if (deed is null || deed.Value.Amount <= 0) return string.Empty;
+            double told = RadioDj.AsTold(deed.Value);
+            text = text.Replace("{AMOUNT}", told.ToString("0", CultureInfo.InvariantCulture),
+                                StringComparison.Ordinal);
+        }
+
         if (text.Contains("{REGION}", StringComparison.Ordinal))
         {
             string name = string.IsNullOrWhiteSpace(region.Name) ? w.Hottest.Name : region.Name;

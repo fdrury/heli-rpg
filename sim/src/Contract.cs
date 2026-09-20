@@ -153,7 +153,7 @@ public sealed class Contract
 /// actually has: a settlement near wrecks offers recovery jobs; one near fuel caches
 /// offers delivery jobs.
 ///
-/// Since D-058, contracts are aware of the encounter and alert systems:
+/// Since D-062, contracts are aware of the encounter and alert systems:
 ///   - Clear contracts ask the player to remove scavengers from hostile sites.
 ///   - Recovery contracts to hostile sites note the guards and pay more.
 ///   - All contracts to alert regions carry danger pay (up to 2x at full readiness).

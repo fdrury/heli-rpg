@@ -128,7 +128,7 @@ field because the technical approach is genuinely novel and the spectral measure
 - **Time of day:** moving sun with dawn/dusk colour, full darkness.
 - **Night lighting:** navigation lights (red/green/white), anti-collision beacon, landing
   light with ground illumination.
-- **Procedural variety:** five building archetypes (D-042) with windows, doors, chimneys,
+- **Procedural variety:** five building archetypes (D-071) with windows, doors, chimneys,
   ridge vents, loading docks, collapsed variants. Procedural rocks, dead trees, scrub,
   forest noise. 153 road segments, water surfaces.
 - **Airframe wear:** object-space shader — sun-bleaching, grime, panel lines, repair
@@ -145,7 +145,7 @@ and Death Stranding are on another planet in raw rendering quality, but they are
 60-person-year art pipelines. The relevant comparison is solo/small-team games like Kenshi
 and Subnautica, against which the visual quality is strong.
 
-The building variety pass (D-042) deserves specific note: five archetypes with windows,
+The building variety pass (D-071) deserves specific note: five archetypes with windows,
 doors, chimneys, collapsed variants and sheds produce a settlement that reads as a place
 from 500 m. This is better than Kenshi's building variety and comparable to early-access
 Subnautica's base aesthetics.

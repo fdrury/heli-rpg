@@ -43,9 +43,9 @@ public static class RadioDjTests
                      double wind = 4.0, double gust = 1.5, double vis = 18000,
                      double cloudBase = 2000, double isa = 0,
                      DjRegionHeat[]? heat = null, bool searchComplete = false,
-                     string? track = null)
+                     string? track = null, IReadOnlyList<DjDeed>? deeds = null)
         => new(clock, sky, wind, gust, vis, cloudBase, isa, 0, 0,
-               heat ?? Array.Empty<DjRegionHeat>(), searchComplete, track, null);
+               heat ?? Array.Empty<DjRegionHeat>(), searchComplete, track, null, deeds);
 
     /// <summary>
     /// Run a station for a while and collect everything he said.
@@ -771,5 +771,155 @@ public static class RadioDjTests
 
         Console.WriteLine();
         return printed == 0 ? "he never said anything in four hours of station time" : null;
+    }
+
+    // =====================================================================================
+    //  8. He talks about what the player has been doing - but only what he could know
+    // =====================================================================================
+
+    /// <summary>
+    /// The announcer is the only voice in the world that talks back, and the cheap version
+    /// of that - the game hands him an event log and he reads it out - is worthless within
+    /// an hour, because the player learns he is hearing his own telemetry with an accent on
+    /// it. Everything interesting is in the GAP between what the player did and what the
+    /// district heard, so that gap is what this measures.
+    ///
+    /// Four claims, and each one is a way the system would be fake if it failed:
+    /// nobody saw it so he never says it; word takes time so he is always behind; he wears
+    /// a story out and moves on; and the number he gives is wrong in a fixed way rather
+    /// than a fresh way, because a rumour is a story people repeat, not noise.
+    /// </summary>
+    public static string? TalksAboutWhatYouDid()
+    {
+        var wrong = new List<string>();
+        const double noon = 172 * 86400 + 12 * 3600;
+
+        // --- 1. the gates, one at a time --------------------------------------
+        (string Label, DjDeed Deed, double Now, bool Expect)[] gates =
+        {
+            ("nobody saw it",
+             new DjDeed(DjDeedKind.Delivered, noon, "Ashcroft", 40, Witnesses: 0), noon + 6 * 3600, false),
+            ("ten minutes ago, word has not travelled",
+             new DjDeed(DjDeedKind.Delivered, noon, "Ashcroft", 40, Witnesses: 12), noon + 600, false),
+            ("this morning, plenty of witnesses",
+             new DjDeed(DjDeedKind.Delivered, noon, "Ashcroft", 40, Witnesses: 12), noon + 6 * 3600, true),
+            ("a week ago, not news any more",
+             new DjDeed(DjDeedKind.Delivered, noon, "Ashcroft", 40, Witnesses: 12), noon + 7 * 86400, false),
+        };
+
+        Console.WriteLine("  what the station can know");
+        foreach ((string label, DjDeed deed, double now, bool expect) in gates)
+        {
+            bool got = RadioDj.Knowable(deed, now);
+            Console.WriteLine($"    {label,-42} {(got ? "he can say it" : "he cannot")}");
+            if (got != expect)
+                wrong.Add($"{label}: expected {(expect ? "knowable" : "not knowable")}");
+        }
+        Console.WriteLine();
+
+        // --- 2. he actually says it, and only about the place it happened -----
+        var host = new DjHost(4242);
+        var deeds = new List<DjDeed>
+        {
+            new(DjDeedKind.WaterDrop, noon, "Kirkhaven", 9, Witnesses: 30),
+        };
+        List<DjSegment> said = Session(host, clock => W(clock, deeds: deeds), noon + 6 * 3600, 400);
+        List<DjSegment> deedLines = said.Where(x => x.Topic == DjTopic.Deed).ToList();
+
+        Console.WriteLine($"  a 23-hour session after one water drop at Kirkhaven:");
+        Console.WriteLine($"    {said.Count} segments, {deedLines.Count} of them about the drop");
+        foreach (DjSegment seg in deedLines)
+            Console.WriteLine($"      {seg.Text}");
+        Console.WriteLine();
+
+        if (deedLines.Count == 0)
+            wrong.Add("he never mentioned a water drop thirty people watched");
+        if (deedLines.Count > DjHost.MaxAiringsPerDeed)
+            wrong.Add($"he aired one deed {deedLines.Count} times - the cap is {DjHost.MaxAiringsPerDeed}");
+        foreach (DjSegment seg in deedLines)
+        {
+            if (!seg.Id.StartsWith("dj.Deed.WaterDrop.", StringComparison.Ordinal))
+                wrong.Add($"a water drop drew the line {seg.Id} from another deed's bank");
+            if (!seg.Text.Contains("Kirkhaven", StringComparison.Ordinal))
+                wrong.Add("a deed line went out without naming where it happened");
+        }
+
+        // --- 3. a deed with no place never produces a sentence with a hole ----
+        //
+        // Same rule as {REGION}: he does not invent a place. The failure this guards is not
+        // a crash, it is a line reaching the player reading "that business at ." - which is
+        // the exact shape of bug that survives every review and no measurement.
+        var placeless = new DjHost(77);
+        var anon = new List<DjDeed> { new(DjDeedKind.Delivered, noon, null, 40, Witnesses: 20) };
+        List<DjSegment> anonSaid = Session(placeless, clock => W(clock, deeds: anon), noon + 6 * 3600, 400);
+        int holes = anonSaid.Count(x => x.Text.Contains('{') || x.Text.Contains('}'));
+        int placeless_deeds = anonSaid.Count(x => x.Topic == DjTopic.Deed);
+        Console.WriteLine($"  a deed nobody could place: {placeless_deeds} deed lines, {holes} with an unfilled token");
+        if (holes > 0) wrong.Add($"{holes} line(s) went out with an unfilled token in them");
+        foreach (DjSegment seg in anonSaid.Where(x => x.Topic == DjTopic.Deed))
+            if (seg.Text.Contains(" at .", StringComparison.Ordinal) ||
+                seg.Text.Contains(" into .", StringComparison.Ordinal))
+                wrong.Add("a placeless deed produced a sentence with the place missing");
+
+        // --- 4. the number drifts, consistently, and less in a crowd ----------
+        //
+        // This is the property that makes it a rumour rather than a random number. He must
+        // tell the SAME wrong story every time; an announcer who gives a different figure
+        // at each airing is not unreliable, he is broken.
+        var told = new DjDeed(DjDeedKind.Delivered, noon, "Ashcroft", 40, Witnesses: 1);
+        double a1 = RadioDj.AsTold(told), a2 = RadioDj.AsTold(told), a3 = RadioDj.AsTold(told);
+        Console.WriteLine();
+        Console.WriteLine($"  40 sacks, one witness, told three times: {a1:F0}, {a2:F0}, {a3:F0}");
+        if (a1 != a2 || a2 != a3)
+            wrong.Add("the same deed produced a different figure on a second telling - " +
+                      "that is not a rumour, it is noise");
+
+        // Drift has to shrink as the crowd grows, across many deeds rather than one: a
+        // single deed can land near zero drift at any witness count by luck, and asserting
+        // on one sample would be a test that fails on a Tuesday.
+        double MeanDrift(int witnesses)
+        {
+            double total = 0;
+            const int n = 400;
+            for (int i = 0; i < n; i++)
+            {
+                var d = new DjDeed(DjDeedKind.Delivered, noon + i * 37.0, "Ashcroft", 100, witnesses);
+                total += Math.Abs(RadioDj.AsTold(d) - 100.0) / 100.0;
+            }
+            return total / n;
+        }
+
+        double lone = MeanDrift(1), few = MeanDrift(4), crowd = MeanDrift(40);
+        Console.WriteLine($"  mean error in a reported figure of 100:");
+        Console.WriteLine($"    seen by 1  {lone:P1}");
+        Console.WriteLine($"    seen by 4  {few:P1}");
+        Console.WriteLine($"    seen by 40 {crowd:P1}");
+        if (!(lone > few && few > crowd))
+            wrong.Add($"the story does not get straighter with more witnesses " +
+                      $"({lone:P1} / {few:P1} / {crowd:P1})");
+        if (lone < 0.05)
+            wrong.Add($"a thing one person saw comes through only {lone:P1} wrong - " +
+                      "there is no gap between what happened and what was heard");
+        if (crowd > 0.12)
+            wrong.Add($"a thing forty people watched is still {crowd:P1} wrong - " +
+                      "the distortion is noise rather than a function of how alone you were");
+
+        // --- 5. and he brings it up again weeks later -------------------------
+        var later = new DjHost(1234);
+        var old = new List<DjDeed> { new(DjDeedKind.Rescued, noon, "Kirkhaven", 1, Witnesses: 25) };
+        List<DjSegment> lateSaid = Session(later, clock => W(clock, deeds: old), noon + 10 * 86400, 400);
+        int callbacks = lateSaid.Count(x => x.Topic == DjTopic.DeedCallback);
+        int stillReporting = lateSaid.Count(x => x.Topic == DjTopic.Deed);
+        Console.WriteLine();
+        Console.WriteLine($"  ten days after a rescue: {stillReporting} reports, {callbacks} callbacks");
+        if (stillReporting > 0)
+            wrong.Add("he was still reporting a ten-day-old rescue as news");
+        if (callbacks == 0)
+            wrong.Add("ten days on he never once brought the rescue up again - " +
+                      "the deed system is a feed, not a memory");
+
+        if (wrong.Count == 0) return null;
+        foreach (string w in wrong) Console.WriteLine($"  !! {w}");
+        return $"{wrong.Count} problem(s) with what he knows about the player";
     }
 }

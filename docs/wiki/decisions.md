@@ -3,6 +3,18 @@
 Format: **D-nnn — Title** · *date* · Decision / Why / Reversibility.
 Fred can veto any of these; entries marked **[LOCKED-IN BY FRED]** came from him directly.
 
+**Taking a number.** Several agents write this file at once, and for a while they were each
+appending an entry with whatever number looked next from where they were reading. Fourteen
+numbers ended up meaning two different things - D-042 was both "building variety" and
+"measure a pinned condition", and code comments cited both. Before adding an entry, run
+
+```
+grep -oE "^#+ D-[0-9]+[a-z]?" docs/wiki/decisions.md | sed 's/^#* //' | sort -u | tail -3
+```
+
+and take the next one after the highest. A suffix letter (`D-003a`) means *refines or
+supersedes that decision* and is never a way to dodge a collision.
+
 ---
 
 ### D-001 — Engine: Godot 4.7.2 (.NET/C#) · 2026-09-18 · **[LOCKED-IN BY FRED]**
@@ -877,7 +889,9 @@ clean touchdown with no bounce.
 
 **Reversible.** One property on the StaticBody3D constructor.
 
-## D-035 — On-foot combat: hitscan sidearm with called shots · 2026-09-19
+## D-066 — On-foot combat: hitscan sidearm with called shots
+
+*Renumbered from D-035, which was already in use above.* · 2026-09-19
 
 **Decision.** The pilot carries a revolver (6-round cylinder, 12 spare). Left click fires
 a hitscan ray from the camera centre. When it intersects a hostile NPC's body-zone
@@ -917,7 +931,9 @@ files and the wiring in Main. The sim-layer types have no dependents outside com
 NPC spawning is driven by `SpawnHostileNpc()` in Main; integrating it with the world
 (which sites are hostile, bandit camps, etc.) is a separate decision.
 
-## D-032 — Rain is drawn, and overcast daylight is flat rather than dark
+## D-063 — Rain is drawn, and overcast daylight is flat rather than dark
+
+*Renumbered from D-032, which was already in use above.*
 
 **Decision.** `WeatherEffects` draws rain as world-space GPU particles whose emitter follows
 the camera, scaled by the weather model's precipitation and slanted by its wind.
@@ -941,7 +957,9 @@ rainy morning rendered as a bright sky over near-black ground, which is what nig
 like. An overcast day is *flat and bright*, not dark: the cut is now 0.70, ambient rises
 further with cover, and exposure lifts slightly under a heavy deck.
 
-## D-033 — A rotor strike is an event, not a state
+## D-064 — A rotor strike is an event, not a state
+
+*Renumbered from D-033, which was already in use above.*
 
 **Decision.** `LandingController` latches the rotor strike, re-arming only once the disc is
 clear of the ground again.
@@ -1001,7 +1019,9 @@ loads, and verifies fourteen properties survived.
 The restore methods on `Progress`, `Damage`, `Loadout`, `DialogueBank`, `PilotHealth` are
 each one or two lines. The game-layer save/load is ~150 lines in Main.
 
-## D-034 — Cockpit lighting belongs to the lights, not the airframe
+## D-065 — Cockpit lighting belongs to the lights, not the airframe
+
+*Renumbered from D-034, which was already in use above.*
 
 **Decision.** The cockpit skylight fill moved from `AirframeBuilder` into `AircraftLights`,
 and instrument faces plus a panel flood were added, all driven by the sun's elevation.
@@ -1045,7 +1065,9 @@ when the real answer was that the question was impossible. The state now moves c
 which is the same lesson as the control-derivative tests that measured departure instead of
 response.
 
-## D-036 — The weather has a voice of its own
+## D-067 — The weather has a voice of its own
+
+*Renumbered from D-036, which was already in use above.*
 
 **Decision.** `WeatherSynth` (sim) and `WeatherAudio` (game) add rain and wind, on a
 **non-positional** player, separate from the rotor.
@@ -1100,7 +1122,9 @@ shows gravel and stone where it did not, but most of the visible landscape is be
 still reads as ground cover. Real cliff faces would need the height function to produce
 them, and the same report says it mostly does not.
 
-## D-039 — Kneeboard map with fog of war · 2026-09-19
+## D-068 — Kneeboard map with fog of war
+
+*Renumbered from D-039, which was already in use above.* · 2026-09-19
 
 **Decision.** The kneeboard gets a fourth page: MAP (previously AIRCRAFT, KNOWN, LOG).
 It shows a top-down terrain chart with grid-based fog of war, site markers, threat
@@ -1204,7 +1228,9 @@ the places people drove to before the collapse.
 TerrainStreamer, and one constant. Woodland: remove GreenTree from ProceduralProps and
 PropScatter. Roads: remove Roads.cs and one line in Main.
 
-## D-041 — Cockpit head-look with padlock · 2026-09-19
+## D-070 — Cockpit head-look with padlock
+
+*Renumbered from D-041, which was already in use above.* · 2026-09-19
 
 **Decision.** The cockpit camera now supports head rotation. Three input methods:
 
@@ -1246,7 +1272,9 @@ where it is.
 ~30 lines in Main, padlock is ~40 lines in Main. No sim/ changes, no save/load changes,
 no new files. Remove the head-look fields and UpdateCockpit reverts to one line.
 
-## D-042 — Building variety: five archetypes · 2026-09-19
+## D-071 — Building variety: five archetypes
+
+*Renumbered from D-042, which was already in use above.* · 2026-09-19
 
 **Decision.** Replace the single box-with-pitched-roof building with five residential
 archetypes — simple gable, L-plan, lean-to addition, flat-roof parapet, and porch —
@@ -1292,7 +1320,9 @@ raking low light**. It read as permanent dusk and made every screenshot a silhou
 is also why the airframe and prop work looked so dark when I first checked it. Day 172 puts
 the morning sun at 54° and leaves the long evenings somewhere to fall from.
 
-## D-040 — Position hold, because speed hold never arrives
+## D-069 — Position hold, because speed hold never arrives
+
+*Renumbered from D-040, which was already in use above.*
 
 **Decision.** `AutopilotDemand.GroundTarget` holds a point on the ground, converting
 position error into a closing speed. The core loop test uses it for both approach and
@@ -1575,7 +1605,9 @@ stop) is enough to carry 20 hours.
 contract board is data over existing systems; the search breadcrumbs are a short authored
 sequence. Both can be changed without touching the flight model, world, or combat.
 
-## D-047 — Autorotation: three hypotheses refuted, and the radial rig that did it
+## D-072 — Autorotation: three hypotheses refuted, and the radial rig that did it
+
+*Renumbered from D-047, which was already in use above.*
 
 `MainRotor.RadialTorque` reports shaft torque banded into tenths of the radius — negative
 drives the rotor, positive drags it. With rotor speed **pinned at 100%** (letting it float
@@ -1697,7 +1729,9 @@ work that never read it. Anything proposing *who or what exists in the world* ha
 checked against D-008 and D-012 first; those two are premise, not preference. The cost here
 was small only because it was caught before the file was committed.
 
-## D-051 — Mission structure: contract board and search thread (the 2/10 gap)
+## D-073 — Mission structure: contract board and search thread (the 2/10 gap)
+
+*Renumbered from D-051, which was already in use above.*
 
 Built to close the critical gap D-048 identified. Every comparator that shipped as a
 narrative game was structurally ahead of ROTORWASH at mission structure (2/10). The fix
@@ -2006,7 +2040,7 @@ currently zero, remote country 7%). Nothing above it depends on land being conti
 
 ---
 
-### D-056 — Hostile site encounters
+### D-060 — Hostile site encounters
 
 **Date:** 2026-09-19
 
@@ -2048,13 +2082,13 @@ contracts. A hostile settlement is a dead loop — you cannot get the payout for
 because the payout comes from the settlement.
 
 **Reversibility:** high. `Encounter.IsHostile` is a pure function in sim/ with no Godot
-dependency; removing it restores the pre-D-056 behaviour with no other changes needed.
+dependency; removing it restores the pre-D-060 behaviour with no other changes needed.
 The `Cleared` field in `SiteRecord` is additive and ignored when the encounter system is
 absent. Six simlab tests cover the rules.
 
 ---
 
-## D-057: regional alert state
+## D-061 — Regional alert state
 
 **Decision:** Being detected by threat emitters raises a region's readiness. Readiness
 persists across sorties and feeds back into the threat system as two effects:
@@ -2094,7 +2128,7 @@ behaviour. `DetectionScale` returns 1.0 and `ReactionScale` returns 1.0 when ale
 The `AlertLevels` field in `SaveData` is optional and ignored when absent. Four existing
 simlab tests verify the alert model; one new test (`save_alert`) verifies the round trip.
 
-## D-058 — Contract depth: contracts that use the world · 2026-09-19
+## D-062 — Contract depth: contracts that use the world · 2026-09-19
 
 **Decision.** Connect the contract board to the alert and encounter systems so that
 contracts are aware of the world state that now exists rather than sitting beside it.
@@ -2142,5 +2176,68 @@ new saves with them are human-readable.
 **Reversibility:** high. Clear contracts are one new enum value, one new branch in
 `CheckCompletion`, and one new `TryAdd` method — deleting them leaves the four original
 types untouched. Danger pay and alert briefs are gated on `alert is not null`, so passing
-null restores the pre-D-058 behaviour exactly. The `SiteStub` defaults mean existing
+null restores the pre-D-062 behaviour exactly. The `SiteStub` defaults mean existing
 test code that does not supply Tier/RegionId continues to compile and run.
+
+---
+
+## D-074 — The announcer talks about what you did, but only what the district heard · 2026-09-19 · **[FRED'S IDEA]**
+
+**Decision:** The station keeps a feed of player deeds (`DjDeed`: kind, when, where, a
+figure, and **how many people saw it**) and the announcer works them into his breaks. A deed
+becomes sayable only when it passes three gates - somebody saw it, forty minutes have passed
+so word could travel, and it is less than three days old - and the figure he gives is not the
+figure that happened. He airs a given deed at most three times, and between three days and
+three weeks it moves to a `DeedCallback` bank where he brings it up unprompted, having
+nothing to add.
+
+**Why:** Fred asked for "radio like Forza where it talks about things the player has done
+too", after asking for a GTA-style announcer. The obvious implementation of that request is
+a feed: the game hands the radio an event log and he reads it out. That version is worthless
+within an hour, because the player learns he is listening to his own telemetry with an accent
+on it, and every line after that is a HUD element that happens to be spoken.
+
+Everything worth having is in the **gap between what the player did and what the district
+heard**, so the gap is what got built:
+
+  * **Somebody has to have seen it.** A long way round over empty country to a place with two
+    people in it does not get talked about. That is the same honesty as
+    `ThreatWorld.Perceivable` - a MANPADS that never fired is one the crew never knew about -
+    and it makes being noticed an outcome the player can influence rather than a notification.
+  * **Word takes forty minutes.** This is what stops the station being a HUD. If he mentions
+    the drop while the player is still in the climb-out, the radio is visibly wired to the
+    game. Forty minutes means he is always talking about the sortie before last, which is how
+    a district actually sounds, and it rewards leaving the station on rather than listening
+    for a cue.
+  * **The number is wrong, and wrong the same way every time.** `RadioDj.AsTold` drifts the
+    figure by up to ±35% at a single witness, falling off as the square root of the crowd,
+    and rounds it the way people round. It is derived from the deed by splitmix64, not drawn
+    from the RNG, because **a rumour is a fixed wrong story, not a fresh one**: an announcer
+    who gives a different figure at each telling is not unreliable, he is broken. Measured:
+    a figure of 100 comes back 18.0% out when one person saw it, 8.8% at four and 2.9% at
+    forty - so how far off he is tells the player how alone they were out there.
+  * **He never addresses the player.** Every line is hearsay about "the helicopter", read at
+    the same weight as the market report. D-058's player-wink blocklist already forbids the
+    alternative and covers these banks. Being talked about by somebody who is not talking
+    *to* you is how you find out a world noticed you; Forza's second person would undo the
+    premise that there is one aircraft and no one knows who flies it.
+
+The bathos is the joke Fred asked for (D-058): eleven years of broadcasting and the biggest
+thing that has ever happened in the district gets four sentences, one of which is about a
+dispute over a hole in a reservoir wall.
+
+**Cost:** 100 new lines across eight deed kinds and a callback bank (676 authored lines
+total, 108 minutes of speech). `{PLACE}` and `{AMOUNT}` join the token set; like `{REGION}`
+they **drop the whole line rather than fall back**, because the fallback for a place is
+inventing one.
+
+**Reversibility:** high. `DjWorld.Deeds` defaults to null, and a null feed means no deed is
+ever offered and the announcer is exactly what he was. Nothing outside `RadioDj.cs` has to
+supply deeds for the station to work. Covered by `dj_deeds`, which checks the three gates
+one at a time, that he wears a story out, that a placeless deed never produces a sentence
+with a hole in it, and that the distortion is both stable and a function of the crowd.
+
+**Not done:** nothing produces `DjDeed`s yet. The hook is one call per completed contract,
+crash, salvage run and low pass, with `Witnesses` taken from the population of the nearest
+site - which is a number the world already knows and nothing currently reads. Logged in
+`integration-debt.md` rather than guessed at here.

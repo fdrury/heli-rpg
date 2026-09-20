@@ -72,7 +72,7 @@ All four hooks are now wired in `SiteInteraction.cs`:
 
 ---
 
-## ~~`AlertState` → nothing drives it~~ **DONE** (D-057)
+## ~~`AlertState` → nothing drives it~~ **DONE** (D-061)
 
 `ThreatWorld` now drives `AlertState`: detection per emitter with LOS, engagement spikes on
 launch, game-time decay every frame. `DetectionScale` and `ReactionScale` feed into
@@ -101,3 +101,35 @@ generation.
 rationale depends on there being exactly one aircraft. The correction is content only — the
 beat machinery, knowledge ids, staging and save format are sound and should be kept.
 See D-050 and section 7 of `story.md`.
+
+---
+
+## The announcer's deed feed -> the game (D-074)
+
+`DjWorld.Deeds` is the input that makes the station talk about the player, and **nothing
+produces a `DjDeed`**. The corpus, the gates and the distortion are built and covered by
+`dj_deeds`; the feed is empty, so in the running game he never mentions anything the player
+has done.
+
+One hook per event, and the only field that needs thought is the last one:
+
+| when | kind | Place | Amount | Witnesses |
+|---|---|---|---|---|
+| contract completed | `Delivered` | destination site name | units carried | population of the destination |
+| bucket work finished | `WaterDrop` | nearest site name | dips made | population within sight of the fire |
+| casualty lifted | `Rescued` | pickup site name | 1 | population of the destination |
+| hard landing survived | `Crashed` | nearest site name | 0 | population within a few km |
+| came home hit | `ShotAt` | region name | 0 | population near the emitter |
+| salvage run finished | `Salvaged` | site name | lifts made | population of the nearest site |
+| contract expired unaccepted | `Declined` | source site name | 0 | population of the source |
+| flew very low over a site | `Buzzed` | site name | 0 | population of that site |
+
+**`Witnesses` is the whole design and must not be defaulted to 1.** It decides whether the
+deed is ever spoken and how wrong the number comes out, so it has to come from the world -
+the population of the nearest site, which `WorldMap` already knows - and not from a constant.
+A hook that passes 1 everywhere turns the system back into the event log D-074 exists to
+avoid.
+
+**Owner:** whoever holds `game/scripts/SiteInteraction.cs` and `Main.cs`. The deed list
+itself wants to live on `Progress` so it survives a save, pruned past
+`RadioDj.DeedCallbackSeconds`.

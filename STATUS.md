@@ -147,7 +147,7 @@ text all draw in the existing HUD aesthetic. The combattest exercises the full c
 fly, land, shut down, dismount, spawn NPC, hip fire, aimed torso shot, Rotor Time
 headshot, reload, pilot damage, board.
 
-**Hostile site encounters** — combat integrated into the world (D-056). Wrecks, depots
+**Hostile site encounters** — combat integrated into the world (D-060). Wrecks, depots
 and airfields in tier 1+ have a seed-based chance of being guarded by scavengers;
 farmsteads join the hostile pool at tier 2+. Tier 0 (the Basin) is always safe —
 settlements, workshops, relays and overlooks are never hostile. Dismounting at an
@@ -190,7 +190,7 @@ shows active contracts, the search thread's current hint, and completed count. E
 simlab tests verify generation, completion, payout, delivery logic, round-trip, search
 gating, determinism, and full integration.
 
-**Look-around** — cockpit head-look (D-041). In cockpit mode the pilot can look around
+**Look-around** — cockpit head-look (D-070). In cockpit mode the pilot can look around
 inside the airframe: middle-mouse drag, hat switch / D-pad, or numpad 4/6/8/2 slew the
 view ±150° yaw, -40° to +60° pitch. Release springs back to forward. `L` padlocks onto
 the nearest detected threat emitter or known site. The 3D cockpit instruments (2×3 bezel
@@ -198,7 +198,7 @@ array, control sticks, collective levers, pedals) are now visible by looking dow
 side doors and terrain are visible by looking left/right. Two screenshot shots
 (`24_cockpit_left`, `25_cockpit_panel`) verify the feature across builds.
 
-**Building variety** — five residential archetypes (D-042): simple gable, L-plan,
+**Building variety** — five residential archetypes (D-071): simple gable, L-plan,
 lean-to addition, flat-roof parapet, and porch. Each produces a distinct silhouette
 visible from 500 m. Windows have dark recesses behind the glass for interior suggestion.
 Door openings and chimneys (~35%) appear on standing houses. Sheds gain ridge vents and
@@ -225,7 +225,7 @@ the display. When any module is installed or removed, a numeric delta card brief
 mass, fuel capacity, drag changes and resulting total weight, so the trade is legible. The
 attitude indicator and right panel (Nr, torque, fuel) are always visible.
 
-**Alert state** — regional readiness driven by the threat field (D-057). Being detected
+**Alert state** — regional readiness driven by the threat field (D-061). Being detected
 by an emitter raises that region's readiness; being engaged spikes it; readiness decays
 with a six-hour game-time half-life. Two effects feed back into the threat system:
 `DetectionScale` stretches emitter detection range by up to 25% and `ReactionScale`
@@ -234,7 +234,7 @@ faster without redrawing routes the player has already learned. The kneeboard MA
 shows raised regions by name and phrase. Alert levels persist through save/load. One
 new simlab test (`save_alert`) verifies the round trip.
 
-**Contract depth** — contracts that use the world (D-058). The board was sitting beside
+**Contract depth** — contracts that use the world (D-062). The board was sitting beside
 the alert and encounter systems rather than using them. Now: Clear contracts ask the
 player to remove scavengers from hostile sites (gated on `SiteRecord.Cleared`). Danger
 pay scales all rewards by `1 + alertLevel`, so a contract to a hot region pays up to
@@ -288,7 +288,7 @@ lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, a
 2. ~~**Wire `AlertState` into the world.**~~ **DONE.** Driven from ThreatWorld, feeds
    DetectionScale/ReactionScale into the threat field, persisted in save, shown on kneeboard.
 3. ~~**Contract depth.**~~ **DONE.** Clear contracts, danger pay, hostile-aware recovery
-   briefs, alert-aware brief suffixes, and survey preference for quiet regions (D-058).
+   briefs, alert-aware brief suffixes, and survey preference for quiet regions (D-062).
 4. **The three degraded story roles.** `--worldreport` shows `DossHome`, `FerrenOffice` and
    `ScaldMagazine` falling back because their region has no site of the right kind. The
    placement fix improved this a lot; check whether it is now fixable properly.

@@ -92,7 +92,7 @@ public sealed class MainRotor
     // Advancing-tip Mach, held as a maximum over a whole revolution. A single physics
     // step only sweeps about eight degrees of azimuth, so the per-step maximum is a
     // reading of wherever the blade happened to be - which is how a measured 0.73
-    // against a 0.74 divergence threshold came to clear compressibility (D-047) when
+    // against a 0.74 divergence threshold came to clear compressibility (D-072) when
     // the true advancing-tip figure at the same condition is 0.82.
     private double _tipMachThisRev, _tipMachLastRev;
 

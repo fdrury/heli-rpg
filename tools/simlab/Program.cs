@@ -183,6 +183,7 @@ public static class Program
         Run("dj_seen", RadioDjTests.OnlySpeaksOfWhatWasSeen);
         Run("dj_alertband", RadioDjTests.MatchesTheAlertBand);
         Run("dj_world", RadioDjTests.ReactsToTheWorld);
+        Run("dj_deeds", RadioDjTests.TalksAboutWhatYouDid);
         Run("dj_guard", RadioDjTests.PremiseAndAdviceGuard);
         Run("dj_schedule", RadioDjTests.Scheduling);
         Run("dj_site", RadioDjTests.BroadcastSite);
