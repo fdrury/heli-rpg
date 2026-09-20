@@ -85,17 +85,9 @@ public sealed partial class SaveTest : Node
                 // flew into a 21 degree slope on the way and rolled over, and the test
                 // reported "could not reach site", which sounds like a range problem.
                 float targetGround = WorldHeight.At(_target.Position.X, _target.Position.Y);
-                float ground = targetGround;
-                const int probes = 12;
-                for (int i = 0; i <= probes; i++)
-                {
-                    Vector2 p2 = flat.Lerp(_target.Position, i / (float)probes);
-                    ground = Mathf.Max(ground, WorldHeight.At(p2.X, p2.Y));
-                }
-
-                // ...and come down to the destination's own height once the ridges are
-                // behind, so the approach still ends where it should.
-                if (range < 260f) ground = targetGround;
+                float ground = range < 260f
+                    ? targetGround
+                    : Mathf.Max(targetGround, WorldHeight.HighestAlong(flat, _target.Position));
 
                 var demand = new AutopilotDemand
                 {

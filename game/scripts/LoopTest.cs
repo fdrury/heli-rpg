@@ -80,7 +80,13 @@ public sealed partial class LoopTest : Node
             // ---- 0: fly to overhead ---------------------------------------
             case 0:
             {
-                float ground = WorldHeight.At(_target.Position.X, _target.Position.Y);
+                // Clear the highest ground on the way, not just the ground at the far end
+                // - see WorldHeight.HighestAlong. Dropping to the destination's own height
+                // once the ridges are behind keeps the approach where it should be.
+                float targetGround = WorldHeight.At(_target.Position.X, _target.Position.Y);
+                float ground = range < 260f
+                    ? targetGround
+                    : Mathf.Max(targetGround, WorldHeight.HighestAlong(flat, _target.Position));
                 // Position hold, not speed hold.
                 //
                 // Commanding a speed along a heading toward the site does not converge in

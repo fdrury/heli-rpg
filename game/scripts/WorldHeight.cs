@@ -597,6 +597,31 @@ public static class WorldHeight
     /// </summary>
     public static float At(float x, float z) => SitePads.Apply(x, z, RawAt(x, z));
 
+    /// <summary>
+    /// The highest ground anywhere on the straight line between two points.
+    ///
+    /// For working out how high something has to fly to get from A to B without hitting
+    /// anything. Every scripted flight in the headless tests used to transit at "the
+    /// destination's ground plus seventy", which is a safe altitude only while the country
+    /// in between is no higher than the destination - true in the old world by luck, and
+    /// false the moment D-087 moved the regions onto different terrain. The save test flew
+    /// into a 21 degree slope, rolled over, and reported "could not reach site", which
+    /// sounds like a range problem and is a clearance one.
+    ///
+    /// Coarse on purpose. Twenty-four samples across a leg is plenty to find a ridge, and
+    /// this is called once per frame by a scripted autopilot rather than per vertex.
+    /// </summary>
+    public static float HighestAlong(Vector2 from, Vector2 to, int samples = 24)
+    {
+        float best = float.NegativeInfinity;
+        for (int i = 0; i <= samples; i++)
+        {
+            Vector2 p = from.Lerp(to, i / (float)samples);
+            best = Mathf.Max(best, At(p.X, p.Y));
+        }
+        return best;
+    }
+
     /// <summary>Surface normal by central difference.</summary>
     public static Vector3 NormalAt(float x, float z, float e = 2.0f)
     {
