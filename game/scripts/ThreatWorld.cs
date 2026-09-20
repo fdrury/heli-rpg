@@ -263,8 +263,12 @@ public sealed partial class ThreatWorld : Node
         // D-074: being shot at is news — the region hears about it.
         if (_play is not null && _emitterRegion.TryGetValue(e.EmitterId, out int shotRid))
         {
-            string region = shotRid < WorldMap.Regions.Count
-                ? WorldMap.Regions[shotRid].Name : "unknown";
+            // Null rather than "unknown" when the region is off the end of the list: every
+            // line in the ShotAt bank names a place, and D-074 drops a line it cannot fill
+            // rather than reading it with a hole in it. "They shot at it near unknown" is
+            // what a fallback string produces, and it only ever reaches the air from here.
+            string? region = shotRid >= 0 && shotRid < WorldMap.Regions.Count
+                ? WorldMap.Regions[shotRid].Name : null;
             // Find the emitter's position for a population check.
             int witnesses = 0;
             foreach (var t in Field.Tracks)

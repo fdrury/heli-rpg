@@ -444,9 +444,16 @@ public sealed partial class SiteInteraction : Node
                 {
                     _rng.Seed = (ulong)(site.Id * 7919);
                     string freq = $"{_rng.RandfRange(118f, 152f):F2} MHz";
+                    // Every other mast is a carrier with nothing behind it. One is not,
+                    // and the log entry has to say so, or the player writes the Upland
+                    // Service down as another dead relay and never tunes back.
+                    bool manned = UplandService.Transmitter?.Id == site.Id;
                     Progress.Learn(new Knowledge(KnowledgeKind.Frequency, id,
                         $"{freq} - {site.Name}",
-                        "Carrier present. Nobody answering, but it is on."));
+                        manned
+                            ? $"A voice. {RadioDj.HostName}, reading out lost property to a " +
+                              "district that may or may not be listening."
+                            : "Carrier present. Nobody answering, but it is on."));
                     Notice?.Invoke($"Frequency logged: {freq}");
                 });
                 return true;

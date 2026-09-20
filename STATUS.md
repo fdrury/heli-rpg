@@ -273,7 +273,14 @@ Headless, always run before committing:
 dotnet run --project tools/simlab -c Release -- all
 godot --headless --path game -- --selftest
 godot --headless --path game -- --looptest
+godot --headless --path game -- --djreport
 ```
+
+> **Godot runs the Debug assembly.** `dotnet build game/Rotorwash.csproj -c Release`
+> succeeds, changes nothing Godot loads, and the next headless run executes the *previous*
+> build with no warning at all - a new `--flag` simply does not match and the game boots
+> normally instead, which looks like a bug in your argument handling rather than a stale
+> binary. Build `-c Debug` before any `godot --headless` run. Cost an hour once.
 
 ## Next
 
@@ -294,6 +301,20 @@ lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, a
    Scald). Zero degraded, zero unbound, zero shortfalls. The placement improvements that
    raised altitude ceilings and added the three-pass desperation system resolved the
    terrain mismatches that were causing silent placement failures (D-075).
+5. ~~**The announcer was not in the game.**~~ **DONE** (D-074). `RadioDj` had 676 authored
+   lines, 28 topics and eleven simlab checks, and **nothing in `game/` referenced it**.
+   `UplandService` resolves his mast from `RadioDj.SiteRules`, `DjBroadcast` runs him
+   against live weather, alert state and the player's own deeds, and `--djreport` measures
+   the whole path. He is Hollis Kerr, on Old Tor; 157 breaks in eighteen hours, 5.8% of
+   the airtime, and he does not mention the salvage run nobody watched.
+6. **He has no voice.** His lines arrive as timed captions paced by `RadioDj.ReadSeconds` -
+   the duration the audio would have taken - because there is no TTS and no recorded VO.
+   Everything else about him is live. This is the biggest remaining gap in the feature and
+   it is confined to `DjBroadcast` and `RadioReadout`.
+7. **The world has no acoustics.** Still the top item in `benchmarks/audio.md`: no reverb,
+   no occlusion, and sites make no sound at all. Landing somewhere and shutting down
+   produces silence at exactly the moment the player is most receptive to being told where
+   they are.
 
 ## Open questions for Fred
 

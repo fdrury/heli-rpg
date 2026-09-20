@@ -589,6 +589,49 @@ public static class RadioDj
     public const double DeedCallbackSeconds = 21 * 86400.0;
 
     /// <summary>
+    /// How much of a story each kind of deed is.
+    ///
+    /// The hooks that produce deeds do not fire at anything like equal rates. A rescue
+    /// happens once in a campaign; a contract nobody accepted expires every time a board
+    /// refreshes, and a low pass over a village happens whenever the player is in a hurry.
+    /// A picker that simply took the most recent sayable deed was measured doing exactly
+    /// what that implies - <c>dj_newsworthy</c> put one rescue against forty routine
+    /// declines and low passes and the rescue was **never mentioned once**, because there
+    /// was always something newer.
+    ///
+    /// So recency is not the only axis. These are editorial weights, and they are the
+    /// announcer's judgement rather than the simulation's: somebody came off a hill alive
+    /// is the best thing that has happened all year, and a haulage job that went unfilled
+    /// is what he reads when there is nothing else.
+    /// </summary>
+    public static double Newsworthiness(DjDeedKind kind) => kind switch
+    {
+        DjDeedKind.Rescued => 3.0,
+        DjDeedKind.Crashed => 2.6,
+        DjDeedKind.WaterDrop => 2.4,
+        DjDeedKind.ShotAt => 2.2,
+        DjDeedKind.Delivered => 1.2,
+        DjDeedKind.Salvaged => 0.9,
+        DjDeedKind.Buzzed => 0.6,
+        DjDeedKind.Declined => 0.4,
+        _ => 1.0,
+    };
+
+    /// <summary>
+    /// What a deed is worth to him right now: how good a story, how fresh, how worn out.
+    ///
+    /// Age costs it half its value across the three days it stays news - enough that today
+    /// beats yesterday among equals, and nowhere near enough to let a stream of nothing
+    /// bury something worth saying. Airings cost it much more sharply, which is what moves
+    /// him on rather than leaving him on his best story until it goes stale.
+    /// </summary>
+    public static double DeedScore(in DjDeed deed, double nowSeconds, int airings)
+    {
+        double age = Math.Clamp((nowSeconds - deed.AtClockSeconds) / DeedStaleSeconds, 0, 1);
+        return Newsworthiness(deed.Kind) * (1.0 - 0.5 * age) / (1.0 + 2.0 * airings);
+    }
+
+    /// <summary>
     /// Whether the station could know about this yet.
     ///
     /// Three ways to fail, and the first is the one that matters: <b>nobody saw it</b>. A
@@ -2210,11 +2253,18 @@ public sealed class DjHost
     {
         if (w.Deeds is null) return null;
         DjDeed? best = null;
+        double bestScore = double.NegativeInfinity;
         foreach (DjDeed d in w.Deeds)
         {
             if (!RadioDj.Knowable(d, w.ClockSeconds)) continue;
-            if (_deedAirings.TryGetValue(d, out int n) && n >= MaxAiringsPerDeed) continue;
-            if (best is null || d.AtClockSeconds > best.Value.AtClockSeconds) best = d;
+            _deedAirings.TryGetValue(d, out int n);
+            if (n >= MaxAiringsPerDeed) continue;
+
+            // Not "the most recent". See RadioDj.Newsworthiness: taking the newest sayable
+            // deed lets the commonest hook win permanently, and the one night that mattered
+            // is never mentioned at all.
+            double score = RadioDj.DeedScore(d, w.ClockSeconds, n);
+            if (score > bestScore) { bestScore = score; best = d; }
         }
         return best;
     }

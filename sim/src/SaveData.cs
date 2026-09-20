@@ -75,6 +75,15 @@ public sealed class SaveData
 
     // ---- contracts ----
     public List<ContractSave> Contracts { get; set; } = new();
+
+    /// <summary>
+    /// What the district is still talking about (D-074).
+    ///
+    /// Saved because the announcer bringing up a delivery from before you last quit is most
+    /// of what separates him from a session-local effect. `Progress` prunes past the
+    /// callback window, so this list stays short whatever the length of the campaign.
+    /// </summary>
+    public List<DeedSave> Deeds { get; set; } = new();
     public int ContractsCompleted { get; set; }
     public int SearchStage { get; set; }
 
@@ -128,6 +137,14 @@ public sealed class SaveData
         foreach (SalvagePart part in p.Cargo.Parts)
             Cargo.Add(new CargoPartSave { Id = part.Def.Id, Condition = part.Condition });
 
+        Deeds.Clear();
+        foreach (DjDeed d in p.Deeds)
+            Deeds.Add(new DeedSave
+            {
+                Kind = d.Kind.ToString(), At = d.AtClockSeconds,
+                Place = d.Place, Amount = d.Amount, Witnesses = d.Witnesses,
+            });
+
         ContractsCompleted = p.ContractsCompleted;
         SearchStage = p.Search.Stage;
 
@@ -165,6 +182,12 @@ public sealed class SaveData
 
         foreach (var k in Knowledge)
             p.RestoreKnowledge(new Sim.Knowledge(k.Kind, k.Id, k.Label, k.Detail));
+
+        // A deed whose kind has left the enum is dropped rather than throwing, the same rule
+        // the cargo list follows: a save written by an older build must still open.
+        foreach (DeedSave d in Deeds)
+            if (Enum.TryParse(d.Kind, out DjDeedKind kind))
+                p.RestoreDeed(new DjDeed(kind, d.At, d.Place, d.Amount, d.Witnesses));
 
         foreach (var (idStr, rec) in Sites)
         {
@@ -314,6 +337,16 @@ public sealed class KnowledgeSave
 /// One salvaged part aboard. Id plus wear; the catalog supplies the rest.
 /// Matches the <c>(string Id, double Condition)</c> tuple <c>Cargo.Restore</c> takes.
 /// </summary>
+/// <summary>One deed, flattened. The kind is stored by name so the enum can be reordered.</summary>
+public sealed class DeedSave
+{
+    public string Kind { get; set; } = "";
+    public double At { get; set; }
+    public string? Place { get; set; }
+    public double Amount { get; set; }
+    public int Witnesses { get; set; }
+}
+
 public sealed class CargoPartSave
 {
     public string Id { get; set; } = "";

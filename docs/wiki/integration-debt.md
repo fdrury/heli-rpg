@@ -104,10 +104,20 @@ See D-050 and section 7 of `story.md`.
 
 ---
 
-## The announcer's deed feed -> the game (D-074)
+## ~~The announcer's deed feed -> the game (D-074)~~ **DONE**
 
-`DjWorld.Deeds` is the input that makes the station talk about the player, and **nothing
-produces a `DjDeed`**. The corpus, the gates and the distortion are built and covered by
+Both halves are wired. `UplandService` puts the station on the dial and `DjBroadcast` runs
+him against live world state; `Progress.RecordDeed` is called from six places, with
+`Witnesses` taken from `WorldMap.PopulationAt`/`PopulationNear` rather than defaulted -
+which is the field the whole design rests on. Verified end to end by `--djreport`: six deed
+lines in eighteen hours about a delivery and a low pass, and **nothing** about the salvage
+run that had zero witnesses.
+
+The contract the hooks are written against is kept below.
+
+---
+
+`DjWorld.Deeds` is the input that makes the station talk about the player. The corpus, the gates and the distortion are built and covered by
 `dj_deeds`; the feed is empty, so in the running game he never mentions anything the player
 has done.
 

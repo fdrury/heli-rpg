@@ -922,4 +922,135 @@ public static class RadioDjTests
         foreach (string w in wrong) Console.WriteLine($"  !! {w}");
         return $"{wrong.Count} problem(s) with what he knows about the player";
     }
+
+    /// <summary>
+    /// The deed ledger: it survives a save, and it does not grow without bound.
+    ///
+    /// Both halves are load-bearing and neither is visible from the announcer's side. If it
+    /// does not survive a save he is a session-local effect and the memory D-074 is built
+    /// around does not exist. If it does not prune, a campaign writes an ever-growing list
+    /// of deeds no line can ever draw into every save file forever.
+    /// </summary>
+    public static string? DeedLedger()
+    {
+        var wrong = new List<string>();
+        var p = Progress.NewGame();
+
+        // Day 1: three things happen, seen by different numbers of people.
+        p.Clock = 1 * 86400 + 9 * 3600;
+        p.RecordDeed(DjDeedKind.Delivered, "Long Acre", 40, witnesses: 30);
+        p.Clock += 4 * 3600;
+        p.RecordDeed(DjDeedKind.Buzzed, "Cold Shoulder", 0, witnesses: 6);
+        p.Clock += 2 * 3600;
+        p.RecordDeed(DjDeedKind.Salvaged, "The Scald", 5, witnesses: 0);
+
+        Console.WriteLine($"  after a day of work: {p.Deeds.Count} deeds on the ledger");
+        if (p.Deeds.Count != 3) wrong.Add($"recorded 3 deeds, the ledger holds {p.Deeds.Count}");
+
+        // --- it survives a save ------------------------------------------
+        var save = new SaveData();
+        save.CaptureProgress(p);
+        string json = System.Text.Json.JsonSerializer.Serialize(save);
+        SaveData? back = System.Text.Json.JsonSerializer.Deserialize<SaveData>(json);
+        if (back is null) return "the save did not deserialise at all";
+        Progress restored = back.ApplyProgress();
+
+        Console.WriteLine($"  through a save and back: {restored.Deeds.Count} deeds");
+        if (restored.Deeds.Count != p.Deeds.Count)
+            wrong.Add($"{p.Deeds.Count} deeds went into the save and {restored.Deeds.Count} came out");
+
+        for (int i = 0; i < Math.Min(p.Deeds.Count, restored.Deeds.Count); i++)
+        {
+            DjDeed a = p.Deeds[i], b = restored.Deeds[i];
+            if (a != b) wrong.Add($"deed {i} changed across the save: {a} -> {b}");
+        }
+
+        // Witnesses specifically, because it is the field that decides everything and the
+        // one a lossy save would quietly default to zero or one.
+        var lost = restored.Deeds.Where((d, i) => i < p.Deeds.Count && d.Witnesses != p.Deeds[i].Witnesses).ToList();
+        if (lost.Count > 0) wrong.Add($"{lost.Count} deed(s) lost their witness count across the save");
+
+        // And the announcer must reach the same conclusion about the restored list as about
+        // the original - a save that preserves the fields but shifts the clock would pass
+        // every check above and still change what he can say.
+        double now = p.Clock + 6 * 3600;
+        int knowableBefore = p.Deeds.Count(d => RadioDj.Knowable(d, now));
+        int knowableAfter = restored.Deeds.Count(d => RadioDj.Knowable(d, now));
+        Console.WriteLine($"  the announcer can speak {knowableBefore} of them before the save, " +
+                          $"{knowableAfter} after");
+        if (knowableBefore != knowableAfter)
+            wrong.Add($"the save changed what he is able to say ({knowableBefore} -> {knowableAfter})");
+        if (knowableBefore == 0)
+            wrong.Add("nothing on a day's ledger was sayable six hours later - the fixture is wrong");
+
+        // --- and it prunes -----------------------------------------------
+        var long_ = Progress.NewGame();
+        for (int day = 0; day < 120; day++)
+        {
+            long_.Clock = day * 86400 + 10 * 3600;
+            long_.RecordDeed(DjDeedKind.Delivered, "Long Acre", 40, witnesses: 20);
+            long_.RecordDeed(DjDeedKind.Buzzed, "Cold Shoulder", 0, witnesses: 8);
+        }
+
+        double horizonDays = RadioDj.DeedCallbackSeconds / 86400.0;
+        Console.WriteLine($"  after 120 days at two deeds a day: {long_.Deeds.Count} kept " +
+                          $"(horizon is {horizonDays:F0} days)");
+        if (long_.Deeds.Count > 2 * (horizonDays + 2))
+            wrong.Add($"the ledger holds {long_.Deeds.Count} deeds after 120 days - it is not pruning");
+        if (long_.Deeds.Count == 0)
+            wrong.Add("the ledger pruned everything, including deeds he could still bring up");
+
+        double oldest = long_.Clock - long_.Deeds.Min(d => d.AtClockSeconds);
+        Console.WriteLine($"  oldest surviving deed is {oldest / 86400.0:F1} days back");
+        if (oldest > RadioDj.DeedCallbackSeconds + 86400)
+            wrong.Add($"a deed {oldest / 86400.0:F1} days old survived the prune, past the " +
+                      $"{horizonDays:F0}-day window anything can be said about");
+
+        if (wrong.Count == 0) return null;
+        foreach (string w in wrong) Console.WriteLine($"  !! {w}");
+        return $"{wrong.Count} problem(s) with the deed ledger";
+    }
+
+    /// <summary>
+    /// A flood of dull deeds must not bury an interesting one.
+    ///
+    /// The deed hooks do not fire at equal rates. A rescue happens once; a contract nobody
+    /// accepted expires every time a board refreshes, and a low pass over a village happens
+    /// whenever the player is in a hurry. If the announcer simply takes the most recent
+    /// thing he could talk about, the commonest hook wins permanently and the player never
+    /// hears about the one night that mattered - which is the failure this measures.
+    /// </summary>
+    public static string? TheInterestingOneWins()
+    {
+        const double noon = 172 * 86400 + 12 * 3600;
+        var deeds = new List<DjDeed>
+        {
+            // The thing that mattered, eight hours ago.
+            new(DjDeedKind.Rescued, noon, "Kirkhaven", 1, Witnesses: 25),
+        };
+        // Then twenty routine declines and low passes, all of them MORE RECENT.
+        for (int i = 0; i < 20; i++)
+        {
+            deeds.Add(new DjDeed(DjDeedKind.Declined, noon + (i + 1) * 600, "Long Acre", 0, 40));
+            deeds.Add(new DjDeed(DjDeedKind.Buzzed, noon + (i + 1) * 620, "Cold Shoulder", 0, 12));
+        }
+
+        var host = new DjHost(31337);
+        List<DjSegment> said = Session(host, clock => W(clock, deeds: deeds),
+                                       noon + 20 * 600 + 3 * 3600, 400);
+
+        var kinds = said.Where(x => x.Topic == DjTopic.Deed)
+                        .GroupBy(x => x.Id.Split('.')[2])
+                        .ToDictionary(g => g.Key, g => g.Count());
+
+        Console.WriteLine("  one rescue against forty routine deeds:");
+        foreach ((string kind, int n) in kinds.OrderByDescending(kv => kv.Value))
+            Console.WriteLine($"    {kind,-12} {n}");
+
+        if (kinds.Count == 0) return "he mentioned none of the forty-one deeds at all";
+        if (!kinds.ContainsKey("Rescued"))
+            return "the rescue was never mentioned - forty routine deeds buried the one " +
+                   "thing that mattered, because the picker takes whatever is most recent";
+        return null;
+    }
 }

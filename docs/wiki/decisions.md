@@ -2237,7 +2237,17 @@ supply deeds for the station to work. Covered by `dj_deeds`, which checks the th
 one at a time, that he wears a story out, that a placeless deed never produces a sentence
 with a hole in it, and that the distortion is both stable and a function of the crowd.
 
-**Not done:** nothing produces `DjDeed`s yet. The hook is one call per completed contract,
+**Amended the same day — newsworthiness.** The first picker took the most recent sayable
+deed, which is wrong because the hooks do not fire at equal rates: a rescue happens once in
+a campaign, an unaccepted contract expires every time a board refreshes, and a low pass
+happens whenever the player is in a hurry. `dj_newsworthy` put one rescue against forty
+routine declines and low passes and the rescue was **never mentioned once**. `RadioDj.
+DeedScore` now weights the kind (`Newsworthiness`, 3.0 for a rescue down to 0.4 for a
+declined job), decays it by half across the three-day freshness window, and divides by
+airings. The rescue now gets its three airings and he moves on. These are editorial weights
+and they are the announcer's judgement, not the simulation's.
+
+**Not done:** ~~nothing produces `DjDeed`s yet.~~ The hook is one call per completed contract,
 crash, salvage run and low pass, with `Witnesses` taken from the population of the nearest
 site - which is a number the world already knows and nothing currently reads. Logged in
 `integration-debt.md` rather than guessed at here.

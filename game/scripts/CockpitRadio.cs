@@ -106,6 +106,17 @@ public sealed partial class CockpitRadio : Node3D
 
     private readonly List<RadioStreamDef> _broadcasters = new();
     private readonly List<RadioStation> _tuned = new();
+
+    /// <summary>
+    /// The Upland Service, if the player has found it. Null until the frequency is known.
+    ///
+    /// Seeded from the transmitter's site id rather than from a clock, so the man on the
+    /// mast says the same things in the same order on a reloaded save. A station that
+    /// reshuffles its whole personality when you quit and come back is not a place.
+    /// </summary>
+    private DjBroadcast? _dj;
+    private ThreatWorld? _threats;
+    private readonly List<DjRegionHeat> _heat = new();
     private readonly Dictionary<int, int> _salvageSeen = new();
 
     private AudioStreamPlayer3D? _player;
@@ -139,7 +150,7 @@ public sealed partial class CockpitRadio : Node3D
                 case "--selftest": case "--looptest": case "--foottest":
                 case "--combattest": case "--savetest": case "--windingtest":
                 case "--screenshot": case "--threatreport": case "--worldreport":
-                case "--warntest":
+                case "--warntest": case "--djreport":
                     _quiet = true;
                     break;
             }
@@ -232,6 +243,7 @@ public sealed partial class CockpitRadio : Node3D
         _landing ??= FindFirst<LandingController>(GetTree().Root);
         _play ??= FindFirst<SiteInteraction>(GetTree().Root);
         _dialogue ??= FindFirst<DialoguePanel>(GetTree().Root);
+        _threats ??= FindFirst<ThreatWorld>(GetTree().Root);
         if (_heli is null) return;
 
         GlobalPosition = _heli.GlobalPosition;
@@ -314,6 +326,17 @@ public sealed partial class CockpitRadio : Node3D
         {
             _stream.Stop();
             _agc.Reset();
+        }
+
+        // --- the man on the mast -----------------------------------------------
+        // Driven off the same station, signal and duck as everything else on the band, so
+        // he fades behind a ridge and gets out of the way of a warning horn without
+        // knowing that either thing exists.
+        if (_dj is not null)
+        {
+            bool onHim = haveStation && station.Url.Length == 0 && _set.Playing;
+            if (!onHim) _dj.Silence();
+            else _dj.Update(delta, BuildDjWorld(), signal * _mix.Gain);
         }
 
         PushAudio(delta);
@@ -474,6 +497,18 @@ public sealed partial class CockpitRadio : Node3D
             if (!int.TryParse(k.Id[5..], out int siteId)) continue;
             Site? site = WorldMap.SiteById(siteId);
             if (site is null) continue;
+
+            // The Upland Service is not a broadcaster. It is a man with a microphone, and
+            // binding it to an Icecast URL would put somebody else's music where he is
+            // meant to be. RadioStation's no-stream constructor is the documented shape for
+            // exactly this, and an empty Url is what tells the socket code to stay shut.
+            if (UplandService.Station is RadioStation local && local.Id == k.Id)
+            {
+                _tuned.Add(local);
+                _dj ??= new DjBroadcast(siteId);
+                continue;
+            }
+
             _tuned.Add(Radio.BindStation(siteId, site.Name, site.Position.X, site.Position.Y,
                                          _broadcasters));
         }
@@ -487,6 +522,44 @@ public sealed partial class CockpitRadio : Node3D
         else if (_set.StationIndex >= _tuned.Count) _set.Tune(_tuned.Count > 0 ? 0 : -1);
     }
 
+    /// <summary>
+    /// Everything the announcer is allowed to know this minute.
+    ///
+    /// Assembled here rather than held as live references because <c>DjWorld</c> is a
+    /// snapshot by design - it is what stops <c>RadioDj</c> reaching into systems it does
+    /// not own. Three of these fields are the whole character:
+    ///
+    ///   * <b>Heat</b> is <see cref="AlertState"/>, named. He only ever talks about a
+    ///     region that has genuinely seen the aircraft, and the band decides how worried
+    ///     the line sounds.
+    ///   * <b>Deeds</b> is the player's own history (D-074). He applies his own
+    ///     knowability gates to it; nothing is filtered on the way in, because deciding
+    ///     what a radio station has heard about is the radio station's job.
+    ///   * <b>TrackTitle</b> is null and stays null. He has no stream behind him, so he has
+    ///     no track to back-announce, and <c>DjCorpus.UnknownTrack</c> is the fallback the
+    ///     corpus already carries for exactly this.
+    /// </summary>
+    private DjWorld BuildDjWorld()
+    {
+        Weather.Conditions wx = SceneMood.Now;
+        Progress? p = _play?.Progress;
+
+        _heat.Clear();
+        if (_threats?.Alert is AlertState alert)
+            foreach (KeyValuePair<int, double> kv in alert.Raised(RadioDj.TalkAboutAbove))
+                if (kv.Key >= 0 && kv.Key < WorldMap.Regions.Count)
+                    _heat.Add(new DjRegionHeat(WorldMap.Regions[kv.Key].Name, kv.Value));
+
+        return new DjWorld(
+            p?.Clock ?? SceneMood.Clock,
+            wx.Sky, wx.WindSpeed, wx.Gust, wx.Visibility, wx.CloudBase,
+            wx.IsaDeviation, wx.Precipitation, wx.StormIntensity,
+            _heat,
+            p?.Search.Complete ?? false,
+            null, null,
+            p?.Deeds);
+    }
+
     // ------------------------------------------------------------- for the panel
 
     internal string Line() => Radio.Readout(_set, _tuned);
@@ -496,6 +569,9 @@ public sealed partial class CockpitRadio : Node3D
     internal double Volume => _set.Volume;
 
     internal bool Ducked => _mix.Gain < 0.7;
+
+    /// <summary>What the announcer is saying this instant, or null. Rendered by the readout.</summary>
+    internal string? Announcer => _dj?.Caption;
 
     internal int StationCount => _tuned.Count;
 
@@ -556,9 +632,61 @@ public sealed partial class RadioReadout : Control
         if (_flash.Length > 0 && _flashAge > 6.0) _flash = "";
     }
 
+    /// <summary>
+    /// The announcer, wrapped, above the readout line.
+    ///
+    /// Two decisions worth naming. It is drawn <b>whether or not the readout is showing</b>
+    /// - the readout is trim that fades after a few seconds, and a man talking is content
+    /// that has to stay up for as long as he is talking. And it wraps to a measured width
+    /// rather than a character count, because these lines run to forty words and a fixed
+    /// column count set against one font breaks silently against another.
+    /// </summary>
+    private void DrawAnnouncer(Vector2 size, float x, float bottom)
+    {
+        string? caption = _radio.Announcer;
+        if (string.IsNullOrEmpty(caption)) return;
+
+        const int fontSize = 16;
+        float maxWidth = Math.Min(size.X - x * 2, 780f);
+
+        var lines = new List<string>();
+        var line = new System.Text.StringBuilder();
+        foreach (string word in caption.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string candidate = line.Length == 0 ? word : line + " " + word;
+            if (_font.GetStringSize(candidate, HorizontalAlignment.Left, -1, fontSize).X > maxWidth
+                && line.Length > 0)
+            {
+                lines.Add(line.ToString());
+                line.Clear().Append(word);
+            }
+            else
+            {
+                line.Clear().Append(candidate);
+            }
+        }
+        if (line.Length > 0) lines.Add(line.ToString());
+
+        const float lineHeight = 21f;
+        float top = bottom - lines.Count * lineHeight;
+
+        // A panel behind it, because this is text over a windscreen and the ground behind
+        // the windscreen is any colour it likes.
+        DrawRect(new Rect2(x - 10, top - 18, maxWidth + 20, lines.Count * lineHeight + 14),
+                 new Color(0.04f, 0.05f, 0.06f, 0.62f));
+
+        for (int i = 0; i < lines.Count; i++)
+            DrawString(_font, new Vector2(x, top + i * lineHeight), lines[i],
+                       HorizontalAlignment.Left, -1, fontSize,
+                       new Color(0.90f, 0.88f, 0.78f, 0.96f));
+    }
+
     public override void _Draw()
     {
         if (!_radio.Installed && _flash.Length == 0) return;
+
+        Vector2 viewport = GetViewportRect().Size;
+        DrawAnnouncer(viewport, 22, viewport.Y - 86);
 
         float alpha = _age < ShowSeconds ? 1f
                     : Math.Max(0f, 1f - (float)(_age - ShowSeconds) / FadeSeconds);

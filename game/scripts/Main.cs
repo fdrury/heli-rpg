@@ -229,6 +229,12 @@ public sealed partial class Main : Node3D
                 GetTree().Quit(0);
                 return;
             }
+            if (arg == "--djreport")
+            {
+                DjReport.Run();
+                GetTree().Quit(0);
+                return;
+            }
             if (arg == "--foottest")
             {
                 GD.Print("[main] running the on-foot test");
@@ -278,9 +284,13 @@ public sealed partial class Main : Node3D
             {
                 var pos = _heli.GlobalPosition;
                 var nearest = WorldMap.Nearest(new Vector2(pos.X, pos.Z));
-                string place = nearest?.Name ?? "nowhere";
+                // Null, not "nowhere". D-074's rule is that the announcer never invents a
+                // place, and every line in the Crashed bank names one - so a deed with no
+                // place to put it is silently dropped when he goes to read it. A fallback
+                // string defeats that from the outside and puts "came down near nowhere" on
+                // the air, which is the exact sentence the {PLACE} rule exists to prevent.
                 int witnesses = WorldMap.PopulationNear(pos.X, pos.Z);
-                _play.Progress.RecordDeed(DjDeedKind.Crashed, place, 0, witnesses);
+                _play.Progress.RecordDeed(DjDeedKind.Crashed, nearest?.Name, 0, witnesses);
             }
         };
         _landing.RotorStrike += what => GD.PrintErr($"[landing] ROTOR STRIKE: {what}");

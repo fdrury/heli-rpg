@@ -73,6 +73,54 @@ public sealed class Progress
     /// <summary>In-world seconds since the game began.</summary>
     public double Clock { get; set; }
 
+    // ------------------------------------------------------------------ deeds
+
+    private readonly List<DjDeed> _deeds = new();
+
+    /// <summary>
+    /// What the district has to talk about: things the player did that somebody saw.
+    ///
+    /// Lives on <see cref="Progress"/> rather than on the radio because it has to survive a
+    /// save - the announcer bringing up a delivery from before you last quit is most of what
+    /// makes him a person rather than a session-local effect (D-074) - and because the radio
+    /// is not the only thing that will want this list. It is deliberately a record of what
+    /// HAPPENED, not of what was said; who has heard about it is the announcer's problem and
+    /// is decided by <see cref="RadioDj.Knowable"/> every time he opens his mouth.
+    /// </summary>
+    public IReadOnlyList<DjDeed> Deeds => _deeds;
+
+    /// <summary>
+    /// Record something the player did.
+    ///
+    /// <paramref name="witnesses"/> is the field that matters and the one that must not be
+    /// defaulted by callers: it decides whether the deed is ever mentioned at all and how
+    /// far the figure drifts on the way to the mast. It comes from the world - the
+    /// population of the nearest inhabited place - so that flying the long way round over
+    /// empty country is genuinely quieter than flying over the valley. A hook that passes 1
+    /// everywhere turns the whole system back into the event log D-074 exists to avoid.
+    /// </summary>
+    public void RecordDeed(DjDeedKind kind, string? place, double amount, int witnesses)
+    {
+        _deeds.Add(new DjDeed(kind, Clock, place, amount, witnesses));
+        Prune();
+    }
+
+    /// <summary>Restore one from a save, at its original time.</summary>
+    public void RestoreDeed(in DjDeed deed) { _deeds.Add(deed); Prune(); }
+
+    /// <summary>
+    /// Drop anything older than the announcer could still bring up.
+    ///
+    /// Without this the list grows for the length of a campaign and is written to every save
+    /// forever, to hold deeds no line can ever draw. The horizon is the announcer's own
+    /// callback window, so the pruning rule and the speaking rule cannot drift apart.
+    /// </summary>
+    private void Prune()
+    {
+        double cutoff = Clock - RadioDj.DeedCallbackSeconds;
+        _deeds.RemoveAll(d => d.AtClockSeconds < cutoff);
+    }
+
     public event Action<Knowledge>? Learned;
     public event Action<Stock, double>? StockChanged;
     public event Action<string>? Journalled;
