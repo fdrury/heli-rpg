@@ -23,11 +23,23 @@ public sealed partial class MenuShot : Node
         ProcessMode = ProcessModeEnum.Always;   // the tree is paused behind the menu
     }
 
-    private static readonly (double At, string Name, Key[] Keys)[] Plan =
+    /// <summary>
+    /// A timeline of presses and photographs, kept SEPARATE.
+    ///
+    /// The first version pressed keys and took the picture in the same tick, and every shot
+    /// after the first came out showing the previous page: the menu had changed state but
+    /// the viewport had not been redrawn yet, so the capture read the old frame. Pressing
+    /// on one step and shooting on a later one is the whole fix.
+    /// </summary>
+    private readonly record struct Step(double At, Key[] Keys, string? Shot);
+
+    private static readonly Step[] Plan =
     {
-        (2.5, "menu-title", Array.Empty<Key>()),
-        (3.4, "menu-settings", new[] { Key.Down, Key.Down, Key.Enter }),
-        (4.2, "menu-pause", new[] { Key.Escape }),
+        new(2.5, System.Array.Empty<Key>(), "menu-title"),
+        new(3.0, new[] { Key.Down, Key.Down, Key.Enter }, null),
+        new(3.4, System.Array.Empty<Key>(), "menu-load"),
+        new(3.8, new[] { Key.Escape, Key.Down, Key.Down, Key.Down, Key.Enter }, null),
+        new(4.2, System.Array.Empty<Key>(), "menu-settings"),
     };
 
     public override void _Process(double delta)
@@ -35,18 +47,14 @@ public sealed partial class MenuShot : Node
         _t += delta;
         if (_shot >= Plan.Length) { GetTree().Quit(0); return; }
 
-        (double at, string name, Key[] keys) = Plan[_shot];
-        if (_t < at) return;
+        Step step = Plan[_shot];
+        if (_t < step.At) return;
 
-        foreach (Key k in keys)
-        {
-            var ev = new InputEventKey { Keycode = k, Pressed = true };
-            _menu._UnhandledInput(ev);
-        }
+        foreach (Key k in step.Keys)
+            _menu._UnhandledInput(new InputEventKey { Keycode = k, Pressed = true });
         _menu.QueueRedraw();
 
-        // One frame for the redraw to land before the viewport is read.
-        CallDeferred(nameof(Snap), name);
+        if (step.Shot is string name) CallDeferred(nameof(Snap), name);
         _shot++;
     }
 

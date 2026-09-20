@@ -27,7 +27,7 @@ namespace Rotorwash;
 /// </summary>
 public sealed partial class GameMenu : Control
 {
-    private enum Page { Hidden, Title, Paused, Settings, ConfirmQuit }
+    private enum Page { Hidden, Title, Paused, Settings, ConfirmQuit, SaveTo, LoadFrom }
 
     private static readonly Color Paper = new(0.06f, 0.07f, 0.065f, 0.96f);
     private static readonly Color Ink = new(0.86f, 0.88f, 0.80f);
@@ -54,20 +54,32 @@ public sealed partial class GameMenu : Control
     {
         Page.Title => new()
         {
-            new("CONTINUE", () => { _main.LoadGame(); Close(); }),
+            // CONTINUE takes the NEWEST save rather than a fixed slot, which is what the
+            // word means everywhere else and saves the player from having to remember
+            // which one they were on.
+            new(Main.NewestSlot() == int.MinValue ? "CONTINUE (no saves)" : "CONTINUE", () =>
+            {
+                int slot = Main.NewestSlot();
+                if (slot == int.MinValue) { Flash("nothing saved yet"); return; }
+                string? why = _main.LoadGame(slot);
+                if (why is null) Close(); else Flash(why);
+            }),
             new("NEW SORTIE", Close),
+            new("LOAD", () => Go(Page.LoadFrom)),
             new("SETTINGS", () => Go(Page.Settings)),
             new("QUIT", () => Go(Page.ConfirmQuit)),
         },
         Page.Paused => new()
         {
             new("RESUME", Close),
-            new("SAVE", () => { _main.SaveGame(); Flash("saved"); }),
-            new("LOAD", () => { _main.LoadGame(); Close(); }),
+            new("SAVE", () => Go(Page.SaveTo)),
+            new("LOAD", () => Go(Page.LoadFrom)),
             new("SETTINGS", () => Go(Page.Settings)),
             new("FLIGHT CONTROLS", () => { Close(); _main.OpenBindings(); }),
             new("QUIT", () => Go(Page.ConfirmQuit)),
         },
+        Page.SaveTo => Slots(save: true),
+        Page.LoadFrom => Slots(save: false),
         Page.Settings => new()
         {
             new("Master volume", () => { }, () => $"{Settings.Master * 100:F0}%"),
@@ -81,11 +93,52 @@ public sealed partial class GameMenu : Control
         Page.ConfirmQuit => new()
         {
             new("Keep flying", () => Go(_main.Started ? Page.Paused : Page.Title)),
-            new("Save and quit", () => { _main.SaveGame(); GetTree().Quit(); }),
+            new("Save and quit", () =>
+            {
+                string? why = _main.SaveGame(0);
+                if (why is null) GetTree().Quit();
+                else Flash($"cannot save - {why}");
+            }),
             new("Quit without saving", () => GetTree().Quit()),
         },
         _ => new(),
     };
+
+    /// <summary>
+    /// The slot list, for saving or loading.
+    ///
+    /// The autosave is in the list for LOADING and absent from SAVING, which is the whole
+    /// reason to have one: it is the copy the player cannot accidentally write over with a
+    /// worse position. Empty slots are shown rather than hidden, because a list that grows
+    /// as you use it is harder to navigate than one that is always the same shape.
+    /// </summary>
+    private List<Row> Slots(bool save)
+    {
+        var rows = new List<Row>();
+
+        if (!save)
+            rows.Add(new("Autosave", () => Use(-1, false), () => Main.DescribeSlot(-1)));
+
+        for (int i = 0; i < Main.SlotCount; i++)
+        {
+            int slot = i;
+            rows.Add(new($"Slot {slot + 1}", () => Use(slot, save), () => Main.DescribeSlot(slot)));
+        }
+        rows.Add(new("Back", () => Go(_main.Started ? Page.Paused : Page.Title)));
+        return rows;
+    }
+
+    private void Use(int slot, bool save)
+    {
+        if (save)
+        {
+            string? why = _main.SaveGame(slot);
+            Flash(why is null ? $"saved to slot {slot + 1}" : $"cannot save - {why}");
+            return;
+        }
+        string? fail = _main.LoadGame(slot);
+        if (fail is null) Close(); else Flash(fail);
+    }
 
     // ------------------------------------------------------------------ life
 
@@ -230,11 +283,24 @@ public sealed partial class GameMenu : Control
             case Key.KpEnter:
             case Key.Space:
                 if (_page == Page.Settings && rows[_row].Value is not null) Adjust(+1);
-                else rows[_row].Act();
+                else rows[_row].Act();          // slot rows carry a value AND an action
+                break;
+
+            case Key.Delete:
+                if (_page is Page.SaveTo or Page.LoadFrom)
+                {
+                    int slot = _page == Page.LoadFrom ? _row - 1 : _row;   // autosave is row 0 on load
+                    if (slot >= 0 && slot < Main.SlotCount)
+                    {
+                        Main.DeleteSlot(slot);
+                        Flash($"slot {slot + 1} cleared");
+                    }
+                    else Flash("the autosave is not yours to delete");
+                }
                 break;
 
             case Key.Escape:
-                if (_page == Page.Settings || _page == Page.ConfirmQuit)
+                if (_page is Page.Settings or Page.ConfirmQuit or Page.SaveTo or Page.LoadFrom)
                     Go(_main.Started ? Page.Paused : Page.Title);
                 else if (_page == Page.Paused) Close();
                 break;
@@ -325,6 +391,8 @@ public sealed partial class GameMenu : Control
             {
                 Page.Settings => "SETTINGS",
                 Page.ConfirmQuit => "QUIT?",
+                Page.SaveTo => "SAVE TO",
+                Page.LoadFrom => "LOAD FROM",
                 _ => "PAUSED",
             };
             DrawString(_font, new Vector2(x, y), heading, HorizontalAlignment.Left, -1, 34, Ink);
@@ -345,18 +413,23 @@ public sealed partial class GameMenu : Control
             if (rows[i].Value is Func<string> v)
             {
                 string value = v();
-                DrawString(_font, new Vector2(x + 340, y), value, HorizontalAlignment.Left, -1, 20,
+                bool slotPage = _page is Page.SaveTo or Page.LoadFrom;
+                DrawString(_font, new Vector2(x + (slotPage ? 150 : 340), y), value,
+                           HorizontalAlignment.Left, -1, slotPage ? 16 : 20,
                            sel ? Hot : Faint);
-                if (sel)
+                if (sel && !slotPage)
                     DrawString(_font, new Vector2(x + 340 + 150, y), "< >", HorizontalAlignment.Left, -1, 16, Faint);
             }
             y += 40;
         }
 
         y += 24;
-        string help = _page == Page.Settings
-            ? "up/down choose   left/right change   ESC back"
-            : "up/down choose   ENTER select   ESC back";
+        string help = _page switch
+        {
+            Page.Settings => "up/down choose   left/right change   ESC back",
+            Page.SaveTo or Page.LoadFrom => "up/down choose   ENTER use   DEL clear   ESC back",
+            _ => "up/down choose   ENTER select   ESC back",
+        };
         DrawString(_font, new Vector2(x, y), help, HorizontalAlignment.Left, -1, 14, Faint);
 
         if (_flash.Length > 0 && _flashAge < 3.0)

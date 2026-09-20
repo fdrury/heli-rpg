@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using Godot;
 using Rotorwash.Sim;
@@ -39,8 +40,8 @@ public sealed partial class Main : Node3D
     private bool _headless;
 
     /// <summary>For the menu. Saving is gated on being parked (D-036); this reports why.</summary>
-    public void SaveGame() => TrySave();
-    public void LoadGame() => TryLoad();
+    public string? SaveGame(int slot) => TrySave(slot);
+    public string? LoadGame(int slot) => TryLoad(slot);
     public void OpenBindings() => _bindings.Visible = true;
     private DialoguePanel _dialogue = null!;
     private CodaServer _codaServer = null!;
@@ -1105,6 +1106,8 @@ public sealed partial class Main : Node3D
 
     public override void _Process(double delta)
     {
+        MaybeAutosave();
+
         if (!_showDebug) return;
         if (_mode == GameMode.OnFoot)
         {
@@ -1144,7 +1147,103 @@ public sealed partial class Main : Node3D
         }
     }
 
+    /// <summary>
+    /// How many numbered slots the player gets, plus an autosave that is not one of them.
+    ///
+    /// Six because that is enough to keep a branch, a before-the-hard-bit and a couple of
+    /// spares without turning the list into a filing exercise. The autosave is separate and
+    /// cannot be written over by hand, which is the whole point of having one.
+    /// </summary>
+    public const int SlotCount = 6;
+
     private static string SavePath => Path.Combine(SaveDir, "save1.json");
+
+    public static string PathForSlot(int slot)
+        => Path.Combine(SaveDir, slot < 0 ? "auto.json" : $"slot{slot}.json");
+
+    /// <summary>The old single-file save, so an existing one is not orphaned.</summary>
+    private static string LegacyPath => Path.Combine(SaveDir, "save1.json");
+
+    /// <summary>
+    /// What is in a slot, without loading it.
+    ///
+    /// Returns null for an empty or unreadable slot - a corrupt save should show as empty
+    /// in the list rather than taking the menu down with it.
+    /// </summary>
+    public static SaveData? PeekSlot(int slot)
+    {
+        string path = PathForSlot(slot);
+        if (!File.Exists(path)) return null;
+        try { return SaveData.FromJson(File.ReadAllText(path)); }
+        catch { return null; }
+    }
+
+    /// <summary>One line for the menu. Empty slots say so.</summary>
+    public static string DescribeSlot(int slot)
+    {
+        SaveData? d = PeekSlot(slot);
+        if (d is null) return "empty";
+
+        int day = (int)(d.Clock / 86400.0);
+        double hour = (d.Clock / 3600.0) % 24.0;
+        string place = string.IsNullOrWhiteSpace(d.PlaceName) ? "somewhere" : d.PlaceName;
+        string when = "";
+        if (DateTime.TryParse(d.SavedAtUtc, null,
+                              System.Globalization.DateTimeStyles.RoundtripKind, out DateTime t))
+            when = $"   {t.ToLocalTime():d MMM HH:mm}";
+
+        return $"day {day}, {(int)hour:D2}:{(int)((hour % 1) * 60):D2}   {place}   " +
+               $"{d.FlightHours:F1} h{when}";
+    }
+
+    /// <summary>The slot with the newest timestamp, or -1 if there are none. For CONTINUE.</summary>
+    public static int NewestSlot()
+    {
+        int best = int.MinValue;
+        DateTime bestAt = DateTime.MinValue;
+        for (int i = -1; i < SlotCount; i++)
+        {
+            SaveData? d = PeekSlot(i);
+            if (d is null) continue;
+            if (!DateTime.TryParse(d.SavedAtUtc, null,
+                                   System.Globalization.DateTimeStyles.RoundtripKind, out DateTime t))
+                t = File.GetLastWriteTimeUtc(PathForSlot(i));
+            if (t > bestAt) { bestAt = t; best = i; }
+        }
+        return best == int.MinValue ? int.MinValue : best;
+    }
+
+    public static void DeleteSlot(int slot)
+    {
+        string path = PathForSlot(slot);
+        if (File.Exists(path)) File.Delete(path);
+    }
+
+    private bool _wasSaveable;
+    private double _lastAutosave = -9999;
+
+    /// <summary>
+    /// Write the autosave the moment the aircraft becomes saveable.
+    ///
+    /// On the RISING EDGE of being parked and shut down, not continuously - the condition
+    /// stays true for as long as the player sits at a site talking to people, and writing a
+    /// save every frame of that would be both wasteful and useless. The edge is the
+    /// interesting moment: it is exactly when the sortie ended, which is the thing anybody
+    /// would want to go back to.
+    ///
+    /// Rate-limited as well, because shutting down and restarting a few times while poking
+    /// at a site should not produce a stream of saves.
+    /// </summary>
+    private void MaybeAutosave()
+    {
+        bool now = CanSave;
+        if (now && !_wasSaveable && SceneMood.Clock - _lastAutosave > 600.0)
+        {
+            _lastAutosave = SceneMood.Clock;
+            if (TrySave(-1) is null) GD.Print("[save] autosaved");
+        }
+        _wasSaveable = now;
+    }
 
     /// <summary>Can save: parked, shut down, not in dialogue or mid-activity.</summary>
     private bool CanSave =>
@@ -1155,19 +1254,47 @@ public sealed partial class Main : Node3D
         && _play.Busy is null
         && !_play.InDialogue;
 
-    private void TrySave()
+    /// <summary>Write a slot. Returns why not, or null when it worked.</summary>
+    public string? TrySave(int slot)
     {
         if (!CanSave)
         {
-            GD.Print("[save] cannot save — land, shut down, and park at a site first");
             _play.Progress.Journal("Tried to save. Put down somewhere first.");
-            return;
+            return "land, shut down and park at a site first";
         }
         var data = CaptureState();
+        data.SavedAtUtc = DateTime.UtcNow.ToString("o");
+        data.PlaceName = _play.Parked?.Name ?? "";
+        data.FlightHours = _heli.Sim.Damage.TotalFlightHours;
+
+        string path = PathForSlot(slot);
         string json = data.ToJson();
-        File.WriteAllText(SavePath, json);
-        GD.Print($"[save] saved to {SavePath} ({json.Length} bytes)");
-        _play.Progress.Journal("Progress recorded.");
+        File.WriteAllText(path, json);
+        GD.Print($"[save] saved to {path} ({json.Length} bytes)");
+        if (slot >= 0) _play.Progress.Journal("Progress recorded.");
+        return null;
+    }
+
+    private void TrySave() => TrySave(0);
+
+    /// <summary>Read a slot. Returns why not, or null when it worked.</summary>
+    public string? TryLoad(int slot)
+    {
+        string path = PathForSlot(slot);
+        // An existing single-file save from before slots predates the numbering, and
+        // silently losing somebody's campaign to a refactor is not acceptable.
+        if (!File.Exists(path) && slot == 0 && File.Exists(LegacyPath)) path = LegacyPath;
+        if (!File.Exists(path)) return "nothing saved there";
+        try
+        {
+            string text = File.ReadAllText(path);
+            var d = SaveData.FromJson(text);
+            if (d is null) return "that save is corrupt";
+            ApplyState(d);
+            GD.Print($"[save] loaded {path}");
+            return null;
+        }
+        catch (Exception e) { return $"could not read that save: {e.Message}"; }
     }
 
     private void TryLoad()

@@ -15,6 +15,23 @@ public sealed class SaveData
 {
     public int Version { get; set; } = 1;
 
+    // ------------------------------------------------------------- slot header
+    //
+    // Four fields that exist only so a save can be DESCRIBED without being loaded. A slot
+    // list that says "slot 3" and nothing else asks the player to remember what they were
+    // doing three sessions ago, which nobody can; a slot list that says where they were and
+    // when tells them instantly which one they want. Written at capture, read by the menu,
+    // and ignored by everything else.
+
+    /// <summary>Real-world time the save was written, ISO 8601. For "which is the newest".</summary>
+    public string SavedAtUtc { get; set; } = "";
+
+    /// <summary>Where the aircraft was parked. The single most useful word in the list.</summary>
+    public string PlaceName { get; set; } = "";
+
+    /// <summary>Hours on the airframe. The clock the whole campaign runs against (D-086).</summary>
+    public double FlightHours { get; set; }
+
     // ---- aircraft ----
     public double North { get; set; }
     public double East { get; set; }

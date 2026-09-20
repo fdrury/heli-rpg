@@ -78,7 +78,25 @@ public sealed partial class SaveTest : Node
             // ---- 0: fly to overhead ---
             case 0:
             {
-                float ground = WorldHeight.At(_target.Position.X, _target.Position.Y);
+                // Clear the ground BETWEEN here and there, not just the ground at the far
+                // end. This was `target ground + 70`, which is a safe altitude only if the
+                // terrain in between is no higher than the destination - true in the old
+                // world by luck and false the moment D-087 moved the regions. The aircraft
+                // flew into a 21 degree slope on the way and rolled over, and the test
+                // reported "could not reach site", which sounds like a range problem.
+                float targetGround = WorldHeight.At(_target.Position.X, _target.Position.Y);
+                float ground = targetGround;
+                const int probes = 12;
+                for (int i = 0; i <= probes; i++)
+                {
+                    Vector2 p2 = flat.Lerp(_target.Position, i / (float)probes);
+                    ground = Mathf.Max(ground, WorldHeight.At(p2.X, p2.Y));
+                }
+
+                // ...and come down to the destination's own height once the ridges are
+                // behind, so the approach still ends where it should.
+                if (range < 260f) ground = targetGround;
+
                 var demand = new AutopilotDemand
                 {
                     Altitude = ground + 70,

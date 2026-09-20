@@ -39,8 +39,17 @@ most hostile thing in here for anybody trying to test.
 - **Settings**: master volume, radio volume, graphics tier, field of view, look sensitivity,
   invert cyclic pitch. Left/right changes a value; it saves itself to `user://settings.cfg`.
 
-Saving is still parked-only by design (D-036) — the menu will tell you to land first rather
-than failing silently.
+**Saves are slots now.** Six numbered slots plus an autosave, each listed with where you were
+parked, the in-game day and time, hours on the airframe, and when it was written — so picking
+one is a glance rather than an archaeology exercise. `ENTER` uses a slot, `DEL` clears one.
+CONTINUE on the title takes the newest of them, whichever that is.
+
+The **autosave** is written the moment the aircraft becomes saveable — the rising edge of
+parked-and-shut-down, which is exactly when a sortie ended — and it is not in the save list,
+so it cannot be written over by hand. That is the whole point of having one.
+
+Saving is still parked-only by design (D-036) — the menu tells you to land first rather than
+failing silently.
 
 ## Start here
 
