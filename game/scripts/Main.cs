@@ -26,6 +26,7 @@ public sealed partial class Main : Node3D
     private Kneeboard _kneeboard = null!;
     private ThreatWorld _threats = null!;
     private FlightHud _hud = null!;
+    private BindingPanel _bindings = null!;
     private DialoguePanel _dialogue = null!;
     private CodaServer _codaServer = null!;
     private PilotController _pilot = null!;
@@ -174,6 +175,12 @@ public sealed partial class Main : Node3D
             ThreatWorldPath = _threats.GetPath(),
         };
         layer.AddChild(_hud);
+
+        // The binding screen. Presets cover the hardware somebody thought of; this covers
+        // everybody else, and it is the difference between "controllers are supported" and
+        // "your controller is supported".
+        _bindings = new BindingPanel(_heli.Input) { Name = "Bindings" };
+        layer.AddChild(_bindings);
         _hud.SetRotorTime(_rotorTime);
         _hud.SetSidearm(_sidearm);
         _hud.SetGunPod(_gunpod);
@@ -241,6 +248,12 @@ public sealed partial class Main : Node3D
             if (arg == "--worldreport")
             {
                 WorldReport.Run();
+                GetTree().Quit(0);
+                return;
+            }
+            if (arg == "--inputreport")
+            {
+                InputReport.Run();
                 GetTree().Quit(0);
                 return;
             }

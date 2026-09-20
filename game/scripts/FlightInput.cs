@@ -160,6 +160,22 @@ public sealed partial class FlightInput : Node
         Input.JoyConnectionChanged += OnJoyChanged;
     }
 
+    /// <summary>
+    /// Throw the saved profile away and work it out again from what is plugged in.
+    ///
+    /// For the binding screen's "re-detect". Needed because the saved profile wins at
+    /// startup - which is right, a player's own bindings must not be silently replaced -
+    /// but that also means somebody who has made a mess of it has no way back without
+    /// finding and deleting a file.
+    /// </summary>
+    public void Redetect()
+    {
+        Profile = DetectProfile(out string description);
+        DeviceDescription = description;
+        SaveProfile();
+        GD.Print($"[input] re-detected: {DeviceDescription}");
+    }
+
     private void OnJoyChanged(long device, bool connected)
     {
         GD.Print($"[input] joystick {device} {(connected ? "connected" : "disconnected")}: " +
@@ -177,51 +193,17 @@ public sealed partial class FlightInput : Node
     /// recognises to the Xbox layout, so a recognised pad gets the gamepad mapping and
     /// anything else is treated as a flight stick with a separate throttle axis.
     /// </summary>
+    /// <summary>
+    /// Work out what the player has plugged in.
+    ///
+    /// The hardware table lives in <see cref="ControllerPresets"/> rather than here, because
+    /// this class is about turning axes into <see cref="Controls"/> and that one is about
+    /// which axes to read. It also takes EVERY connected device rather than just the first:
+    /// a real HOTAS is two USB devices and the collective belongs on the throttle, which is
+    /// impossible to express if you only ever look at joypad 0.
+    /// </summary>
     private static InputProfile DetectProfile(out string description)
-    {
-        var pads = Input.GetConnectedJoypads();
-        if (pads.Count == 0)
-        {
-            description = "keyboard only (no stick or pad detected)";
-            return new InputProfile { Name = description };
-        }
-
-        int device = pads[0];
-        string name = Input.GetJoyName(device);
-        bool looksLikeGamepad = Input.IsJoyKnown(device) &&
-            new[] { "xbox", "playstation", "ps4", "ps5", "dualshock", "dualsense", "nintendo", "gamepad", "controller" }
-                .Any(k => name.ToLowerInvariant().Contains(k));
-
-        if (looksLikeGamepad)
-        {
-            description = $"gamepad: {name}";
-            return new InputProfile
-            {
-                Name = description,
-                // Right stick is the cyclic. Godot reports stick up as negative.
-                CyclicPitch = new AxisBinding { Device = device, Axis = (int)JoyAxis.RightY, Invert = true, Expo = 0.45f },
-                CyclicRoll = new AxisBinding { Device = device, Axis = (int)JoyAxis.RightX, Expo = 0.45f },
-                // Left stick horizontal is the pedals.
-                Pedal = new AxisBinding { Device = device, Axis = (int)JoyAxis.LeftX, Expo = 0.3f },
-                // Left stick vertical drives the collective as a RATE, integrated in
-                // Poll(), because a self-centring stick cannot hold a lever position.
-                Collective = new AxisBinding { Axis = -1 },
-            };
-        }
-
-        description = $"flight stick: {name}";
-        return new InputProfile
-        {
-            Name = description,
-            CyclicPitch = new AxisBinding { Device = device, Axis = (int)JoyAxis.LeftY, Invert = true, Expo = 0.2f, Deadzone = 0.03f },
-            CyclicRoll = new AxisBinding { Device = device, Axis = (int)JoyAxis.LeftX, Expo = 0.2f, Deadzone = 0.03f },
-            // Twist grip. On most sticks this is the Z rotation, which Godot maps here.
-            Pedal = new AxisBinding { Device = device, Axis = (int)JoyAxis.RightX, Expo = 0.25f, Deadzone = 0.08f },
-            // Throttle lever as the collective: absolute position, no centring. This is
-            // the correct control and the reason a HOTAS is worth having for this game.
-            Collective = new AxisBinding { Device = device, Axis = (int)JoyAxis.TriggerLeft, UnipolarLever = true },
-        };
-    }
+        => ControllerPresets.Build(Input.GetConnectedJoypads(), out description);
 
     /// <summary>Read every live device and produce the pilot's demand for this frame.</summary>
     public Controls Poll(double dt)

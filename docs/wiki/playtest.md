@@ -46,6 +46,23 @@ table — but for reference:
 Throttle and stick are supported and better than the keyboard for the collective, which
 wants fine control rather than on/off.
 
+**Controllers.** `ControllerPresets` recognises about forty device names - Xbox, PlayStation,
+Switch Pro, T.16000M, Extreme 3D Pro, X52/X56, Warthog, VKB, VIRPIL, CH, Honeycomb, TWCS,
+rudder pedals - and, importantly, builds a profile from **every** device plugged in rather
+than just the first, because a real HOTAS is two USB devices and the collective belongs on
+the throttle. A dedicated throttle always wins the collective; dedicated pedals always win
+the yaw.
+
+**If your hardware is odd, press `F8`.** That is the binding screen: up/down to pick an axis,
+`ENTER` then move the control you want (it binds whatever moved furthest, so you do not need
+to know axis numbers), `I` to invert, `L` to say an axis is a lever rather than a
+self-centring stick, `S` to save, `R` to go back to auto-detection. Every axis draws a live
+bar, which is the quickest way to spot one that is bound correctly and reading backwards.
+
+`godot --headless --path game -- --inputreport` prints the table's verdict on thirty real
+device names and what it would build from whatever is plugged into that machine. Worth
+running on the test PC before you start - it will say what it thinks your hardware is.
+
 ## What to look for, in order
 
 **1. Does the aircraft feel like an aircraft?** This is the only question that cannot be

@@ -152,7 +152,7 @@ public sealed partial class CockpitRadio : Node3D
                 case "--selftest": case "--looptest": case "--foottest":
                 case "--combattest": case "--savetest": case "--windingtest":
                 case "--screenshot": case "--threatreport": case "--worldreport":
-                case "--warntest": case "--djreport": case "--ringscan":
+                case "--warntest": case "--djreport": case "--ringscan": case "--inputreport":
                     _quiet = true;
                     break;
             }
