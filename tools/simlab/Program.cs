@@ -149,6 +149,7 @@ public static class Program
         Run("contract_delivery", ContractTests.DeliveryCompletion);
         Run("contract_roundtrip", ContractTests.RoundTrip);
         Run("search_advance", ContractTests.SearchAdvance);
+        Run("search_legs", ContractTests.SearchLegs);
         Run("contract_determinism", ContractTests.Determinism);
         Run("contract_clear", ContractTests.ClearContract);
         Run("contract_danger_pay", ContractTests.DangerPay);

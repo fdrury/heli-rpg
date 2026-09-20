@@ -230,6 +230,7 @@ public sealed class DamageState
     private double _vibrationIps;
     private double _lastRotorFraction;
     private double _rotorSeconds;
+    private double _totalFlightHours;
     private bool _chipLight;
     private bool _primed;
 
@@ -582,6 +583,17 @@ public sealed class DamageState
     public double RotorTurningSeconds => _rotorSeconds;
 
     /// <summary>
+    /// Total flight hours since the rotor was last tracked. Accumulated in
+    /// <see cref="AccrueFlightHours"/> and persisted through save/load. The kneeboard
+    /// THREAD page shows this as "N h since track" alongside the rotor ceiling.
+    /// </summary>
+    public double TotalFlightHours
+    {
+        get => _totalFlightHours;
+        set => _totalFlightHours = value;
+    }
+
+    /// <summary>
     /// Charge the accumulated rotor-turning time to every component, on
     /// <c>Salvage</c>'s accelerating wear curve. Returns the hours booked.
     ///
@@ -608,6 +620,7 @@ public sealed class DamageState
         if (_rotorSeconds < 1.0) return 0;
         double hours = _rotorSeconds / 3600.0;
         _rotorSeconds = 0;
+        _totalFlightHours += hours;
         foreach (Component c in System.Enum.GetValues<Component>())
         {
             double lost = Salvage.WearOver(c, _health[(int)c], hours);

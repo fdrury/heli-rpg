@@ -35,7 +35,7 @@ public sealed partial class Kneeboard : Control
     private Font _font = null!;
     private int _page;
 
-    private static readonly string[] Pages = { "AIRCRAFT", "KNOWN", "LOG", "MAP", "JOBS" };
+    private static readonly string[] Pages = { "AIRCRAFT", "KNOWN", "LOG", "MAP", "JOBS", "THREAD" };
 
     private static readonly Color Ink = new(0.84f, 0.86f, 0.78f);
     private static readonly Color Faint = new(0.55f, 0.58f, 0.52f);
@@ -107,6 +107,7 @@ public sealed partial class Kneeboard : Control
             case 2: DrawLog(body, sheet); break;
             case 3: DrawMap(body, sheet); break;
             case 4: DrawJobs(body, sheet); break;
+            case 5: DrawThread(body, sheet); break;
         }
 
         Text(new Vector2(sheet.Position.X + 30, sheet.End.Y - 18),
@@ -668,6 +669,105 @@ public sealed partial class Kneeboard : Control
                  Faint * new Color(1, 1, 1, 0.4f), 1f);
         y += 12;
         Text(new Vector2(o.X, y), $"COMPLETED: {p.ContractsCompleted}", Faint, 12);
+    }
+
+    // --------------------------------------------------------------- thread
+
+    /// <summary>
+    /// The search thread's structure: the four ferry-route legs, the airband hunt,
+    /// and the rotor ceiling. Story.md §4.4. Facts, not inferences — no next-objective
+    /// marker, no percentage. The legs close themselves as evidence arrives.
+    /// </summary>
+    private void DrawThread(Vector2 o, Rect2 sheet)
+    {
+        Progress p = _play.Progress;
+        var sim = _heli.Sim;
+        float maxW = sheet.Size.X - 72;
+
+        // Header: the person and the aircraft
+        Text(o, "THREAD", Ink, 17);
+        float y = o.Y + 30;
+
+        Text(new Vector2(o.X + 6, y), "WRAY, SERA", Ink, 14);
+        Text(new Vector2(o.X + 130, y), "\u2014 flight engineer", Faint, 12);
+        y += 20;
+
+        Text(new Vector2(o.X + 6, y),
+             "SIERRA-FOUR-THREE, four legs, last plan filed 11 March", Faint, 12);
+        y += 30;
+
+        // The four legs
+        DrawLine(new Vector2(o.X, y), new Vector2(o.X + maxW, y),
+                 Faint * new Color(1, 1, 1, 0.4f), 1f);
+        y += 14;
+
+        for (int i = 0; i < SearchThread.Legs.Length; i++)
+        {
+            var (from, to, _) = SearchThread.Legs[i];
+            bool closed = SearchThread.IsLegClosed(i, p);
+            double closedAt = p.Search.LegClosedAt[i];
+
+            string legLabel = $"LEG {i + 1}";
+            string route = $"{from}  \u2192  {to}";
+            string status;
+            Color statusCol;
+
+            if (closed)
+            {
+                int day = closedAt > 0 ? (int)(closedAt / 86400) + 1 : 0;
+                status = day > 0 ? $"closed  D{day}" : "closed";
+                statusCol = Good;
+            }
+            else
+            {
+                status = "open";
+                statusCol = Faint;
+            }
+
+            Text(new Vector2(o.X + 6, y), legLabel, closed ? Good : Ink, 13);
+            Text(new Vector2(o.X + 64, y), route, closed ? Good : Ink, 13);
+
+            float statusX = o.X + maxW - _font.GetStringSize(status, HorizontalAlignment.Left, -1, 12).X;
+            Text(new Vector2(statusX, y), status, statusCol, 12);
+            y += 22;
+        }
+
+        // Airband candidates
+        y += 12;
+        DrawLine(new Vector2(o.X, y), new Vector2(o.X + maxW, y),
+                 Faint * new Color(1, 1, 1, 0.4f), 1f);
+        y += 14;
+
+        int freqCount = p.CountKnown(KnowledgeKind.Frequency);
+        Color freqCol = freqCount >= 34 ? Good : freqCount > 0 ? Ink : Faint;
+        Text(new Vector2(o.X + 6, y), "AIRBAND CANDIDATES", Faint, 12);
+        Text(new Vector2(o.X + 200, y), $"{freqCount} of 34 logged", freqCol, 13);
+
+        // Main rotor condition
+        y += 28;
+        double rotorHealth = sim.Damage.Health(Component.MainRotor);
+        double floor = DamageState.MainRotorFloor;
+        double ceiling = (rotorHealth - floor) / (1.0 - floor);
+        if (ceiling < 0) ceiling = 0;
+        double hours = sim.Damage.TotalFlightHours;
+
+        Color rotorCol = ceiling > 0.6 ? Good : ceiling > 0.3 ? Warn : Bad;
+        Text(new Vector2(o.X + 6, y), "MAIN ROTOR", Faint, 12);
+        Text(new Vector2(o.X + 200, y),
+             $"ceiling {ceiling:P0}   \u00b7   {hours:F0} h since track", rotorCol, 13);
+
+        Bar(new Vector2(o.X + 6, y + 22), maxW - 12, (float)ceiling, rotorCol);
+
+        // Current hint at the bottom
+        y += 56;
+        DrawLine(new Vector2(o.X, y), new Vector2(o.X + maxW, y),
+                 Faint * new Color(1, 1, 1, 0.4f), 1f);
+        y += 14;
+
+        Text(new Vector2(o.X + 6, y), "CURRENT", Faint, 11);
+        y += 16;
+        string hint = p.Search.CurrentHint;
+        WrapText(o.X + 6, y, hint, Warn, 13, maxW - 12);
     }
 
     /// <summary>Word-wrap text into a given width, returns the Y after the last line.</summary>

@@ -15,8 +15,8 @@ named settlement, put it down, shut down, talk to whoever lives there, take a co
 the board, fly it, and come back for the payout. The main search — 12 authored beats about
 finding Sera Wray, a flight engineer, and a set of matched blades — gives the long-term
 pull; the contracts give the per-sortie purpose. Eight module bays, each felt in the flight
-model. The kneeboard's five pages show aircraft condition, knowledge, journal, map, and
-active jobs.
+model. The kneeboard's six pages show aircraft condition, knowledge, journal, map, active
+jobs, and the search thread — the four-leg ferry route that is the arc's spine.
 
 **The world is eight islands** (D-077), 33 km corner to corner, with ten committed water
 crossings between them and one home island where The Pan and Long Acre join. Tier costs
@@ -232,6 +232,15 @@ available at any site where StoryPlaces declares an NPC, not only at Settlements
 NPCs at airfields, workshops and depots can be spoken to. `ArrivedAtNight` reads the sun
 elevation so night-gated dialogue lines work. `ThreadContext` lives in sim/ (pure .NET);
 the game layer populates it from StoryPlaces role bindings.
+
+**Kneeboard THREAD page** — the search arc made visible (D-084). A sixth kneeboard page
+shows the four-leg ferry route of SIERRA-FOUR-THREE with open/closed status and closure
+day stamps, the airband frequency hunt (N of 34 logged), and the main rotor ceiling as a
+percentage of serviceable life with total flight hours since last track. The current hint
+is shown at the bottom. No next-objective marker, no completion percentage — facts, not
+inferences. `SearchThread` tracks leg closure timestamps; `DamageState.TotalFlightHours`
+accumulates in `AccrueFlightHours`. Both persist through save/load. One simlab test
+(`search_legs`) verifies leg closure stamps and save round-trip.
 
 **Look-around** — cockpit head-look (D-070). In cockpit mode the pilot can look around
 inside the airframe: middle-mouse drag, hat switch / D-pad, or numpad 4/6/8/2 slew the

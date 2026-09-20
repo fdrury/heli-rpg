@@ -89,6 +89,43 @@ public sealed class SearchThread
     public string LastClue =>
         Stage > 0 && Stage <= Beats.Length ? Beats[Stage - 1].Journal : "";
 
+    // ----------------------------------------------------------- leg tracking
+
+    /// <summary>
+    /// The four legs of SIERRA-FOUR-THREE's ferry route (story.md §1.1).
+    /// Each closes when the corresponding evidence arrives. The kneeboard THREAD page
+    /// (§4.4) shows this as the main visual structure: four lines, each opening or
+    /// closed with a day stamp.
+    /// </summary>
+    public static readonly (string From, string To, string KnowledgeGate)[] Legs =
+    {
+        ("Fenmoor field", "north", "search.manifest"),
+        ("north", "the wetland", "search.wreck"),
+        ("the wetland", "uplands", "search.roster"),
+        ("uplands", "---", "search.wray"),
+    };
+
+    /// <summary>
+    /// Game clock (seconds) when each leg closed, or 0 if still open. Persisted
+    /// through save/load. Four elements, one per leg.
+    /// </summary>
+    public double[] LegClosedAt { get; } = new double[4];
+
+    /// <summary>True if the knowledge that closes this leg has been learned.</summary>
+    public static bool IsLegClosed(int leg, Progress p) => p.Knows(Legs[leg].KnowledgeGate);
+
+    /// <summary>Beat index → leg index (0-based), or -1 if the beat does not close a leg.</summary>
+    private static int BeatToLeg(int beatIndex) => beatIndex switch
+    {
+        3 => 0,  // "The manifest" → Leg 1
+        4 => 1,  // "The wreck" → Leg 2
+        6 => 2,  // "The roster" → Leg 3
+        8 => 3,  // "Sera Wray" → Leg 4
+        _ => -1,
+    };
+
+    // ---------------------------------------------------------------- advance
+
     /// <summary>
     /// Check whether the next beat should trigger, given current progress and world state.
     /// Returns the beat if it fires, null otherwise.
@@ -99,6 +136,10 @@ public sealed class SearchThread
 
         SearchBeat beat = Beats[Stage];
         if (!beat.Gate(progress, ctx)) return null;
+
+        int leg = BeatToLeg(Stage);
+        if (leg >= 0 && LegClosedAt[leg] == 0)
+            LegClosedAt[leg] = ctx.GameClock;
 
         Stage++;
         return beat;

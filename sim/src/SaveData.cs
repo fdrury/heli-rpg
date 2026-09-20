@@ -98,6 +98,20 @@ public sealed class SaveData
     public int ContractsCompleted { get; set; }
     public int SearchStage { get; set; }
 
+    /// <summary>
+    /// Game clock (seconds) when each of the four ferry-route legs closed.
+    /// A zero means that leg is still open. A save written before this field
+    /// existed loads with all legs open, which is correct.
+    /// </summary>
+    public List<double> LegClosedAt { get; set; } = new();
+
+    /// <summary>
+    /// Total flight hours since the rotor was last tracked. Persisted so the
+    /// kneeboard THREAD page can show "N h since track" after a save/load cycle.
+    /// A save written before this field existed loads as 0, which is acceptable.
+    /// </summary>
+    public double TotalFlightHours { get; set; }
+
     // ================================================================ JSON
 
     private static readonly JsonSerializerOptions Opts = new()
@@ -159,6 +173,9 @@ public sealed class SaveData
         ContractsCompleted = p.ContractsCompleted;
         SearchStage = p.Search.Stage;
 
+        LegClosedAt.Clear();
+        LegClosedAt.AddRange(p.Search.LegClosedAt);
+
         Contracts.Clear();
         foreach (var c in p.Contracts)
             Contracts.Add(new ContractSave
@@ -218,6 +235,9 @@ public sealed class SaveData
         p.ContractsCompleted = ContractsCompleted;
         p.Search.Stage = SearchStage;
 
+        for (int i = 0; i < Math.Min(LegClosedAt.Count, 4); i++)
+            p.Search.LegClosedAt[i] = LegClosedAt[i];
+
         var contracts = new List<Contract>();
         foreach (var cs in Contracts)
             contracts.Add(new Contract
@@ -252,6 +272,8 @@ public sealed class SaveData
         for (int i = 0; i < count; i++)
             ComponentHealth[i] = d.Health((Component)i);
 
+        TotalFlightHours = d.TotalFlightHours;
+
         DamageLog.Clear();
         foreach (var e in d.Log)
             DamageLog.Add(new DamageEventSave
@@ -265,6 +287,8 @@ public sealed class SaveData
     {
         for (int i = 0; i < ComponentHealth.Length; i++)
             d.SetHealth((Component)i, ComponentHealth[i]);
+
+        d.TotalFlightHours = TotalFlightHours;
 
         d.RestoreLog(DamageLog.Select(e =>
             new DamageEvent(e.Component, e.Amount, e.Cause, e.Note)));

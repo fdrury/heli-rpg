@@ -76,6 +76,7 @@ public static class SaveTests
         d.Apply(Component.Engine, 0.3, DamageCause.Gunfire, "SAM hit");
         d.Apply(Component.TailRotor, 0.6, DamageCause.Fragment, "shrapnel");
         d.Apply(Component.Skids, 0.1, DamageCause.HardLanding, "heavy touchdown");
+        d.TotalFlightHours = 47.3;
 
         var save = new SaveData();
         save.CaptureDamage(d);
@@ -99,6 +100,9 @@ public static class SaveTests
         if (d2.Log.Count != 3) return $"log count: {d2.Log.Count}";
         if (d2.Log[0].Cause != DamageCause.Gunfire) return $"log[0] cause: {d2.Log[0].Cause}";
         if (d2.Log[1].Component != Component.TailRotor) return $"log[1] component: {d2.Log[1].Component}";
+
+        if (Math.Abs(d2.TotalFlightHours - 47.3) > 1e-6)
+            return $"total flight hours: {d2.TotalFlightHours} vs 47.3";
 
         return null;
     }

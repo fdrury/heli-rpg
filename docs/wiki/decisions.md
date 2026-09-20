@@ -2668,3 +2668,27 @@ where the journal entry describes what is actually around them.
 **Reversibility:** high. `ThreadContext` is one struct, the gate signature change is
 mechanical, and the game-layer `BuildThreadContext` is 15 lines. Reverting to counter-only
 gates is a find-replace of the lambda signatures and dropping the `ctx.Visited()` clauses.
+
+---
+
+### D-084 — Kneeboard THREAD page · 2026-09-20
+
+**Decision.** A sixth kneeboard page — THREAD — shows the search arc's structure as a
+physical document: the four legs of SIERRA-FOUR-THREE's ferry route (with open/closed
+status and closure day), the airband frequency hunt (N of 34 logged), the main rotor
+ceiling as a percentage of serviceable life, and total flight hours since last track. The
+current hint is shown at the bottom. No next-objective marker, no completion percentage.
+
+**Why.** Story.md §4.4 specifies it, and benchmark pass 2 identified mission structure as
+the critical gap (2/10). The JOBS page shows contracts (the per-sortie purpose); the
+THREAD page shows the search (the long-term pull). They are different things and must not
+be merged — Elite has the first and no second, and ROTORWASH needs both. The spec says
+"the arc has to be visible or it does not exist."
+
+Implementation: `SearchThread` now tracks four leg closure timestamps (persisted in save),
+`DamageState` tracks total flight hours (persisted in save), and the kneeboard renders
+the page from those two sources plus `Progress.Known` and `Progress.CountKnown`. One new
+simlab test (`search_legs`) verifies leg closure stamps and save round-trip.
+
+**Reversibility:** high. One kneeboard page, one new simlab test, two small save fields
+that default to sensible values for older saves.

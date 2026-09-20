@@ -252,6 +252,78 @@ public static class ContractTests
         return null;
     }
 
+    /// <summary>Leg closure stamps are recorded when beats fire and survive save/load.</summary>
+    public static string? SearchLegs()
+    {
+        var p = Progress.NewGame();
+        var allRoles = new HashSet<string>
+        {
+            "place.mattie", "place.doss", "place.long_mast", "place.nell",
+            "place.field", "place.bel", "place.wreck", "place.osie",
+            "place.cairn", "place.ferren", "place.saw_relay", "place.wray",
+            "place.juno", "place.tether", "place.sparrow", "place.magazine",
+        };
+
+        // All four legs start open
+        for (int i = 0; i < 4; i++)
+            if (SearchThread.IsLegClosed(i, p))
+                return $"leg {i + 1} closed at start";
+
+        // Advance through beats 0-3 with a clock that records the day.
+        // Beat 3 ("The manifest") closes Leg 1.
+        double clock = 9 * 86400; // Day 10
+        var ctx = new ThreadContext(clock, false, -1, false, allRoles);
+
+        // Satisfy all counter and knowledge prerequisites to reach beat 3
+        for (int i = 0; i < 30; i++) p.MarkVisited(i);
+        for (int i = 0; i < 5; i++)
+            p.Learn(new Knowledge(KnowledgeKind.Frequency, $"freq.{i}", $"F{i}", ""));
+        for (int i = 0; i < 5; i++)
+            p.Learn(new Knowledge(KnowledgeKind.Chart, $"chart.{i}", $"C{i}", ""));
+        for (int i = 0; i < 5; i++)
+            p.Learn(new Knowledge(KnowledgeKind.ThreatSite, $"threat.{i}", $"T{i}", ""));
+
+        // Advance through all beats
+        int advanceCount = 0;
+        while (p.Search.TryAdvance(p, ctx) is not null)
+        {
+            advanceCount++;
+            // Grant knowledge the beat would normally grant
+            var beat = SearchThread.Beats[p.Search.Stage - 1];
+            if (beat.KnowledgeId is not null)
+                p.Learn(new Knowledge(KnowledgeKind.Rumour, beat.KnowledgeId,
+                    beat.KnowledgeLabel ?? "", beat.KnowledgeDetail ?? ""));
+        }
+
+        if (advanceCount < 4)
+            return $"only {advanceCount} beats fired, need at least 4 for leg 1";
+
+        // Verify leg 1 closed with the correct clock
+        if (!SearchThread.IsLegClosed(0, p))
+            return "leg 1 not closed after beat 3";
+        if (p.Search.LegClosedAt[0] != clock)
+            return $"leg 1 closed at {p.Search.LegClosedAt[0]}, expected {clock}";
+
+        int day = (int)(p.Search.LegClosedAt[0] / 86400) + 1;
+        if (day != 10)
+            return $"leg 1 closed on D{day}, expected D10";
+
+        // Save/load round trip: leg closure stamps must survive
+        var save = new SaveData();
+        save.CaptureProgress(p);
+        var p2 = save.ApplyProgress();
+
+        for (int i = 0; i < 4; i++)
+            if (p2.Search.LegClosedAt[i] != p.Search.LegClosedAt[i])
+                return $"leg {i + 1} closure time lost in save/load: " +
+                       $"{p2.Search.LegClosedAt[i]} vs {p.Search.LegClosedAt[i]}";
+
+        Console.WriteLine($"  Legs closed: {advanceCount} beats fired");
+        Console.WriteLine($"  Leg 1 closed D{day}, clock {p.Search.LegClosedAt[0]:F0}s");
+
+        return null;
+    }
+
     /// <summary>Board is deterministic for the same inputs.</summary>
     public static string? Determinism()
     {
