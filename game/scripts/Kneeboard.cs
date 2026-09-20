@@ -298,6 +298,9 @@ public sealed partial class Kneeboard : Control
         // Aircraft marker
         DrawAircraftMarker(mapRect);
 
+        // D-082: bearing lines from aircraft to active contract targets
+        DrawBearingLines(mapRect);
+
         // Scale bar
         DrawScaleBar(mapRect);
     }
@@ -517,6 +520,46 @@ public sealed partial class Kneeboard : Control
 
         var heliColor = new Color(0.95f, 0.95f, 0.85f);
         DrawColoredPolygon(new[] { nose, left, tail, right }, heliColor);
+    }
+
+    /// <summary>
+    /// Draw a dashed line from the aircraft to each active contract target, so the
+    /// player can see the bearing on the map and plan a route around threat circles.
+    /// </summary>
+    private void DrawBearingLines(Rect2 mapRect)
+    {
+        Vector3 acPos = _heli.GlobalPosition;
+        Vector2 acMap = WorldToMap(mapRect, acPos.X, acPos.Z);
+
+        var lineColor = new Color(0.95f, 0.82f, 0.35f, 0.45f);
+
+        foreach (var c in _play.Progress.ActiveContracts)
+        {
+            var site = WorldMap.SiteById(c.TargetSiteId);
+            if (site is null) continue;
+
+            Vector2 tgtMap = WorldToMap(mapRect, site.Position.X, site.Position.Y);
+
+            // Dashed line: segments of 8px with 5px gaps
+            Vector2 dir = tgtMap - acMap;
+            float len = dir.Length();
+            if (len < 2f) continue;
+            dir /= len;
+
+            float drawn = 0;
+            while (drawn < len)
+            {
+                float segEnd = Math.Min(drawn + 8f, len);
+                Vector2 a = acMap + dir * drawn;
+                Vector2 b = acMap + dir * segEnd;
+
+                // Clip to map bounds
+                if (mapRect.HasPoint(a) || mapRect.HasPoint(b))
+                    DrawLine(a, b, lineColor, 1.2f);
+
+                drawn = segEnd + 5f;
+            }
+        }
     }
 
     private void DrawScaleBar(Rect2 mapRect)

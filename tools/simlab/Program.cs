@@ -212,6 +212,10 @@ public static class Program
         Run("acoustics_agl", AcousticsTests.HighAgl);
         Run("acoustics_ambience", AcousticsTests.SiteAmbience);
         Run("acoustics_wind", AcousticsTests.WindResponse);
+        Run("nav_cardinals", NavigationTests.Cardinals);
+        Run("nav_distance", NavigationTests.Distance);
+        Run("nav_relbearing", NavigationTests.RelBearing);
+        Run("nav_roundtrip", NavigationTests.RoundTrip);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 

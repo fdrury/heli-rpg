@@ -2588,3 +2588,40 @@ cockpit. The weight shifts CG forward, which changes handling.
 **Reversibility:** high. Remove the `gunpod` entry from `Loadout.All`, delete
 `GunPodController.cs`, revert the input/HUD/save additions in `Main.cs` and `FlightHud.cs`.
 No other system depends on gunnery.
+
+## D-082 — Heading compass with bearing guidance
+
+*2026-09-20*
+
+**Decision.** A horizontal compass strip at the top of the HUD, centred on the aircraft's
+heading, with bearing chevrons pointing to active contract targets and a distance readout
+to the nearest one. The kneeboard MAP page gets dashed bearing lines from the aircraft to
+each active contract destination.
+
+**Why.** The contract board (D-049, D-062) tells the player *what* to do; nothing told them
+*where* to go. The kneeboard MAP shows sites as diamonds, but mid-flight there was no way
+to know "am I heading toward the contract target?" without opening the kneeboard, finding
+the diamond, and mentally comparing it to the chevron. A real helicopter has an ADF or
+GPS — we needed the game equivalent.
+
+The compass strip shows ±60° of heading with tick marks every 10°, cardinal labels (N/E/
+S/W plus intercardinals), and a centre reference mark. Contract targets appear as gold
+chevrons on the strip with a truncated name label; off-strip targets get an arrow at the
+edge. The nearest target's name and distance appear below the strip. On the kneeboard MAP,
+dashed gold lines run from the aircraft position to each active contract target, so the
+pilot can plan a route around threat circles.
+
+**Gated on SAS** (D-055): the compass requires the sensor package. Without SAS, the pilot
+flies by visual reference — heading numbers and bearing guidance require instruments. This
+is consistent with "instruments are items".
+
+**Architecture.** `Navigation.cs` in sim/ provides `BearingRad`, `DistanceM`, and
+`RelativeBearing` as pure static methods (flat-earth, 1.3 m error at 13 km). `NavTarget`
+record carries name and NED position. `Main.cs` builds targets from `Progress.ActiveContracts`
+each physics frame (only reallocates when the set changes) and passes them to `FlightHud` via
+`SetNavTargets`. The compass drawing is entirely in `FlightHud._Draw()`.
+
+Four simlab tests: `nav_cardinals`, `nav_distance`, `nav_relbearing`, `nav_roundtrip`.
+
+**Reversibility:** high. Delete `Navigation.cs`, remove `DrawCompass`, `SetNavTargets`,
+`UpdateNavTargets`, and `DrawBearingLines`. No other system depends on the compass.

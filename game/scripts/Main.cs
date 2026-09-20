@@ -808,6 +808,9 @@ public sealed partial class Main : Node3D
         Vector3 p = _heli.GlobalPosition;
         _fog.Reveal(-p.Z, p.X);   // Godot X=east, -Z=north
 
+        // D-082: navigation targets for the compass strip — active contract destinations.
+        UpdateNavTargets();
+
         // D-074: flying low over a site is a buzz — the washing comes off the line.
         if (_mode == GameMode.Flying && !_landing.OnGround)
             CheckBuzz(p);
@@ -860,6 +863,30 @@ public sealed partial class Main : Node3D
         if (Input.IsKeyPressed(Key.Kp2)) pitch -= 1;
 
         _camera.SetLookInput(yaw, pitch);
+    }
+
+    /// <summary>
+    /// Build the list of places the compass should point at. Active contracts come first;
+    /// if there are none, the search thread's current hint site is used instead.
+    /// Runs every physics frame but only allocates when the set changes.
+    /// </summary>
+    private int _lastNavHash;
+    private void UpdateNavTargets()
+    {
+        var targets = new System.Collections.Generic.List<NavTarget>();
+        foreach (var c in _play.Progress.ActiveContracts)
+        {
+            var site = WorldMap.SiteById(c.TargetSiteId);
+            if (site is null) continue;
+            // Godot XZ → NED: north = -Z = -Position.Y, east = X = Position.X
+            targets.Add(new NavTarget(c.TargetName, -site.Position.Y, site.Position.X));
+        }
+
+        int hash = targets.Count;
+        foreach (var t in targets) hash = hash * 31 + t.Name.GetHashCode();
+        if (hash == _lastNavHash) return;
+        _lastNavHash = hash;
+        _hud.SetNavTargets(targets.ToArray());
     }
 
     public override void _Process(double delta)

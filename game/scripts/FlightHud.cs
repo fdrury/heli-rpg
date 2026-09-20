@@ -41,6 +41,10 @@ public sealed partial class FlightHud : Control
     private double _deltaAge = 99;
     private const double DeltaDuration = 5.0;
 
+    // Navigation compass (D-082): bearing guidance for active contracts.
+    private NavTarget[] _navTargets = Array.Empty<NavTarget>();
+    private static readonly Color NavMark = new(0.95f, 0.82f, 0.35f, 0.92f);
+
     private static readonly Color Dim = new(0.62f, 0.72f, 0.66f, 0.85f);
     private static readonly Color Bright = new(0.80f, 0.94f, 0.84f, 0.95f);
     private static readonly Color Warn = new(0.98f, 0.74f, 0.25f);
@@ -69,6 +73,7 @@ public sealed partial class FlightHud : Control
     public void SetGunPod(GunPodController g) => _gunpod = g;
     public void SetCamera(Camera3D cam) => _camera = cam;
     public void SetOnFoot(bool onFoot) => _onFoot = onFoot;
+    public void SetNavTargets(NavTarget[] targets) => _navTargets = targets;
 
     public override void _Process(double delta)
     {
@@ -118,7 +123,10 @@ public sealed partial class FlightHud : Control
         DrawRightPanel(new Vector2(size.X - 232, size.Y * 0.30f), t, sim);
 
         if (hasSas)
+        {
+            DrawCompass(new Vector2(size.X * 0.5f, 18), size.X, sim);
             DrawControlPositions(new Vector2(size.X - 190, size.Y - 190), sim);
+        }
 
         DrawLandingPanel(new Vector2(size.X * 0.5f - 150, 26), t);
         DrawDamagePanel(new Vector2(28, size.Y * 0.30f + (hasSas ? 210 : 60)), sim);
@@ -169,6 +177,134 @@ public sealed partial class FlightHud : Control
         float ballX = Mathf.Clamp((float)slip * 3.2f, -1, 1) * 46f;
         DrawLine(c + new Vector2(-52, 34), c + new Vector2(52, 34), Dim * new Color(1, 1, 1, 0.5f), 1.2f);
         DrawCircle(c + new Vector2(ballX, 34), 5.0f, Math.Abs(slip) > 0.14 ? Warn : Bright);
+    }
+
+    // -------------------------------------------------------- compass strip (D-082)
+
+    /// <summary>
+    /// A horizontal compass bar at the top of the screen. Centres on the aircraft's
+    /// heading and shows ±60° of the compass rose with tick marks every 10° and cardinal
+    /// labels. Active contract targets appear as gold chevrons with name and distance.
+    ///
+    /// Only drawn when SAS is fitted (D-055: instruments are items), because a heading
+    /// tape requires sensors.
+    /// </summary>
+    private void DrawCompass(Vector2 centre, float screenWidth, Helicopter sim)
+    {
+        const float halfArc = 60f;                       // degrees visible each side
+        float stripW = Math.Min(screenWidth - 80, 640);  // pixels wide
+        float stripH = 28f;
+        float left = centre.X - stripW / 2;
+        float top = centre.Y;
+
+        // Background
+        DrawRect(new Rect2(left, top, stripW, stripH), Panel);
+
+        double headingDeg = sim.State.Orientation.Yaw * 180.0 / Math.PI;
+        if (headingDeg < 0) headingDeg += 360;
+
+        float pixPerDeg = stripW / (halfArc * 2);
+
+        // Tick marks and labels across the visible arc
+        int startDeg = (int)Math.Floor(headingDeg - halfArc);
+        int endDeg = (int)Math.Ceiling(headingDeg + halfArc);
+
+        for (int deg = startDeg; deg <= endDeg; deg++)
+        {
+            int norm = ((deg % 360) + 360) % 360;
+            float rel = (float)(deg - headingDeg);
+            float px = centre.X + rel * pixPerDeg;
+            if (px < left || px > left + stripW) continue;
+
+            if (norm % 10 == 0)
+            {
+                float tickH = norm % 30 == 0 ? 10f : 5f;
+                DrawLine(new Vector2(px, top + stripH - tickH), new Vector2(px, top + stripH),
+                         Dim * new Color(1, 1, 1, 0.6f), 1.0f);
+            }
+
+            string? label = norm switch
+            {
+                0   => "N",
+                45  => "NE",
+                90  => "E",
+                135 => "SE",
+                180 => "S",
+                225 => "SW",
+                270 => "W",
+                315 => "NW",
+                _ when norm % 30 == 0 => $"{norm}",
+                _ => null,
+            };
+
+            if (label is not null)
+            {
+                Color lc = norm == 0 ? Bright : Dim;
+                var sz = _font.GetStringSize(label, HorizontalAlignment.Left, -1, 11);
+                DrawString(_font, new Vector2(px - sz.X / 2, top + 13), label,
+                           HorizontalAlignment.Left, -1, 11, lc);
+            }
+        }
+
+        // Centre reference mark (aircraft heading)
+        DrawLine(new Vector2(centre.X, top), new Vector2(centre.X, top + 4), Bright, 1.8f);
+        DrawLine(new Vector2(centre.X - 3, top), new Vector2(centre.X + 3, top), Bright, 1.8f);
+
+        // Navigation targets: bearing chevrons
+        if (_heli is null) return;
+        double acN = sim.State.Position.X;
+        double acE = sim.State.Position.Y;
+        double hdgRad = sim.State.Orientation.Yaw;
+
+        NavTarget? nearest = null;
+        double nearestDist = double.MaxValue;
+
+        foreach (var tgt in _navTargets)
+        {
+            double brg = Navigation.BearingRad(acN, acE, tgt.NorthM, tgt.EastM);
+            double dist = Navigation.DistanceM(acN, acE, tgt.NorthM, tgt.EastM);
+            double relDeg = Navigation.RelativeBearing(hdgRad, brg) * 180.0 / Math.PI;
+
+            if (dist < nearestDist) { nearestDist = dist; nearest = tgt; }
+
+            float px = centre.X + (float)relDeg * pixPerDeg;
+
+            if (px >= left && px <= left + stripW)
+            {
+                // Chevron pointing down into the compass strip
+                float cy = top - 2;
+                DrawLine(new Vector2(px - 5, cy - 6), new Vector2(px, cy), NavMark, 1.6f);
+                DrawLine(new Vector2(px + 5, cy - 6), new Vector2(px, cy), NavMark, 1.6f);
+
+                // Target name above the chevron, truncated
+                string name = tgt.Name.Length > 12 ? tgt.Name[..12] : tgt.Name;
+                var nSz = _font.GetStringSize(name, HorizontalAlignment.Left, -1, 10);
+                float labelX = Math.Clamp(px - nSz.X / 2, left, left + stripW - nSz.X);
+                DrawString(_font, new Vector2(labelX, cy - 16), name,
+                           HorizontalAlignment.Left, -1, 10, NavMark);
+            }
+            else
+            {
+                // Off-strip: draw an arrow at the edge pointing toward the target
+                bool right = relDeg > 0;
+                float edgeX = right ? left + stripW - 2 : left + 2;
+                float my = top + stripH / 2;
+                float dx = right ? -5 : 5;
+                DrawLine(new Vector2(edgeX, my - 4), new Vector2(edgeX - dx, my), NavMark * new Color(1, 1, 1, 0.7f), 1.4f);
+                DrawLine(new Vector2(edgeX, my + 4), new Vector2(edgeX - dx, my), NavMark * new Color(1, 1, 1, 0.7f), 1.4f);
+            }
+        }
+
+        // Distance readout to nearest target, below the compass
+        if (nearest is NavTarget nt && nearestDist < 50_000)
+        {
+            string dText = nearestDist >= 1000
+                ? $"{nt.Name}  {nearestDist / 1000:F1} km"
+                : $"{nt.Name}  {nearestDist:F0} m";
+            var dSz = _font.GetStringSize(dText, HorizontalAlignment.Left, -1, 12);
+            DrawString(_font, new Vector2(centre.X - dSz.X / 2, top + stripH + 4), dText,
+                       HorizontalAlignment.Left, -1, 12, NavMark * new Color(1, 1, 1, 0.8f));
+        }
     }
 
     // ----------------------------------------------------------- side panels

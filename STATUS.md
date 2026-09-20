@@ -202,6 +202,16 @@ matching the military-chart aesthetic. The fog grid is 128×128 (~102 m cells), 
 radius 500 m, persisted through save/load. Scale bar and survey-percentage readout.
 `FogOfWar` lives in sim/ (pure .NET, no Godot dependency) with byte-array serialisation;
 the game layer generates terrain and fog textures and draws markers via `_Draw()`.
+Dashed bearing lines from the aircraft to each active contract target let the pilot
+plan routes around threat circles.
+
+**Navigation** — heading compass with bearing guidance (D-082). A horizontal compass strip
+at the top of the HUD, centred on the aircraft's heading, showing ±60° of the compass rose
+with tick marks every 10° and cardinal/intercardinal labels. Active contract targets appear
+as gold chevrons on the strip with name and distance. Off-strip targets get an edge arrow
+pointing in their direction. Requires SAS module (D-055: instruments are items). `Navigation`
+lives in sim/ (pure .NET, flat-earth geometry); four simlab tests verify the bearing and
+distance math.
 
 **Mission structure** — contract board at settlements and main-search breadcrumbs (D-049).
 Settlements generate 2-3 contracts from their neighbours: deliveries, scout missions,
