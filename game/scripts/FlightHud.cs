@@ -45,6 +45,12 @@ public sealed partial class FlightHud : Control
     private NavTarget[] _navTargets = Array.Empty<NavTarget>();
     private static readonly Color NavMark = new(0.95f, 0.82f, 0.35f, 0.92f);
 
+    // Radio strip (D-085): in-flight text for radio messages.
+    private RadioStrip? _radioStrip;
+    private static readonly Color RadioBroadcast = new(0.72f, 0.82f, 0.90f, 0.92f);
+    private static readonly Color RadioDirected = new(0.65f, 0.92f, 0.72f, 0.92f);
+    private static readonly Color RadioIntercepted = new(0.95f, 0.55f, 0.45f, 0.92f);
+
     private static readonly Color Dim = new(0.62f, 0.72f, 0.66f, 0.85f);
     private static readonly Color Bright = new(0.80f, 0.94f, 0.84f, 0.95f);
     private static readonly Color Warn = new(0.98f, 0.74f, 0.25f);
@@ -74,6 +80,7 @@ public sealed partial class FlightHud : Control
     public void SetCamera(Camera3D cam) => _camera = cam;
     public void SetOnFoot(bool onFoot) => _onFoot = onFoot;
     public void SetNavTargets(NavTarget[] targets) => _navTargets = targets;
+    public void SetRadioStrip(RadioStrip strip) => _radioStrip = strip;
 
     public override void _Process(double delta)
     {
@@ -99,6 +106,7 @@ public sealed partial class FlightHud : Control
             DrawShotFeedback(size);
             DrawZoneMarkers(size);
             DrawSitePanel(new Vector2(size.X * 0.5f - 250, size.Y - 300));
+            DrawRadioStrip(size);
             DrawFooterOnFoot(size);
             return;
         }
@@ -135,6 +143,7 @@ public sealed partial class FlightHud : Control
         DrawWarnings(new Vector2(size.X * 0.5f, size.Y - 122), t);
         DrawDeltaCard(new Vector2(28, size.Y * 0.62f));
         DrawGunPod(size);
+        DrawRadioStrip(size);
         DrawFooter(size);
     }
 
@@ -670,6 +679,79 @@ public sealed partial class FlightHud : Control
         // AUTOROTATE stays: it is a state, not a threshold, so there is nothing to filter,
         // and it is the one a pilot most wants confirmed instantly.
         Caption("AUTOROTATE", t.Autorotating && t.Engine != EngineState.Running, Warn);
+    }
+
+    // ----------------------------------------------------------- radio strip (D-085)
+
+    /// <summary>
+    /// Two-line text strip at the bottom of the HUD for radio messages (story.md §4.3).
+    /// Word-by-word reveal at reading pace. Broadcasts are cool blue, directed calls
+    /// are green, intercepted traffic is warm red.
+    /// </summary>
+    private void DrawRadioStrip(Vector2 size)
+    {
+        if (_radioStrip is null || !_radioStrip.Active) return;
+
+        string text = _radioStrip.CurrentText!;
+        string? speaker = _radioStrip.CurrentSpeaker;
+        Color textCol = _radioStrip.CurrentKind switch
+        {
+            RadioMessageKind.Directed => RadioDirected,
+            RadioMessageKind.Intercepted => RadioIntercepted,
+            _ => RadioBroadcast,
+        };
+
+        const int fontSize = 16;
+        float maxWidth = Math.Min(size.X - 80, 720f);
+        float x = (size.X - maxWidth) * 0.5f;
+        float y = size.Y - 80;
+
+        // Word-wrap into at most two lines.
+        var lines = new List<string>(2);
+        var line = new System.Text.StringBuilder();
+        foreach (string word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string candidate = line.Length == 0 ? word : line + " " + word;
+            if (_font.GetStringSize(candidate, HorizontalAlignment.Left, -1, fontSize).X > maxWidth
+                && line.Length > 0)
+            {
+                lines.Add(line.ToString());
+                line.Clear();
+                line.Append(word);
+                if (lines.Count >= 2) break;
+            }
+            else
+            {
+                line.Clear();
+                line.Append(candidate);
+            }
+        }
+        if (line.Length > 0 && lines.Count < 2)
+            lines.Add(line.ToString());
+
+        // Background panel behind the text.
+        float lineHeight = fontSize + 4;
+        float panelH = lines.Count * lineHeight + 12;
+        float speakerWidth = 0;
+        if (!string.IsNullOrEmpty(speaker))
+            speakerWidth = _font.GetStringSize(speaker + "  ", HorizontalAlignment.Left, -1, fontSize - 2).X;
+
+        DrawRect(new Rect2(x - 8, y - 6, maxWidth + 16 + speakerWidth, panelH), Panel);
+
+        // Speaker tag in dim, offset left.
+        if (!string.IsNullOrEmpty(speaker))
+        {
+            Label(new Vector2(x, y + lineHeight * 0.5f), speaker,
+                  Dim * new Color(1, 1, 1, 0.8f), fontSize - 2);
+        }
+
+        // Text lines.
+        float textX = x + speakerWidth;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            DrawString(_font, new Vector2(textX, y + i * lineHeight + lineHeight * 0.75f),
+                       lines[i], HorizontalAlignment.Left, -1, fontSize, textCol);
+        }
     }
 
     private void DrawFooter(Vector2 size)

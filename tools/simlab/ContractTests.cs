@@ -269,10 +269,12 @@ public static class ContractTests
             if (SearchThread.IsLegClosed(i, p))
                 return $"leg {i + 1} closed at start";
 
-        // Advance through beats 0-3 with a clock that records the day.
-        // Beat 3 ("The manifest") closes Leg 1.
-        double clock = 9 * 86400; // Day 10
-        var ctx = new ThreadContext(clock, false, -1, false, allRoles);
+        // Advance through all beats with a clock that records the day.
+        // Beat 4 ("The manifest") closes Leg 1. Beat 3 ("The voice") requires
+        // airborne + weather window (06:40 = 24000s of day), so the clock must
+        // land inside that window.
+        double clock = 9 * 86400 + 24000; // Day 10 at 06:40
+        var ctx = new ThreadContext(clock, true, -1, false, allRoles);
 
         // Satisfy all counter and knowledge prerequisites to reach beat 3
         for (int i = 0; i < 30; i++) p.MarkVisited(i);
@@ -295,12 +297,12 @@ public static class ContractTests
                     beat.KnowledgeLabel ?? "", beat.KnowledgeDetail ?? ""));
         }
 
-        if (advanceCount < 4)
-            return $"only {advanceCount} beats fired, need at least 4 for leg 1";
+        if (advanceCount < 5)
+            return $"only {advanceCount} beats fired, need at least 5 for leg 1";
 
         // Verify leg 1 closed with the correct clock
         if (!SearchThread.IsLegClosed(0, p))
-            return "leg 1 not closed after beat 3";
+            return "leg 1 not closed after beat 4 (The manifest)";
         if (p.Search.LegClosedAt[0] != clock)
             return $"leg 1 closed at {p.Search.LegClosedAt[0]}, expected {clock}";
 

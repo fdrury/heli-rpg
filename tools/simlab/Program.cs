@@ -217,6 +217,12 @@ public static class Program
         Run("nav_distance", NavigationTests.Distance);
         Run("nav_relbearing", NavigationTests.RelBearing);
         Run("nav_roundtrip", NavigationTests.RoundTrip);
+        Run("strip_enqueue", RadioStripTests.Enqueue);
+        Run("strip_wordreveal", RadioStripTests.WordReveal);
+        Run("strip_hold", RadioStripTests.Hold);
+        Run("strip_suppressed", RadioStripTests.Suppressed);
+        Run("strip_queue", RadioStripTests.QueueOrder);
+        Run("strip_voicebeat", RadioStripTests.VoiceBeat);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 

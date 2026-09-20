@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Rotorwash.Sim;
@@ -117,12 +118,22 @@ public sealed class SearchThread
     /// <summary>Beat index → leg index (0-based), or -1 if the beat does not close a leg.</summary>
     private static int BeatToLeg(int beatIndex) => beatIndex switch
     {
-        3 => 0,  // "The manifest" → Leg 1
-        4 => 1,  // "The wreck" → Leg 2
-        6 => 2,  // "The roster" → Leg 3
-        8 => 3,  // "Sera Wray" → Leg 4
+        4 => 0,  // "The manifest" → Leg 1
+        5 => 1,  // "The wreck" → Leg 2
+        7 => 2,  // "The roster" → Leg 3
+        9 => 3,  // "Sera Wray" → Leg 4
         _ => -1,
     };
+
+    /// <summary>
+    /// True if the time-of-day component of the game clock falls within the 06:40 ± 20 min
+    /// weather broadcast window (story.md §2, beat 5). 06:20–07:00 = 22800–25200 seconds.
+    /// </summary>
+    public static bool IsWeatherWindow(double gameClock)
+    {
+        double tod = gameClock % 86400;
+        return tod >= 22800 && tod <= 25200;
+    }
 
     // ---------------------------------------------------------------- advance
 
@@ -148,7 +159,7 @@ public sealed class SearchThread
     // ---------------------------------------------------------------- beats
 
     /// <summary>
-    /// The 11 authored beats of the main search, following docs/wiki/story.md.
+    /// The 12 authored beats of the main search, following docs/wiki/story.md.
     ///
     /// Each beat has:
     /// - A gate: what the player must have done for this to trigger.
@@ -205,6 +216,22 @@ public sealed class SearchThread
             hint: "A daily broadcast at 06:40. Four readers. One says knots.",
             knowledgeId: "search.rota", knowledgeLabel: "The 06:40 broadcast",
             knowledgeDetail: "A weather sequence, four readers, one says knots. Nobody says knots."),
+
+        // Beat 5: the first time the world speaks to you in flight. This is the moment
+        // the game stops being a sandbox. The text arrives on the radio strip (§4.3).
+        new(
+            "The voice",
+            gate: (p, ctx) => p.Knows("search.rota")
+                              && ctx.Airborne
+                              && IsWeatherWindow(ctx.GameClock),
+            journal: "Heard the 06:40 broadcast in flight. A weather sequence, four voices in rotation. " +
+                     "One of them said the wind speed in knots. Nobody says knots.",
+            hint: "Heard one of the four readers. The one who says knots. Find out who broadcasts.",
+            knowledgeId: "search.voice", knowledgeLabel: "The 06:40 voice",
+            knowledgeDetail: "Heard in flight. Wind reported in knots — aviation convention, not civilian. A pilot's habit.",
+            radioText: "...wind zero-three-zero, twelve knots, gusting eighteen. " +
+                       "Visibility five thousand. Broken at fourteen hundred. " +
+                       "Temperature nine, dewpoint six. Altimeter one-zero-one-three."),
 
         // ACT II — "The route." (Fenmoor, The Drowning, Cold Shoulder, Sawtooth · tiers 1-2)
         // Target: 10-14 hours. Threats begin. Follow the ferry route leg by leg.
@@ -320,9 +347,15 @@ public sealed class SearchBeat
     public string? KnowledgeLabel;
     public string? KnowledgeDetail;
 
+    /// <summary>
+    /// If non-null, this beat's carrier is the radio strip (story.md §4.3).
+    /// The game layer pushes this text to the HUD strip when the beat fires.
+    /// </summary>
+    public string? RadioText;
+
     public SearchBeat(string name, Func<Progress, ThreadContext, bool> gate, string journal, string hint,
                       string? knowledgeId = null, string? knowledgeLabel = null,
-                      string? knowledgeDetail = null)
+                      string? knowledgeDetail = null, string? radioText = null)
     {
         Name = name;
         Gate = gate;
@@ -331,5 +364,6 @@ public sealed class SearchBeat
         KnowledgeId = knowledgeId;
         KnowledgeLabel = knowledgeLabel;
         KnowledgeDetail = knowledgeDetail;
+        RadioText = radioText;
     }
 }

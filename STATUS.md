@@ -10,7 +10,7 @@ every choice and why; `docs/wiki/benchmarks/` is where it was measured against t
 
 **The core loop closes, people talk, the machine levels up, the map fills in, there is
 somewhere to go and a reason to get there — and now a voice on the radio that knows what
-you did.** You can fly a physically simulated Huey across a streamed archipelago, find a
+you did, and a world that speaks to you in flight.** You can fly a physically simulated Huey across a streamed archipelago, find a
 named settlement, put it down, shut down, talk to whoever lives there, take a contract from
 the board, fly it, and come back for the payout. The main search — 12 authored beats about
 finding Sera Wray, a flight engineer, and a set of matched blades — gives the long-term
@@ -241,6 +241,16 @@ is shown at the bottom. No next-objective marker, no completion percentage — f
 inferences. `SearchThread` tracks leg closure timestamps; `DamageState.TotalFlightHours`
 accumulates in `AccrueFlightHours`. Both persist through save/load. One simlab test
 (`search_legs`) verifies leg closure stamps and save round-trip.
+
+**Radio strip** — in-flight text for radio messages (D-085). A two-line word-by-word
+reveal strip at the bottom of the HUD carries three kinds of radio call: scheduled
+broadcasts (cool blue), directed calls (green), intercepted traffic (warm red). Messages
+are suppressed during threat engagement. Beat 5 (`search.voice`) fires the first time the
+player is airborne during the 06:40 weather window after learning about the rota — a
+METAR-style broadcast mentioning knots, the tell Doss described. This is the moment the
+game stops being a sandbox: the world speaks to you in flight. `RadioStrip` lives in sim/
+(pure .NET, no Godot dependency); six simlab tests verify queue management, word-reveal
+timing, suppression, and the beat 5 gate. Story.md build order items 1–7 are now complete.
 
 **Look-around** — cockpit head-look (D-070). In cockpit mode the pilot can look around
 inside the airframe: middle-mouse drag, hat switch / D-pad, or numpad 4/6/8/2 slew the

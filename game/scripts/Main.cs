@@ -35,6 +35,7 @@ public sealed partial class Main : Node3D
     private readonly System.Collections.Generic.List<HostileNpc> _hostileNpcs = new();
     private StormEffects _storm = null!;
     private FogOfWar _fog = new();
+    private RadioStrip _radioStrip = new();
     private Label _debugLabel = null!;
     private bool _showDebug;
     private GameMode _mode = GameMode.Flying;
@@ -151,6 +152,7 @@ public sealed partial class Main : Node3D
         };
         AddChild(_threats);
         _play.Alert = _threats.Alert;
+        _play.RadioStrip = _radioStrip;
 
         var layer = new CanvasLayer { Name = "Hud" };
         AddChild(layer);
@@ -170,6 +172,7 @@ public sealed partial class Main : Node3D
         _hud.SetSidearm(_sidearm);
         _hud.SetGunPod(_gunpod);
         _hud.SetCamera(_camera);
+        _hud.SetRadioStrip(_radioStrip);
 
         _kneeboard = new Kneeboard
         {
@@ -819,6 +822,10 @@ public sealed partial class Main : Node3D
         if (_mode == GameMode.Flying)
             _rotorTime.UpdateCharge(delta);
         _rotorTime.UpdateDrain(delta);
+
+        // D-085: radio strip — suppress during threat engagement, update word reveal.
+        _radioStrip.Suppressed = _threats.Field.AnyEngaging;
+        _radioStrip.Update(delta);
 
         // FOV tracks Rotor Time zoom smoothly.
         _camera.Fov = _rotorTime.CurrentFov(_camera.Fov, (float)delta);

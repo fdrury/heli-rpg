@@ -40,6 +40,9 @@ public sealed partial class SiteInteraction : Node
     /// <summary>Set by Main after ThreatWorld is created. Used for alert-aware contracts.</summary>
     public AlertState? Alert { get; set; }
 
+    /// <summary>Set by Main. Radio messages from the search thread are pushed here.</summary>
+    public RadioStrip? RadioStrip { get; set; }
+
     /// <summary>Raised when a module is found during salvage.</summary>
     public event Action<ModuleDef>? ModuleFound;
     /// <summary>Raised when a module is installed. Main wires the system-specific effects.</summary>
@@ -570,7 +573,9 @@ public sealed partial class SiteInteraction : Node
     private void CheckSearchThread()
     {
         // Check every few seconds of game time, not every frame.
-        if (Progress.Clock - _lastSearchCheck < 60) return;
+        // Beat 5 ("The voice") needs the 06:40 window, so check frequently enough
+        // that the 40-minute window is not missed between checks.
+        if (Progress.Clock - _lastSearchCheck < 30) return;
         _lastSearchCheck = Progress.Clock;
 
         var ctx = BuildThreadContext();
@@ -588,6 +593,12 @@ public sealed partial class SiteInteraction : Node
                 beat.KnowledgeId,
                 beat.KnowledgeLabel ?? "",
                 beat.KnowledgeDetail ?? ""));
+        }
+
+        // If the beat's carrier is the radio strip, push the text there (D-085).
+        if (beat.RadioText is not null && RadioStrip is not null)
+        {
+            RadioStrip.Enqueue("06:40", beat.RadioText, RadioMessageKind.Broadcast);
         }
 
         Notice?.Invoke($"The search: {beat.Name}");

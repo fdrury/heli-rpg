@@ -2692,3 +2692,53 @@ simlab test (`search_legs`) verifies leg closure stamps and save round-trip.
 
 **Reversibility:** high. One kneeboard page, one new simlab test, two small save fields
 that default to sensible values for older saves.
+
+### D-085 — Radio strip and beat 5: the world speaks to you in flight · 2026-09-20
+
+**Decision.** A two-line text strip at the bottom of the HUD for radio messages, with
+word-by-word reveal at reading pace (story.md §4.3, §7.4). Three kinds of message are
+colour-coded: broadcasts (cool blue), directed calls (green), intercepted traffic (warm
+red). Messages are suppressed during threat engagement and resume after.
+
+Beat 5 (`search.voice`) is inserted into the search thread between "The broadcast" (beat
+4, Doss's rota) and "The manifest" (now beat 6). Gate: `Knows(search.rota) && Airborne
+&& IsWeatherWindow(GameClock)` — the player must be flying during the 06:40 ± 20 min
+weather broadcast window after learning about the rota from Doss. When the beat fires,
+the radio strip shows a METAR-style weather sequence mentioning knots — the tell Doss
+described. This is story.md's "the first time the world speaks to you in flight is the
+moment this stops being a sandbox."
+
+**Architecture.** `RadioStrip` lives in `sim/src/RadioStrip.cs` (pure .NET, no Godot
+dependency): a `Queue<RadioMessage>` with word-by-word reveal at `WordsPerSecond = 2.55`
+(matching RadioDj for natural caption feel), a configurable hold time, and a `Suppressed`
+flag that defers new messages without interrupting the current one.
+`SearchBeat.RadioText` is a new optional field: if non-null, the game layer pushes the
+text to the radio strip when the beat fires. `SearchThread.IsWeatherWindow(double)` is a
+static helper checking the 06:20–07:00 window. `FlightHud.DrawRadioStrip()` renders the
+strip at bottom-centre with word-wrapping, background panel, and speaker tag. `Main.cs`
+creates the strip, passes it to both FlightHud and SiteInteraction, and updates it each
+physics frame with suppression driven by `ThreatField.AnyEngaging`.
+
+The beat array now has 12 entries (was 11). `BeatToLeg` indices shift by 1 for all
+post-insertion beats. Existing saves with `Stage ≤ 3` gain the new beat naturally;
+saves with `Stage > 3` skip it, which is correct (they have already left Act I).
+
+**Six simlab tests:** `strip_enqueue`, `strip_wordreveal`, `strip_hold`,
+`strip_suppressed`, `strip_queue`, `strip_voicebeat`. The voice beat test verifies the
+weather window boundaries, the airborne requirement, the time-of-day gate, and the
+RadioText content.
+
+**Why.** Story.md §8 item 7: "The radio strip (§7.4) and beat 5 — the first time the
+world speaks to you in flight is the moment this stops being a sandbox." Items 1–6 from
+that build order are all complete. The radio strip is the infrastructure that all three
+kinds of in-flight radio call (§4.3) will use; beat 5 is the first content that proves it
+works.
+
+**What this does NOT do** (deliberately deferred):
+- Directed calls (someone raises the player) — needs per-region trigger logic
+- Intercepted calls (overheard traffic in threat envelopes) — needs threat-state hooks
+- DJ captions on this strip — the DJ already displays via RadioReadout in CockpitRadio
+
+**Reversibility:** high. Remove `RadioStrip.cs`, revert `SearchBeat.RadioText` and the
+inserted beat, remove `DrawRadioStrip` from FlightHud, and remove the three wiring lines
+in Main.cs. No other system depends on the radio strip.
