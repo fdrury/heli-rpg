@@ -48,6 +48,7 @@ public static class Program
         Run("handsoff", TrimTests.HandsOff);
         Run("poshold", TrimTests.PositionHold);
         Run("envelope", EnvelopeTests.Performance);
+        Run("range_crossings", EnvelopeTests.CrossingRange);
         Run("autoglide", EnvelopeTests.Autorotation);
         Run("autotrim", EnvelopeTests.AutorotationTrim);
         Run("autobalance", EnvelopeTests.AutorotationBalance);

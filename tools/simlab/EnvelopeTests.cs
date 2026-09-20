@@ -809,4 +809,87 @@ public static class EnvelopeTests
         for (int i = 0; i < n; i++) x[i] = m[i, n] / m[i, i];
         return true;
     }
+
+    /// <summary>
+    /// Can the player actually make the crossings the world is now built out of?
+    ///
+    /// D-077 turned the map into eight islands with ten committed water crossings, the
+    /// longest a shade under eight kilometres. That is a decision about the FLIGHT MODEL
+    /// dressed up as a decision about level design, and nothing was checking it: if a
+    /// realistic salvaged fuel load cannot cross and come back, the outer islands are not
+    /// gated content, they are a wall with a coastline painted on it.
+    ///
+    /// The number that answers it is specific range - kilometres per kilogram of fuel -
+    /// which is a different question from endurance and peaks at a different speed. Loiter
+    /// slowly, travel faster.
+    /// </summary>
+    public static string? CrossingRange()
+    {
+        Console.WriteLine("  specific range against speed, 500 m, standard day");
+        Console.WriteLine("     kt     fuel kg/h     km/h      km per kg");
+
+        double bestKmPerKg = 0, bestKt = 0;
+        for (double kt = 40; kt <= 120; kt += 10)
+        {
+            (double _, double _, double fuelFlow, bool ok) = AtSpeed(500, kt);
+            if (!ok) { Console.WriteLine($"    {kt,5:F0}     did not trim"); continue; }
+
+            double kgPerHour = fuelFlow * 3600.0;
+            double kmPerHour = kt / Kt * 3.6;
+            double kmPerKg = kgPerHour > 1e-6 ? kmPerHour / kgPerHour : 0;
+            Console.WriteLine($"    {kt,5:F0}     {kgPerHour,9:F0}   {kmPerHour,6:F0}      {kmPerKg,9:F2}");
+            if (kmPerKg > bestKmPerKg) { bestKmPerKg = kmPerKg; bestKt = kt; }
+        }
+
+        if (bestKmPerKg <= 0) return "nothing trimmed at any speed - there is no range to measure";
+
+        Console.WriteLine();
+        Console.WriteLine($"  best specific range {bestKmPerKg:F2} km/kg at {bestKt:F0} kt");
+
+        // What that buys, against the actual crossings in WorldMap.BuildRegions. These are
+        // the longest over-water runs --worldreport measures on each leg, not the leg
+        // lengths: the number that matters is how far you are from land, not how far apart
+        // the islands are.
+        (string Leg, double Km)[] crossings =
+        {
+            ("home island (The Pan - Long Acre)", 0.0),
+            ("home -> tier 1 (Fenmoor)", 3.1),
+            ("tier 1 -> tier 2 (Cold Shoulder)", 3.4),
+            ("tier 1 -> tier 2 (Sawtooth Works)", 3.7),
+            ("home -> tier 3 (The Scald)", 7.8),
+            ("tier 1 -> tier 3 (Ashmount)", 7.0),
+        };
+
+        Console.WriteLine();
+        Console.WriteLine("  what each crossing costs, there and back, at best range:");
+        Console.WriteLine("    leg                                  water    fuel there+back");
+        double worst = 0;
+        foreach ((string leg, double km) in crossings)
+        {
+            double kg = 2 * km / bestKmPerKg;
+            Console.WriteLine($"    {leg,-36} {km,5:F1} km   {kg,7:F1} kg");
+            worst = Math.Max(worst, kg);
+        }
+
+        // A salvaged tank, not a full one. D-004 makes fuel the scarce thing and the player
+        // rarely has the 800 kg the aircraft can hold; 150 kg is a plausible bad day and is
+        // the load the outer islands have to be reachable on.
+        const double Salvaged = 150.0;
+        Console.WriteLine();
+        Console.WriteLine($"  on a salvaged {Salvaged:F0} kg the longest crossing costs " +
+                          $"{worst / Salvaged * 100:F0}% of the tank in transit alone, " +
+                          $"leaving {(Salvaged - worst) * bestKmPerKg:F0} km of endurance " +
+                          "for everything else");
+
+        if (worst >= Salvaged * 0.75)
+            return $"the longest crossing burns {worst:F0} kg of a {Salvaged:F0} kg load " +
+                   "just getting there and back - the outer islands are not gated, they are " +
+                   "unreachable, and D-077's layout needs to come in";
+        if (worst <= Salvaged * 0.05)
+            return $"the longest crossing costs {worst:F1} kg of {Salvaged:F0} - it is not a " +
+                   "commitment at all, and D-059's whole argument is that a crossing should " +
+                   "be one";
+
+        return null;
+    }
 }
