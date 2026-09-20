@@ -1053,4 +1053,70 @@ public static class RadioDjTests
                    "thing that mattered, because the picker takes whatever is most recent";
         return null;
     }
+
+    /// <summary>
+    /// Run the D-008 blocklist over the search thread, which nothing was doing.
+    ///
+    /// The premise guard exists, it is good, and it was pointed at the wrong files. D-008
+    /// is locked by Fred - one aircraft, one pilot, no rivals - and D-010's entire gating
+    /// rationale depends on it. The beats in `SearchThread.cs` are the most premise-heavy
+    /// authored text in the project, they are where the violation D-050 had to correct
+    /// actually lived, and `DjAudit` only ever saw the radio corpus and the dialogue banks.
+    ///
+    /// <para><b>What this cannot do.</b> A blocklist matches phrasings, not meaning. The
+    /// last word of the old premise to survive D-050's rewrite was the `search.voice`
+    /// beat calling knots "a pilot's habit" - a violation because it is said about Sera
+    /// Wray, who is a flight engineer, and a perfectly good line if it were said about the
+    /// player, who is a pilot. No list of strings can tell those apart, and pretending
+    /// otherwise would make this test a straitjacket that bans the word "pilot" from a
+    /// game about being one. This catches the gross shapes: second flyers, second
+    /// machines, plural helicopters. The subtle ones still need a reader.</para>
+    /// </summary>
+    public static string? SearchThreadPremiseGuard()
+    {
+        var findings = new List<string>();
+        int scanned = 0;
+
+        foreach (SearchBeat beat in SearchThread.Beats)
+        {
+            (string Field, string? Text)[] authored =
+            {
+                ("journal", beat.Journal),
+                ("hint", beat.Hint),
+                ("knowledge", beat.KnowledgeDetail),
+                ("knowledge label", beat.KnowledgeLabel),
+                ("radio", beat.RadioText),
+            };
+
+            foreach ((string field, string? text) in authored)
+            {
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                scanned++;
+                foreach (string bad in DjAudit.RivalFlyer)
+                    if (text.Contains(bad, StringComparison.OrdinalIgnoreCase))
+                        findings.Add($"\"{beat.Name}\" {field}: \"{bad}\" in \"{text}\"");
+            }
+        }
+
+        Console.WriteLine($"  {SearchThread.Beats.Length} beats, {scanned} authored strings, " +
+                          $"scanned against {DjAudit.RivalFlyer.Length} D-008 phrasings");
+
+        // The guard has to be shown to work on this text, not just to run over it. A
+        // blocklist nobody has seen catch anything is a comment with a for-loop round it.
+        const string probe = "There is another pilot out there flying a second helicopter.";
+        int caught = DjAudit.RivalFlyer.Count(b => probe.Contains(b, StringComparison.OrdinalIgnoreCase));
+        Console.WriteLine($"  self-check: a planted rival-flyer line trips {caught} phrasing(s)");
+        if (caught == 0)
+            return "the D-008 blocklist did not catch a sentence with a rival pilot AND a " +
+                   "second helicopter in it - the guard is decoration";
+
+        if (findings.Count == 0)
+        {
+            Console.WriteLine("  no D-008 violations in the search thread");
+            return null;
+        }
+        foreach (string f in findings) Console.WriteLine($"  !! {f}");
+        return $"{findings.Count} D-008 violation(s) in the search thread - " +
+               "Fred locked this one (see D-050)";
+    }
 }

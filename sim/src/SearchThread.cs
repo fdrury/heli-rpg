@@ -228,7 +228,11 @@ public sealed class SearchThread
                      "One of them said the wind speed in knots. Nobody says knots.",
             hint: "Heard one of the four readers. The one who says knots. Find out who broadcasts.",
             knowledgeId: "search.voice", knowledgeLabel: "The 06:40 voice",
-            knowledgeDetail: "Heard in flight. Wind reported in knots — aviation convention, not civilian. A pilot's habit.",
+            // "Aircrew", not "a pilot". The last surviving word from the version D-050
+            // corrected: Wray is a flight engineer and D-008 is locked, so the tell cannot
+            // be that she flies. Knots is an aviation habit, and an engineer who spent her
+            // working life on a flight deck has it exactly as much as the pilot beside her.
+            knowledgeDetail: "Heard in flight. Wind reported in knots — aviation convention, not civilian. Aircrew habit.",
             radioText: "...wind zero-three-zero, twelve knots, gusting eighteen. " +
                        "Visibility five thousand. Broken at fourteen hundred. " +
                        "Temperature nine, dewpoint six. Altimeter one-zero-one-three."),

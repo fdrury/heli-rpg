@@ -26,7 +26,11 @@ of the five hooks are now in. One is left, and it is the one that fills the carg
    couplings, serviced between sorties — stops being airworthy at **53 flight hours**.
    Covered by `salvage_hours`.
 
-2. **`SiteInteraction.AddSalvage` still rolls its own yields** — a `switch` on `SiteKind`
+2. ~~**`SiteInteraction.AddSalvage` still rolls its own yields**~~ **DONE.** `AddSalvage`
+   calls `Salvage.SearchesAt`/`Salvage.Search` and puts `SalvagePart` into `Progress.Cargo`.
+   Original text below.
+
+   ~~a `switch` on `SiteKind`
    with its own RNG. It should call `Salvage.SearchesAt` / `Salvage.Search` with
    `(SalvageSiteKind)(int)site.Kind` and `site.Tier`. The two enums are deliberately kept in
    the same order so that cast is valid. **This is now the only thing standing between the
@@ -82,6 +86,15 @@ Kneeboard MAP header shows raised regions. The radio announcer (`RadioDj`) alrea
 
 ---
 
+## ~~Story spine → the engine~~ **DONE** (from `c67607d`)
+
+`StoryPlaces` landed and is consulted in `SiteKit.Build`, `AddSalvage` and `GetOrCreateNpc`.
+`--worldreport` reads **16 roles, 16 bound, 0 degraded, 0 UNBOUND**, and the sense-checks
+pass including `DrowningWreck`, which now sits 5.1 m *below* the waterline (D-079). The
+original text is kept below because the hook list is still the contract.
+
+---
+
 ## Story spine → the engine (from `c67607d`)
 
 `docs/wiki/story.md` specifies places that must mean particular things. `SiteKit.Build`
@@ -94,13 +107,19 @@ generation.
 
 ---
 
-## The search thread → D-008 (from `D-050`)
+## ~~The search thread → D-008~~ **DONE** (from `D-050`)
 
-`sim/src/SearchThread.cs` makes the search target a rival **helicopter pilot** and ends on
+`sim/src/SearchThread.cs` made the search target a rival **helicopter pilot** and ended on
 *"Two pilots, two aircraft"*. D-008 is locked by Fred and forbids it; D-010's gating
-rationale depends on there being exactly one aircraft. The correction is content only — the
-beat machinery, knowledge ids, staging and save format are sound and should be kept.
-See D-050 and section 7 of `story.md`.
+rationale depends on there being exactly one aircraft.
+
+The rewrite landed with D-050 — the target is Sera Wray, a flight engineer — and the beat
+machinery, knowledge ids, staging and save format were kept as they were, which was the
+right call. **One word survived it**: the `search.voice` beat described knots as "a pilot's
+habit", which is the old premise hiding in a detail rather than in a plot point. It is
+"aircrew habit" now. That is the shape this kind of leak takes, and it is worth knowing
+that `DialogueCorpus`'s rival-flyer blocklist does not cover `SearchThread` — the beats are
+authored in a different file and nothing scans them.
 
 ---
 

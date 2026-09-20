@@ -193,6 +193,7 @@ public static class Program
         Run("dj_ledger", RadioDjTests.DeedLedger);
         Run("dj_newsworthy", RadioDjTests.TheInterestingOneWins);
         Run("dj_guard", RadioDjTests.PremiseAndAdviceGuard);
+        Run("search_guard", RadioDjTests.SearchThreadPremiseGuard);
         Run("dj_schedule", RadioDjTests.Scheduling);
         Run("dj_site", RadioDjTests.BroadcastSite);
         Run("dj_transcript", RadioDjTests.Transcript);
