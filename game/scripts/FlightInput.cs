@@ -296,8 +296,18 @@ public sealed partial class FlightInput : Node
             // No lever: integrate a rate from the pad stick and the keyboard. The lever
             // holds its position when nothing is pressed, like the real thing.
             float rate = 0;
-            var pads = Input.GetConnectedJoypads();
-            if (pads.Count > 0) rate += -Input.GetJoyAxis(pads[0], JoyAxis.LeftY);
+
+            // The PROFILE's device, not joypad 0. These are different the moment somebody
+            // has more than one thing plugged in - a stick in port 0 and a pad in port 1 -
+            // and reading the wrong one means the collective either does nothing or drifts
+            // on its own because it is watching an axis nobody is touching.
+            int padDevice = Profile.CyclicPitch.Bound ? Profile.CyclicPitch.Device : -1;
+            if (padDevice < 0)
+            {
+                var pads = Input.GetConnectedJoypads();
+                if (pads.Count > 0) padDevice = pads[0];
+            }
+            if (padDevice >= 0) rate += -Input.GetJoyAxis(padDevice, JoyAxis.LeftY);
             if (Input.IsKeyPressed(Key.W)) rate += 1;
             if (Input.IsKeyPressed(Key.S)) rate -= 1;
             if (Mathf.Abs(rate) < 0.08f) rate = 0;

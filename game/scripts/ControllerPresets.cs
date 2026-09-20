@@ -263,6 +263,20 @@ public static class ControllerPresets
         Collective = new AxisBinding { Axis = -1 },
     };
 
+    /// <summary>
+    /// The layout a given kind of device would get, without one being plugged in.
+    ///
+    /// So the mapping can be reported and checked on a machine with no controller on it,
+    /// which is the machine this was written on.
+    /// </summary>
+    public static InputProfile Preview(Kind kind, int device) => kind switch
+    {
+        Kind.Gamepad => Gamepad(device),
+        Kind.Yoke => Yoke(device),
+        Kind.Throttle => Gamepad(device),
+        _ => FlightStick(device, kind == Kind.TwistStick),
+    };
+
     /// <summary>Every preset name, for the binding screen's list and for a report.</summary>
     public static IEnumerable<string> Known => Table.Select(m => m.Label).Distinct();
 }

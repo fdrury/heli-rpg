@@ -99,6 +99,24 @@ public static class InputReport
         GD.Print("  plugged in here:");
         foreach (string line in FlightInput.DescribeDevices()) GD.Print($"    {line}");
 
+        // What each KIND of device would be mapped to, with nothing plugged in. The dev
+        // machine has no controller on it, so without this the report can only ever say
+        // "keyboard only" and the mapping itself stays unverifiable until somebody with
+        // hardware runs it.
+        GD.Print("");
+        GD.Print("  the layouts, as they would be built:");
+        foreach (string name in new[] { "Xbox Series X Controller", "Thrustmaster T.16000M",
+                                        "Logitech Extreme 3D Pro", "Honeycomb Alpha Flight Controls Yoke" })
+        {
+            (ControllerPresets.Kind kind, string _) = ControllerPresets.Classify(name);
+            InputProfile q = ControllerPresets.Preview(kind, 0);
+            GD.Print($"    {name}  ({kind})");
+            GD.Print($"      cyclic pitch {Describe(q.CyclicPitch)}");
+            GD.Print($"      cyclic roll  {Describe(q.CyclicRoll)}");
+            GD.Print($"      pedals       {Describe(q.Pedal)}");
+            GD.Print($"      collective   {Describe(q.Collective)}");
+        }
+
         var pads = Input.GetConnectedJoypads();
         InputProfile p = ControllerPresets.Build(pads, out string description);
         GD.Print("");
