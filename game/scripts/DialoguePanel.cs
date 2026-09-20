@@ -240,7 +240,24 @@ public sealed partial class DialoguePanel : Control
     {
         if (_phase == Phase.Closed || _npc is null) return;
 
-        Vector2 size = Size;
+        // The viewport, not Size.
+        //
+        // These panels are Controls parented to a CanvasLayer, and they ask for a full-rect
+        // anchor preset in _Ready. The anchors are set correctly - 0,0,1,1 - and the rect
+        // never resolves anyway: Size stays (0, 0) against a 1600x900 viewport, because
+        // nothing triggers the layout pass that would turn those anchors into a size.
+        //
+        // Everything then drew relative to a zero-sized control. Anything positioned from
+        // the right edge or the centre - the torque and Nr panel at Size.X - 232, the
+        // compass, the warnings, the RWR, the footer - landed at a negative coordinate and
+        // was simply not on the screen, and what was left piled into the top-left corner.
+        // The game shipped its entire interface off the edge of the display.
+        //
+        // It survived because the screenshot pass hides the HUD by design, so the only
+        // frame that ever showed any of this was the kneeboard capture, and nobody had
+        // opened it. GameMenu and BindingPanel read GetViewportRect() and always looked
+        // right, which is the comparison that found it.
+        Vector2 size = GetViewportRect().Size;
         float pw = 550, ph = 220;
         float px = size.X * 0.5f - pw * 0.5f;
         float py = size.Y - 360;

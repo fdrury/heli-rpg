@@ -278,6 +278,16 @@ public sealed partial class Main : Node3D
                 GetTree().Quit(0);
                 return;
             }
+            if (arg == "--flysweep")
+            {
+                // Which keyboard tuning can actually be flown - the whole grid in one
+                // session, rather than one Godot run per candidate.
+                GD.Print("[main] running the keyboard tuning sweep");
+                _hud.Visible = false;
+                _threats.Disabled = true;
+                AddChild(new FlySweep(_heli) { Name = "FlySweep" });
+                break;
+            }
             if (arg == "--playprobe")
             {
                 // Flies the aircraft through the KEYBOARD, which nothing else here does.
@@ -338,6 +348,16 @@ public sealed partial class Main : Node3D
                 _threats.Disabled = true;
                 AddChild(new SaveTest(this, _heli, _play, _landing, _sites, _sidearm, _rotorTime)
                 { Name = "SaveTest" });
+                break;
+            }
+            if (arg == "--hudshot")
+            {
+                // The interface, which the screenshot pass deliberately hides and which
+                // had therefore never been looked at.
+                GD.Print("[main] running the HUD shot pass");
+                _threats.Disabled = true;
+                AddChild(new HudShots(_heli, _camera, _hud, _kneeboard,
+                                      "res://../builds/screenshots") { Name = "HudShots" });
                 break;
             }
             if (arg == "--screenshot")

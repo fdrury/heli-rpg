@@ -71,11 +71,38 @@ public sealed partial class Kneeboard : Control
     public void Toggle() { Visible = !Visible; QueueRedraw(); }
     public void NextPage() { _page = (_page + 1) % Pages.Length; QueueRedraw(); }
 
+    /// <summary>Go straight to a page. For the shot director, which wants all six.</summary>
+    public void SetPage(int page)
+    {
+        _page = Mathf.PosMod(page, Pages.Length);
+        QueueRedraw();
+    }
+
+    /// <summary>The page names, in order, for anything that wants to label a capture.</summary>
+    public static string PageName(int page) => Pages[Mathf.PosMod(page, Pages.Length)];
+
     public override void _Process(double delta) { if (Visible) QueueRedraw(); }
 
     public override void _Draw()
     {
-        Vector2 size = Size;
+        // The viewport, not Size.
+        //
+        // These panels are Controls parented to a CanvasLayer, and they ask for a full-rect
+        // anchor preset in _Ready. The anchors are set correctly - 0,0,1,1 - and the rect
+        // never resolves anyway: Size stays (0, 0) against a 1600x900 viewport, because
+        // nothing triggers the layout pass that would turn those anchors into a size.
+        //
+        // Everything then drew relative to a zero-sized control. Anything positioned from
+        // the right edge or the centre - the torque and Nr panel at Size.X - 232, the
+        // compass, the warnings, the RWR, the footer - landed at a negative coordinate and
+        // was simply not on the screen, and what was left piled into the top-left corner.
+        // The game shipped its entire interface off the edge of the display.
+        //
+        // It survived because the screenshot pass hides the HUD by design, so the only
+        // frame that ever showed any of this was the kneeboard capture, and nobody had
+        // opened it. GameMenu and BindingPanel read GetViewportRect() and always looked
+        // right, which is the comparison that found it.
+        Vector2 size = GetViewportRect().Size;
         var sheet = new Rect2(size.X * 0.13f, size.Y * 0.08f, size.X * 0.74f, size.Y * 0.84f);
         DrawRect(sheet, Paper);
         DrawRect(sheet, Faint * new Color(1, 1, 1, 0.6f), false, 1.4f);

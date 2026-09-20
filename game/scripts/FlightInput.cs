@@ -108,6 +108,45 @@ public sealed class InputProfile
     /// use for a sustained displacement anyway.
     /// </summary>
     public float KeyboardCyclicAuthority { get; set; } = 0.40f;
+
+    /// <summary>
+    /// The pedal gets the same spring the cyclic does, and for a sharper reason.
+    ///
+    /// The cyclic at least had a rate limit. The pedal had nothing at all: it was
+    /// <c>(A ? -1 : 0) + (D ? 1 : 0)</c> straight into the control, so a tap was an
+    /// instantaneous full deflection. The measured yaw derivative is +25.1 deg/s per 0.30
+    /// of pedal, which makes a full one about 84 deg/s - a quarter turn per second,
+    /// arriving in a single frame.
+    ///
+    /// The sweep found this the hard way. With a pilot flying all four controls and
+    /// correcting every frame, the aircraft held attitude to ten degrees and altitude to
+    /// fourteen metres while the heading wandered through 95 to 180 degrees. It was not
+    /// departing - it was spinning, because the only yaw control available was a switch.
+    ///
+    /// So the pedal gets a spring, and KEEPS ITS FULL TRAVEL. That second half is not an
+    /// oversight, it is the measured result: the sweep tried the same authority ladder the
+    /// cyclic has, and every rung below 0.70 departed outright - 0.55, 0.45, 0.35 and 0.25
+    /// all crashed or went unflyable, from a hover, with a pilot correcting every frame.
+    /// Yaw is not like pitch and roll here. The pedal that trims a hover is a third of a
+    /// travel wrong by 40 kt, so a pilot who cannot reach that third cannot stop a yaw once
+    /// it has started, and capping the travel takes the recovery away along with the
+    /// twitchiness. The rate limit alone removes the step input without removing the
+    /// authority.
+    ///
+    /// Honest about what the sweep could NOT show: averaged over three flights per
+    /// configuration, the spring did not measurably beat the unsprung pedal on heading
+    /// error. It would not - the test pilot is a machine that re-presses the key every
+    /// frame, and bang-bang control is exactly what such a pilot copes with best and a
+    /// person copes with worst. The spring is here on the argument that an 84 deg/s step
+    /// input from a key press is not a control a human can modulate, not on a number.
+    /// </summary>
+    public float KeyboardPedalRate { get; set; } = 0.30f;
+    /// <summary>Seconds for a released keyboard pedal to spring back to centre.</summary>
+    public float KeyboardPedalReturn { get; set; } = 0.20f;
+    /// <summary>
+    /// How much of the pedal travel a keyboard can reach. Full, deliberately - see above.
+    /// </summary>
+    public float KeyboardPedalAuthority { get; set; } = 1.00f;
 }
 
 /// <summary>
@@ -133,7 +172,7 @@ public sealed partial class FlightInput : Node
     private const string ConfigPath = "user://input.json";
 
     private float _keyboardCollective = 0.0f;
-    private float _keyCyclicPitch, _keyCyclicRoll;
+    private float _keyCyclicPitch, _keyCyclicRoll, _keyPedal;
     private float _gamepadCollective = 0.0f;
 
     /// <summary>Trim offsets, adjusted by the player, applied to the cyclic.</summary>
@@ -283,8 +322,12 @@ public sealed partial class FlightInput : Node
         if (ftr && !_ftrHeld) ReTrimToCurrent();
         _ftrHeld = ftr;
 
-        _rawPedal = pedal + keyPedal;
-        c.Pedal = Mathf.Clamp(pedal + keyPedal + TrimPedal, -1, 1);
+        _keyPedal = Spring(_keyPedal, keyPedal, dt,
+                           Profile.KeyboardPedalRate, Profile.KeyboardPedalReturn);
+        float pedalAuth = Mathf.Clamp(Profile.KeyboardPedalAuthority, 0.05f, 1f);
+
+        _rawPedal = pedal + _keyPedal * pedalAuth;
+        c.Pedal = Mathf.Clamp(pedal + _keyPedal * pedalAuth + TrimPedal, -1, 1);
 
         // --- Collective ------------------------------------------------------
         if (Profile.Collective.Bound)
@@ -329,10 +372,18 @@ public sealed partial class FlightInput : Node
     }
 
     private float SpringAxis(float current, float demand, double dt)
+        => Spring(current, demand, dt, Profile.KeyboardCyclicRate, Profile.KeyboardCyclicReturn);
+
+    /// <summary>
+    /// A key held is a stick being pushed; a key released is a stick springing back. The
+    /// return is deliberately quicker than the press on every axis - when it is the other
+    /// way round, corrections ratchet and the control walks to its stop.
+    /// </summary>
+    private static float Spring(float current, float demand, double dt, float rateSec, float returnSec)
     {
         float rate = demand != 0
-            ? 1.0f / Mathf.Max(Profile.KeyboardCyclicRate, 0.05f)
-            : 1.0f / Mathf.Max(Profile.KeyboardCyclicReturn, 0.05f);
+            ? 1.0f / Mathf.Max(rateSec, 0.05f)
+            : 1.0f / Mathf.Max(returnSec, 0.05f);
         float target = demand;
         float step = rate * (float)dt;
         float d = target - current;
@@ -374,6 +425,26 @@ public sealed partial class FlightInput : Node
             if (loaded.KeyboardCyclicReturn > InputProfile.SlowestCyclicReturn)
                 loaded.KeyboardCyclicReturn = new InputProfile().KeyboardCyclicReturn;
 
+            // Does the hardware this profile is written against still exist?
+            //
+            // The saved profile wins at startup, which is right - a player's bindings must
+            // not be silently replaced. But it is written against DEVICE NUMBERS, and a
+            // device number is a slot, not a stick. Unplug the pad and the profile still
+            // says "cyclic is device 0 axis 2"; plug a different one into that slot and
+            // the cyclic is now bound to whatever axis 2 happens to be on that device.
+            //
+            // Found on a machine whose saved profile claimed an XInput pad that was not
+            // plugged in. Every axis read zero, the game announced a controller nobody
+            // could see, and the keyboard tuning carried in that file was the pre-fix
+            // unflyable one - so the migration above was the only thing between the player
+            // and a control scheme for hardware that was not there.
+            if (!DevicesPresentFor(loaded))
+            {
+                GD.Print($"[input] saved profile \"{loaded.Name}\" is bound to a device that " +
+                         "is not connected - detecting again from what is plugged in");
+                return false;
+            }
+
             Profile = loaded;
             return true;
         }
@@ -382,6 +453,18 @@ public sealed partial class FlightInput : Node
             GD.PushWarning($"[input] could not read {ConfigPath}, falling back to detection: {e.Message}");
             return false;
         }
+    }
+
+    /// <summary>
+    /// True when every joystick axis the profile binds belongs to a device that is
+    /// actually connected. A keyboard-only profile binds nothing and is always present.
+    /// </summary>
+    private static bool DevicesPresentFor(InputProfile p)
+    {
+        var pads = Input.GetConnectedJoypads();
+        foreach (AxisBinding b in new[] { p.CyclicPitch, p.CyclicRoll, p.Pedal, p.Collective })
+            if (b.Bound && !pads.Contains(b.Device)) return false;
+        return true;
     }
 
     /// <summary>Report every axis on every connected device. The basis of the binding UI.</summary>

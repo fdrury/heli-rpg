@@ -286,15 +286,21 @@ public static class Scenarios
         Console.WriteLine($"  trimmed pedal in the hover {trimPedal:+0.000;-0.000} " +
                           $"(tail rotor pitch {heli.Tail.Update(Vec3.Zero, Vec3.Zero, heli.RotorOmega, 0, 1.225, 340, Dt).PitchUsed * Deg:F1} deg at zero command)");
 
-        // Right pedal must yaw the nose right.
-        double yaw0 = heli.State.Orientation.Yaw;
+        // Right pedal must yaw the nose right. Accumulate the per-step delta rather than
+        // differencing the endpoints: three seconds of pedal takes the nose through more
+        // than half a turn, and a single WrapPi of the total reads that back as a large
+        // LEFT yaw. The bug is in the measurement, not the aircraft.
+        double yawed = 0;
+        double yawPrev = heli.State.Orientation.Yaw;
         for (double t = 0; t < 3; t += Dt)
         {
             heli.Input = new Controls { Collective = trimCollective, Pedal = trimPedal + 0.4, Throttle = 1.0 };
             heli.Step(Dt);
+            double yawNow = heli.State.Orientation.Yaw;
+            yawed += Airfoil.WrapPi(yawNow - yawPrev) * Deg;
+            yawPrev = yawNow;
         }
-        double yawed = Airfoil.WrapPi(heli.State.Orientation.Yaw - yaw0) * Deg;
-        Console.WriteLine($"  right pedal for 3 s -> {yawed:F1} deg of yaw");
+        Console.WriteLine($"  right pedal for 3 s -> {yawed:F1} deg of yaw ({yawed / 3:F0} deg/s mean)");
 
         // With no pedal at all, main rotor torque must yaw the nose the other way.
         var heli2 = MakeHeli();
@@ -302,14 +308,17 @@ public static class Scenarios
         var ap2 = new Autopilot { CollectiveTrim = 0.55 };
         Fly(heli2, ap2, demand, 40);
         double trimColl2 = heli2.Input.Collective;
-        double yawStart2 = heli2.State.Orientation.Yaw;
+        double torqueYaw = 0;
+        double yawPrev2 = heli2.State.Orientation.Yaw;
         for (double t = 0; t < 2.5; t += Dt)
         {
             heli2.Input = new Controls { Collective = trimColl2, Pedal = -1.0, Throttle = 1.0 };
             heli2.Step(Dt);
+            double yawNow2 = heli2.State.Orientation.Yaw;
+            torqueYaw += Airfoil.WrapPi(yawNow2 - yawPrev2) * Deg;
+            yawPrev2 = yawNow2;
         }
-        double torqueYaw = Airfoil.WrapPi(heli2.State.Orientation.Yaw - yawStart2) * Deg;
-        Console.WriteLine($"  full left pedal for 2.5 s -> {torqueYaw:F1} deg of yaw");
+        Console.WriteLine($"  full left pedal for 2.5 s -> {torqueYaw:F1} deg of yaw ({torqueYaw / 2.5:F0} deg/s mean)");
 
         if (yawed < 10) return $"right pedal produced only {yawed:F1} deg of right yaw";
         if (torqueYaw > -10) return $"left pedal produced {torqueYaw:F1} deg - the anti-torque sense is wrong";

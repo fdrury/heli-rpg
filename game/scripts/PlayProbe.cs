@@ -65,15 +65,23 @@ public sealed partial class PlayProbe : Node
     private int _probe = -1;
     private Vector3 _holdFrom;
     private double _worstBank, _worstDrift, _lastLog;
-    private Key _heldRoll = Key.None, _heldPitch = Key.None;
+    private KeyboardPilot? _hands;
 
-    /// <summary>Press a key and release whatever was held for that axis. Real input events.</summary>
-    private static void SetHeld(ref Key held, Key want)
+    /// <summary>Put the Godot body and the sim's own copy of the state back into a clean hover.</summary>
+    private void ResetToHover()
     {
-        if (held == want) return;
-        if (held != Key.None) Hold(held, false);
-        if (want != Key.None) Hold(want, true);
-        held = want;
+        float ground = WorldHeight.At(_heli.GlobalPosition.X, _heli.GlobalPosition.Z);
+        _heli.GlobalTransform = new Transform3D(
+            Basis.Identity, new Vector3(_heli.GlobalPosition.X, ground + 150f, _heli.GlobalPosition.Z));
+        _heli.LinearVelocity = Vector3.Zero;
+        _heli.AngularVelocity = Vector3.Zero;
+
+        // The datum follows the trim solution, or the hover starts with the stick already
+        // displaced and this measures the recovery from that instead.
+        var trim = _heli.Sim.PlaceInFlightTrimmed(ground + 150f);
+        _heli.Input.SetTrim(trim.Controls.CyclicPitch, trim.Controls.CyclicRoll,
+                            trim.Controls.Pedal);
+        _heli.Input.SetCollectivePosition((float)trim.Controls.Collective);
     }
 
     public override void _Process(double delta)
@@ -127,88 +135,66 @@ public sealed partial class PlayProbe : Node
         // elsewhere means the game can be flown.
         if (_step == 0)
         {
-            // Put the aircraft back to a clean hover FIRST - and that means the Godot rigid
-            // body, not just the sim.
-            //
-            // PlaceInFlightTrimmed resets the sim's own copy of the state and nothing else,
-            // so the first version of this started its "hover hold" with the Godot body
-            // still tumbling from the control probes above (which hold full collective,
-            // then full cyclic, then full pedal, one after another). It was face down at
-            // 2.3 m before the measurement began, and then faithfully reported that a
-            // keyboard pilot could not hold a hover. Two states, one of them reset.
-            float ground = WorldHeight.At(_heli.GlobalPosition.X, _heli.GlobalPosition.Z);
-            _heli.GlobalTransform = new Transform3D(
-                Basis.Identity, new Vector3(_heli.GlobalPosition.X, ground + 150f, _heli.GlobalPosition.Z));
-            _heli.LinearVelocity = Vector3.Zero;
-            _heli.AngularVelocity = Vector3.Zero;
-            _heli.Sim.PlaceInFlightTrimmed(ground + 150f);
+            ResetToHover();
+            _step = 5;
+            _t = 0;
+            return;
+        }
 
+        // Let the teleport actually land before measuring anything.
+        //
+        // The reset below was already here, with a comment about the Godot body and the
+        // sim being two states with only one of them reset. It was right and it was still
+        // not enough: writing GlobalTransform on a rigid body is a request, the physics
+        // server applies it on its own schedule, and this probe started flying on the same
+        // frame it asked. So the "clean hover" it measured was in fact the tail end of the
+        // control-probe tumble above - full collective, then full cyclic, then full pedal -
+        // and it reported that as the aircraft being unflyable, for the second time and for
+        // a different reason than the first.
+        //
+        // Settle, then reset AGAIN from a body that has stopped moving, then fly. The
+        // sweep next door does exactly this, which is why the same pilot holds the same
+        // aircraft there to nine degrees and here to a hundred and fifty.
+        if (_step == 5)
+        {
+            if (_t < 1.5) return;
+            ResetToHover();
+            _hands = new KeyboardPilot(_heli) { TargetAgl = 150f };
+            _hands.Begin();
             _holdFrom = _heli.GlobalPosition;
             _step = 10;
             _t = 0;
             GD.Print("");
-            GD.Print("  keyboard pilot holding a hover for 30 s:");
+            GD.Print("  keyboard pilot holding a hover for 30 s, flying all four controls:");
             return;
         }
 
         if (_step == 10)
         {
-            var sim = _heli.Sim;
-            double rollDeg = sim.State.Orientation.Roll * 57.2958;
-            double pitchDeg = sim.State.Orientation.Pitch * 57.2958;
-
-            // A pilot flies the RATE, not the angle.
-            //
-            // The first version of this pilot was bang-bang on attitude alone, and against
-            // a responsive control it did what bang-bang always does: drove a textbook
-            // pilot-induced oscillation and reported 180 degrees of bank, which says
-            // something about the controller and nothing about the aircraft. Anticipating
-            // where the attitude is GOING - angle plus a second or so of current rate - is
-            // what a person does without thinking about it, and is the minimum needed to
-            // judge whether a control is usable.
-            double rollRate = sim.State.AngularVelocity.X * 57.2958;
-            double pitchRate = sim.State.AngularVelocity.Y * 57.2958;
-            double rollLead = rollDeg + rollRate * 0.9;
-            double pitchLead = pitchDeg + pitchRate * 0.9;
-
-            // Positive cyclic rolls LEFT in this sim (Stability.RollSign, measured), so a
-            // right bank is corrected by pressing Right.
-            Key rollKey = rollLead > 2 ? Key.Left : rollLead < -2 ? Key.Right : Key.None;
-            // Positive pitch is NOSE UP (the bridge self-test asserts forward cyclic gives
-            // a negative pitch), and Up arrow is aft cyclic, which raises the nose further.
-            // So a nose-up excursion is corrected with DOWN. Had this backwards first time
-            // and the probe dutifully flew the aircraft into the ground, then reported that
-            // the aircraft could not be flown.
-            Key pitchKey = pitchLead > 2 ? Key.Down : pitchLead < -2 ? Key.Up : Key.None;
-            SetHeld(ref _heldRoll, rollKey);
-            SetHeld(ref _heldPitch, pitchKey);
-
-            // Tilt from vertical, not Euler roll. Euler roll WRAPS to 180 the moment pitch
-            // passes 90, so the first two runs of this probe reported "176 degrees of bank"
-            // for what was actually a pitch excursion - the exact trap the bridge self-test
-            // warns about in its own comments, walked into twice in ten minutes. The angle
-            // between the aircraft's own up vector and the world's cannot wrap and is what
-            // "did it stay upright" actually means.
-            float tilt = Mathf.RadToDeg(Mathf.Acos(Mathf.Clamp(
-                _heli.GlobalTransform.Basis.Y.Dot(Vector3.Up), -1f, 1f)));
-            _worstBank = Math.Max(_worstBank, tilt);
+            _hands!.Fly();
 
             if (_t - _lastLog > 5.0)
             {
                 _lastLog = _t;
-                GD.Print($"    t+{_t,4:F0}s  tilt {tilt,5:F1}  roll {rollDeg,6:F1}  " +
-                         $"pitch {pitchDeg,6:F1}  agl {_heli.HeightAgl(),6:F1}");
+                float tiltNow = Mathf.RadToDeg(Mathf.Acos(Mathf.Clamp(
+                    _heli.GlobalTransform.Basis.Y.Dot(Vector3.Up), -1f, 1f)));
+                GD.Print($"    t+{_t,4:F0}s  tilt {tiltNow,5:F1}  " +
+                         $"roll {_heli.Sim.State.Orientation.Roll * 57.2958,6:F1}  " +
+                         $"pitch {_heli.Sim.State.Orientation.Pitch * 57.2958,6:F1}  " +
+                         $"hdg err {_hands.WorstHeadingError,5:F0}  agl {_heli.HeightAgl(),6:F1}");
             }
-            var flat = new Vector2(_heli.GlobalPosition.X - _holdFrom.X,
-                                   _heli.GlobalPosition.Z - _holdFrom.Z);
-            _worstDrift = Math.Max(_worstDrift, flat.Length());
 
             if (_t > 30.0)
             {
-                SetHeld(ref _heldRoll, Key.None);
-                SetHeld(ref _heldPitch, Key.None);
-                GD.Print($"    worst tilt      {_worstBank:F1} deg from level");
+                _hands.ReleaseAll();
+                _worstBank = _hands.WorstTilt;
+                _worstDrift = _hands.WorstDrift;
+                GD.Print($"    worst tilt      {_worstBank:F1} deg from level " +
+                         $"(mean {_hands.MeanTilt:F1})");
                 GD.Print($"    worst drift     {_worstDrift:F0} m");
+                GD.Print($"    worst heading   {_hands.WorstHeadingError:F0} deg off " +
+                         $"(mean {_hands.MeanHeadingError:F0})");
+                GD.Print($"    worst altitude  {_hands.WorstAglError:F0} m off");
                 GD.Print($"    still airborne  {_heli.HeightAgl() > 3}");
 
                 if (_worstBank > 60)
@@ -217,9 +203,10 @@ public sealed partial class PlayProbe : Node
                                   "flown from the keyboard");
                 if (_worstDrift > 400)
                     _problems.Add($"drifted {_worstDrift:F0} m while trying to hold a hover");
-                _step = 0;
-                _t = 4.0;
+                if (_heli.HeightAgl() <= 3)
+                    _problems.Add("the aircraft ended the hover on the ground");
                 _step = 20;
+                _t = 4.0;
             }
             return;
         }

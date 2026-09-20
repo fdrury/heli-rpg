@@ -387,7 +387,11 @@ public sealed partial class WarningPanel : Control
         // one thing: a warning-severity condition that is true right now.
         bool flash = (int)(_blink * 2.6) % 2 == 0;
 
-        float x = Size.X - 24f - PanelWidth;
+        // The viewport, not Size: this Control's rect never resolves from its anchors,
+        // so Size is (0, 0) and every right-edge position came out negative. See the
+        // longer note in FlightHud.
+        Vector2 view = GetViewportRect().Size;
+        float x = view.X - 24f - PanelWidth;
         float y = 22f;
 
         if (_cws.MasterWarning || _cws.MasterCaution)
@@ -407,7 +411,7 @@ public sealed partial class WarningPanel : Control
         // the list is bounded by the room above them rather than by a constant, and the
         // sort has already put the worst conditions at the top: what gets cut is always
         // the least of it, and the count says so.
-        int room = Mathf.Max(3, (int)((Size.Y * 0.30f - 30f - y) / RowHeight));
+        int room = Mathf.Max(3, (int)((view.Y * 0.30f - 30f - y) / RowHeight));
         int shown = Math.Min(items.Count, Math.Min(MaxRows, room));
         for (int i = 0; i < shown; i++)
         {
