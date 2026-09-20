@@ -2093,3 +2093,54 @@ and staying away for one game-day clears most of it.
 behaviour. `DetectionScale` returns 1.0 and `ReactionScale` returns 1.0 when alert is null.
 The `AlertLevels` field in `SaveData` is optional and ignored when absent. Four existing
 simlab tests verify the alert model; one new test (`save_alert`) verifies the round trip.
+
+## D-058 — Contract depth: contracts that use the world · 2026-09-19
+
+**Decision.** Connect the contract board to the alert and encounter systems so that
+contracts are aware of the world state that now exists rather than sitting beside it.
+
+**What changed:**
+
+1. **Clear contracts.** New `ContractKind.Clear` — "clear the scavengers at [hostile
+   site]". Generated when `Encounter.IsHostile` returns true for an uncleared nearby site.
+   Completion is gated on `SiteRecord.Cleared`. Reward scales with distance, NPC count,
+   and danger pay. Pays knowledge about the site, because clearing it reveals what was
+   there. The kneeboard shows these in red with a CLEAR tag.
+
+2. **Danger pay.** All contracts scale rewards by `1 + AlertState.Level(regionId)`,
+   so a contract to a fully awake region pays up to double. This makes hot regions
+   worth the risk rather than dead weight on the board. The multiplier is applied after
+   the distance component, so a short flight into a hot region pays more than a short
+   flight into a quiet one but less than a long flight into a quiet one.
+
+3. **Alert-aware briefs.** Every contract brief can end with a sentence about the
+   region's alert level: "somebody saw something" at low alert, "they are expecting
+   company" at high. The suffix is omitted entirely below 0.15 readiness, so most
+   early-game contracts read as they always did.
+
+4. **Hostile-aware recovery.** Recovery contracts (search a wreck/depot) to hostile
+   sites use a distinct set of brief templates that mention the guards and pay one
+   extra part for the fight. The player knows before accepting that the site is guarded.
+
+5. **Survey preference for quiet regions.** The survey generator sorts candidates by
+   `distance + alertLevel × 4000`, preferring quiet regions. A region the player has
+   stirred up is less likely to appear as a scout target, which naturally steers
+   exploration toward untouched parts of the map.
+
+**SiteStub extended.** `Tier` and `RegionId` added (defaulted to 0 for backward
+compatibility). The game layer now passes both from the Godot `Site` record.
+`SiteInteraction` receives `AlertState` from Main after `ThreatWorld` is constructed.
+
+**Save/load.** No schema change. `ContractKind.Clear` is a new enum value serialised as
+a string by `JsonStringEnumConverter`, so old saves without Clear contracts load fine and
+new saves with them are human-readable.
+
+**Tests.** Four new simlab tests: `contract_clear` (generation and completion),
+`contract_danger_pay` (alert-scaled rewards), `contract_recover_hostile` (guarded briefs),
+`contract_clear_roundtrip` (save/load). All twelve contract tests pass.
+
+**Reversibility:** high. Clear contracts are one new enum value, one new branch in
+`CheckCompletion`, and one new `TryAdd` method — deleting them leaves the four original
+types untouched. Danger pay and alert briefs are gated on `alert is not null`, so passing
+null restores the pre-D-058 behaviour exactly. The `SiteStub` defaults mean existing
+test code that does not supply Tier/RegionId continues to compile and run.

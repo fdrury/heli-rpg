@@ -234,6 +234,16 @@ faster without redrawing routes the player has already learned. The kneeboard MA
 shows raised regions by name and phrase. Alert levels persist through save/load. One
 new simlab test (`save_alert`) verifies the round trip.
 
+**Contract depth** — contracts that use the world (D-058). The board was sitting beside
+the alert and encounter systems rather than using them. Now: Clear contracts ask the
+player to remove scavengers from hostile sites (gated on `SiteRecord.Cleared`). Danger
+pay scales all rewards by `1 + alertLevel`, so a contract to a hot region pays up to
+double. Recovery contracts to hostile sites mention the guards and pay extra. Survey
+generation prefers quiet regions, naturally steering exploration toward untouched country.
+Brief text appends an alert sentence when the destination region is above 0.15 readiness.
+Four new simlab tests: clear generation/completion, danger pay scaling, hostile recovery
+briefs, and clear round-trip. The kneeboard shows CLEAR contracts in red.
+
 **Autorotation investigation closed** (D-054). The "glides half as far" gap was three
 problems: (1) the autoglide test rig drifted sideways (no lateral channel in the autopilot
 demand), inflating drag by 13.5 m² of side area; (2) the 4:1 reference is a rule-of-thumb
@@ -277,9 +287,8 @@ lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, a
    consulted in both `GetOrCreateNpc` and `AddSalvage`.
 2. ~~**Wire `AlertState` into the world.**~~ **DONE.** Driven from ThreatWorld, feeds
    DetectionScale/ReactionScale into the threat field, persisted in save, shown on kneeboard.
-3. **Contract depth.** The board exists. Contracts that use the world state that now exists
-   — carry this part to that workshop, fly someone to a place that is currently quiet —
-   would connect mission structure to salvage and alert rather than sitting beside them.
+3. ~~**Contract depth.**~~ **DONE.** Clear contracts, danger pay, hostile-aware recovery
+   briefs, alert-aware brief suffixes, and survey preference for quiet regions (D-058).
 4. **The three degraded story roles.** `--worldreport` shows `DossHome`, `FerrenOffice` and
    `ScaldMagazine` falling back because their region has no site of the right kind. The
    placement fix improved this a lot; check whether it is now fixable properly.

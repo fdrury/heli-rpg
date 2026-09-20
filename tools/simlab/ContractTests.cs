@@ -252,15 +252,24 @@ public static class ContractTests
                 return $"title[{i}] differs";
         }
 
-        // Different cycle should produce different contracts
-        var board3 = ContractBoard.Generate(0, "Test", 0, 0, sites, progress, 7200, 1);
+        // Different cycle should produce different contracts. With limited test sites
+        // the IDs can match (same eligible targets), so also compare titles and briefs
+        // which include RNG-dependent text (cargo amounts, brief selection).
         bool anyDifferent = false;
-        if (board3.Count != board1.Count) anyDifferent = true;
-        else
+        for (int cycle = 1; cycle <= 10 && !anyDifferent; cycle++)
+        {
+            var other = ContractBoard.Generate(0, "Test", 0, 0, sites, progress, 7200, cycle);
+            if (other.Count != board1.Count) { anyDifferent = true; break; }
             for (int i = 0; i < board1.Count; i++)
-                if (board1[i].Id != board3[i].Id) { anyDifferent = true; break; }
+            {
+                if (board1[i].Id != other[i].Id
+                    || board1[i].Title != other[i].Title
+                    || board1[i].Brief != other[i].Brief)
+                { anyDifferent = true; break; }
+            }
+        }
 
-        if (!anyDifferent) return "different cycle produced identical contracts";
+        if (!anyDifferent) return "10 different cycles all produced identical contracts";
 
         return null;
     }
@@ -307,22 +316,200 @@ public static class ContractTests
         return null;
     }
 
+    /// <summary>Clear contract generates for hostile sites and completes on clear.</summary>
+    public static string? ClearContract()
+    {
+        var progress = Progress.NewGame();
+        var sites = MakeSites();
+
+        // Find a hostile site among our test sites.
+        int hostileId = -1;
+        foreach (var s in sites)
+        {
+            if (Encounter.IsHostile(s.Id, (int)s.Kind, s.Tier) && !progress.Record(s.Id).Cleared)
+            {
+                hostileId = s.Id;
+                break;
+            }
+        }
+
+        if (hostileId == -1)
+            return null; // no hostile site in test data — skip, not a failure
+
+        // Generate board — look for a Clear contract across several cycles.
+        Contract? clearContract = null;
+        for (int cycle = 0; cycle < 20 && clearContract is null; cycle++)
+        {
+            var board = ContractBoard.Generate(0, "Test Settlement", 0, 0,
+                sites, progress, 7200, cycle);
+            foreach (var c in board)
+                if (c.Kind == ContractKind.Clear) { clearContract = c; break; }
+        }
+
+        if (clearContract is null)
+            return "no Clear contract generated in 20 cycles";
+
+        Console.WriteLine($"  Clear contract: {clearContract.Title} → {clearContract.TargetName}");
+        Console.WriteLine($"  Reward: +{clearContract.RewardAmount} {clearContract.RewardKind}");
+
+        // Should not complete before clearing
+        clearContract.Accepted = true;
+        if (clearContract.CheckCompletion(progress))
+            return "completed before clearing";
+
+        // Clear the site
+        progress.Record(clearContract.TargetSiteId).Cleared = true;
+
+        // Now it should complete
+        if (!clearContract.CheckCompletion(progress))
+            return "did not complete after clearing";
+
+        return null;
+    }
+
+    /// <summary>Danger pay scales rewards when alert is raised.</summary>
+    public static string? DangerPay()
+    {
+        var progress = Progress.NewGame();
+        var sites = MakeSites();
+
+        // Generate with no alert — baseline rewards.
+        var baseline = ContractBoard.Generate(0, "Test Settlement", 0, 0,
+            sites, progress, 7200, 0, alert: null);
+        if (baseline.Count == 0) return "no baseline contracts generated";
+
+        // Generate with a hot region — rewards should be higher.
+        var alert = new AlertState();
+        // Set region 1 (where most test sites live) to near-full readiness.
+        alert.Set(1, 0.9);
+
+        var hot = ContractBoard.Generate(0, "Test Settlement", 0, 0,
+            sites, progress, 7200, 0, alert: alert);
+        if (hot.Count == 0) return "no alert contracts generated";
+
+        double baseTotal = 0, hotTotal = 0;
+        foreach (var c in baseline) baseTotal += c.RewardAmount;
+        foreach (var c in hot) hotTotal += c.RewardAmount;
+
+        Console.WriteLine($"  Baseline total reward: {baseTotal:F0}");
+        Console.WriteLine($"  Alert total reward: {hotTotal:F0}");
+
+        // At least some contracts should pay more when alert is raised.
+        if (hotTotal <= baseTotal)
+            return $"alert rewards ({hotTotal:F0}) not higher than baseline ({baseTotal:F0})";
+
+        return null;
+    }
+
+    /// <summary>Recovery contracts note hostile guards and pay extra.</summary>
+    public static string? RecoverHostile()
+    {
+        var progress = Progress.NewGame();
+        var sites = MakeSites();
+
+        // Find a recovery contract targeting a hostile site.
+        Contract? guardedRecovery = null;
+        for (int cycle = 0; cycle < 20 && guardedRecovery is null; cycle++)
+        {
+            var board = ContractBoard.Generate(0, "Test Settlement", 0, 0,
+                sites, progress, 7200, cycle);
+            foreach (var c in board)
+            {
+                if (c.Kind != ContractKind.Recover) continue;
+                var target = FindSite(sites, c.TargetSiteId);
+                if (target is null) continue;
+                if (Encounter.IsHostile(target.Id, (int)target.Kind, target.Tier))
+                {
+                    guardedRecovery = c;
+                    break;
+                }
+            }
+        }
+
+        if (guardedRecovery is null)
+            return null; // no hostile recovery in test data — skip
+
+        Console.WriteLine($"  Guarded recovery: {guardedRecovery.Title}");
+        Console.WriteLine($"  Brief: {guardedRecovery.Brief}");
+
+        // The brief should mention the guards.
+        bool mentionsGuards = guardedRecovery.Brief.Contains("guarding")
+                           || guardedRecovery.Brief.Contains("sitting on")
+                           || guardedRecovery.Brief.Contains("keeping everyone");
+        if (!mentionsGuards)
+            return "guarded recovery brief does not mention hostiles";
+
+        return null;
+    }
+
+    /// <summary>Clear contract round-trips through save/load.</summary>
+    public static string? ClearRoundTrip()
+    {
+        var progress = Progress.NewGame();
+        progress.Clock = 50000;
+
+        var c = new Contract
+        {
+            Id = "test.clr.1",
+            Kind = ContractKind.Clear,
+            Title = "Clear East Wreck",
+            Brief = "Scavengers at East Wreck. Deal with them.",
+            SourceSiteId = 0,
+            TargetSiteId = 2,
+            TargetName = "East Wreck",
+            RewardKind = Stock.Scrap,
+            RewardAmount = 15,
+            StandingReward = 0.2,
+            RewardKnowledgeId = "site.cleared.2",
+            RewardKnowledgeLabel = "East Wreck",
+            RewardKnowledgeDetail = "Cleared.",
+            PostedAt = 48000,
+            Accepted = true,
+        };
+        progress.AcceptContract(c);
+
+        var save = new SaveData();
+        save.CaptureProgress(progress);
+
+        string json = save.ToJson();
+        var loaded = SaveData.FromJson(json);
+        if (loaded is null) return "deserialisation returned null";
+
+        var p2 = loaded.ApplyProgress();
+        if (p2.Contracts.Count != 1) return $"contract count: {p2.Contracts.Count}";
+
+        var c2 = p2.Contracts[0];
+        if (c2.Kind != ContractKind.Clear) return $"kind: {c2.Kind}";
+        if (c2.Title != "Clear East Wreck") return $"title: {c2.Title}";
+        if (c2.TargetSiteId != 2) return $"target: {c2.TargetSiteId}";
+        if (c2.RewardKnowledgeId != "site.cleared.2") return $"knowledge: {c2.RewardKnowledgeId}";
+
+        return null;
+    }
+
     // ---- helpers ----
 
     private static List<SiteStub> MakeSites()
     {
+        // Tier and RegionId now populated for encounter and alert awareness.
         return new List<SiteStub>
         {
-            new(0, "Test Settlement", SiteKindTag.Settlement, 0, 0),
-            new(1, "North Cache", SiteKindTag.FuelCache, 1500, 0),
-            new(2, "East Wreck", SiteKindTag.Wreck, 2000, 1000),
-            new(3, "South Workshop", SiteKindTag.Workshop, 0, 2500),
-            new(4, "Far Settlement", SiteKindTag.Settlement, -3000, 1000),
-            new(5, "Relay Hill", SiteKindTag.Relay, 1000, -2000),
-            new(6, "Depot", SiteKindTag.Depot, -1500, -1500),
-            new(7, "Airfield", SiteKindTag.Airfield, 4000, 3000),
-            new(8, "Farm", SiteKindTag.Farmstead, 800, 500),
-            new(9, "Overlook", SiteKindTag.Overlook, -500, -3000),
+            new(0, "Test Settlement", SiteKindTag.Settlement, 0, 0, Tier: 0, RegionId: 0),
+            new(1, "North Cache", SiteKindTag.FuelCache, 1500, 0, Tier: 1, RegionId: 1),
+            new(2, "East Wreck", SiteKindTag.Wreck, 2000, 1000, Tier: 2, RegionId: 1),
+            new(3, "South Workshop", SiteKindTag.Workshop, 0, 2500, Tier: 1, RegionId: 1),
+            new(4, "Far Settlement", SiteKindTag.Settlement, -3000, 1000, Tier: 1, RegionId: 2),
+            new(5, "Relay Hill", SiteKindTag.Relay, 1000, -2000, Tier: 1, RegionId: 1),
+            new(6, "Depot", SiteKindTag.Depot, -1500, -1500, Tier: 2, RegionId: 2),
+            new(7, "Airfield", SiteKindTag.Airfield, 4000, 3000, Tier: 2, RegionId: 3),
+            new(8, "Farm", SiteKindTag.Farmstead, 800, 500, Tier: 2, RegionId: 1),
+            new(9, "Overlook", SiteKindTag.Overlook, -500, -3000, Tier: 1, RegionId: 1),
         };
+    }
+
+    private static SiteStub? FindSite(IReadOnlyList<SiteStub> list, int id)
+    {
+        foreach (var s in list) if (s.Id == id) return s;
+        return null;
     }
 }

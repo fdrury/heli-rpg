@@ -597,6 +597,7 @@ public sealed partial class Kneeboard : Control
                     ContractKind.Survey => "SCOUT",
                     ContractKind.Recover => "SEARCH",
                     ContractKind.Relay => "MESSAGE",
+                    ContractKind.Clear => "CLEAR",
                     _ => "JOB",
                 };
                 Color kindCol = c.Kind switch
@@ -605,6 +606,7 @@ public sealed partial class Kneeboard : Control
                     ContractKind.Survey => new Color(0.55f, 0.75f, 0.90f),
                     ContractKind.Recover => new Color(0.75f, 0.60f, 0.40f),
                     ContractKind.Relay => new Color(0.63f, 0.84f, 0.60f),
+                    ContractKind.Clear => new Color(0.90f, 0.40f, 0.35f),
                     _ => Ink,
                 };
 

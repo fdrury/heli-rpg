@@ -131,6 +131,8 @@ public sealed partial class Main : Node3D
         AddChild(_codaServer);
         _play.CodaServer = _codaServer;
 
+        // Alert is set after ThreatWorld construction below, not here, because _threats
+        // does not exist yet. See the line after AddChild(_threats).
         _threats = new ThreatWorld
         {
             Name = "Threats",
@@ -138,6 +140,7 @@ public sealed partial class Main : Node3D
             InteractionPath = _play.GetPath(),
         };
         AddChild(_threats);
+        _play.Alert = _threats.Alert;
 
         var layer = new CanvasLayer { Name = "Hud" };
         AddChild(layer);

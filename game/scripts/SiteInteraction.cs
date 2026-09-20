@@ -37,6 +37,9 @@ public sealed partial class SiteInteraction : Node
     public Progress Progress { get; } = Progress.NewGame();
     public Loadout Loadout { get; } = new();
 
+    /// <summary>Set by Main after ThreatWorld is created. Used for alert-aware contracts.</summary>
+    public AlertState? Alert { get; set; }
+
     /// <summary>Raised when a module is found during salvage.</summary>
     public event Action<ModuleDef>? ModuleFound;
     /// <summary>Raised when a module is installed. Main wires the system-specific effects.</summary>
@@ -507,7 +510,7 @@ public sealed partial class SiteInteraction : Node
             var stubs = BuildSiteStubs();
             var board = ContractBoard.Generate(
                 site.Id, site.Name, site.Position.X, site.Position.Y,
-                stubs, Progress, Progress.Clock, cycle);
+                stubs, Progress, Progress.Clock, cycle, Alert);
             _boards[site.Id] = (board, cycle);
             cached = (board, cycle);
         }
@@ -531,7 +534,8 @@ public sealed partial class SiteInteraction : Node
     {
         var stubs = new List<SiteStub>();
         foreach (var s in WorldMap.Sites)
-            stubs.Add(new SiteStub(s.Id, s.Name, (SiteKindTag)(int)s.Kind, s.Position.X, s.Position.Y));
+            stubs.Add(new SiteStub(s.Id, s.Name, (SiteKindTag)(int)s.Kind,
+                s.Position.X, s.Position.Y, s.Tier, (int)s.Region));
         return stubs;
     }
 

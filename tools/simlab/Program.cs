@@ -145,6 +145,10 @@ public static class Program
         Run("contract_roundtrip", ContractTests.RoundTrip);
         Run("search_advance", ContractTests.SearchAdvance);
         Run("contract_determinism", ContractTests.Determinism);
+        Run("contract_clear", ContractTests.ClearContract);
+        Run("contract_danger_pay", ContractTests.DangerPay);
+        Run("contract_recover_hostile", ContractTests.RecoverHostile);
+        Run("contract_clear_roundtrip", ContractTests.ClearRoundTrip);
         Run("contract_integration", ContractTests.ProgressIntegration);
         Run("save_progress", SaveTests.ProgressRoundTrip);
         Run("save_damage", SaveTests.DamageRoundTrip);
