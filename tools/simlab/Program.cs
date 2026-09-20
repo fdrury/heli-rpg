@@ -195,6 +195,10 @@ public static class Program
         Run("dj_guard", RadioDjTests.PremiseAndAdviceGuard);
         Run("ditching", DitchingTests.IntoTheWater);
         Run("ditch_shape", DitchingTests.NotJustAHardLanding);
+        Run("rebuild", RebuildTests.PlacesComeBack);
+        Run("rebuild_empty", RebuildTests.EmptyPlacesStayDown);
+        Run("rebuild_watched", RebuildTests.NobodyWatchesAWallGrow);
+        Run("rebuild_cousins", RebuildTests.TheCousins);
         Run("search_guard", RadioDjTests.SearchThreadPremiseGuard);
         Run("dj_schedule", RadioDjTests.Scheduling);
         Run("dj_site", RadioDjTests.BroadcastSite);
