@@ -41,6 +41,14 @@ public sealed partial class LandingController : Node
     /// <summary>Latch, so one impact is one strike rather than one per frame.</summary>
     private bool _rotorStruck;
 
+    /// <summary>The aircraft is in the water. Latched: you ditch once.</summary>
+    public bool Ditched { get; private set; }
+
+    /// <summary>The ditching, for the HUD, the journal and the radio.</summary>
+    public Ditching.Report LastDitching { get; private set; }
+
+    public event Action<Ditching.Report>? WentIn;
+
     private double _now;
 
     public override void _Ready()
@@ -89,6 +97,16 @@ public sealed partial class LandingController : Node
             _rotorStruck = false;
         }
 
+        // --- The water --------------------------------------------------------
+        //
+        // Checked BEFORE the touchdown test, and deliberately not through the physics
+        // contact the touchdown test uses, because there is nothing there to contact. The
+        // water is drawn as a flat quad with no collider (TerrainStreamer), and the only
+        // collision mesh at sea is the seabed eleven to seventy-five metres down - so an
+        // aircraft descending over water used to fall clean through the surface, sit on the
+        // bottom, and lift off again. Every committed crossing D-077 built was free.
+        CheckDitching();
+
         // --- Touchdown --------------------------------------------------------
         bool contact = _heli.GetContactCount() > 0;
         double descentRate = -_heli.LinearVelocity.Y;
@@ -114,6 +132,52 @@ public sealed partial class LandingController : Node
         OnGround = contact;
         _wasAirborne = !contact;
         if (contact) _timeOnGround += delta; else _timeOnGround = 0;
+    }
+
+    /// <summary>
+    /// Has the lowest part of the aircraft gone under the sea?
+    ///
+    /// The lowest part, not the centre of gravity and not the skids' nominal height: the
+    /// airframe's own contact points, transformed into the world, which is the same set the
+    /// touchdown test uses and means a nose-down arrival goes in nose first.
+    /// </summary>
+    private void CheckDitching()
+    {
+        if (Ditched) return;
+
+        var sim = _heli.Sim;
+        Transform3D t = _heli.GlobalTransform;
+        Vec3 cg = sim.CentreOfGravity;
+
+        float lowest = float.MaxValue;
+        foreach (Vec3 c in sim.Airframe.ContactPoints)
+            lowest = Math.Min(lowest, (t * SimBridge.ToGodot(c - cg)).Y);
+        if (lowest == float.MaxValue) lowest = _heli.GlobalPosition.Y;
+
+        double depth = WorldHeight.WaterLevel - lowest;
+        if (depth < Ditching.ContactDepthM) return;
+
+        // Only water. The waterline is a world-wide constant, so a point below it inland -
+        // the floor of a dry gorge cut under datum, say - is not the sea. Ask the height
+        // field what is actually there.
+        Vector3 here = _heli.GlobalPosition;
+        if (!WorldHeight.IsWater(here.X, here.Z)) return;
+
+        Ditching.Report r = Ditching.Evaluate(
+            depth,
+            Math.Max(0, -_heli.LinearVelocity.Y),
+            new Vector2(_heli.LinearVelocity.X, _heli.LinearVelocity.Z).Length(),
+            sim.RotorOmega / Math.Max(sim.Airframe.MainRotor.NominalOmega, 1e-6));
+
+        Ditched = true;
+        LastDitching = r;
+
+        var d = sim.Damage;
+        foreach ((Component part, double amount, string why) in Ditching.DamageFrom(r))
+            d.Apply(part, amount, DamageCause.Impact, why);
+
+        GD.Print($"[ditch] {Ditching.Describe(r)}");
+        WentIn?.Invoke(r);
     }
 
     private void ApplyTouchdownDamage(TouchdownReport r)
