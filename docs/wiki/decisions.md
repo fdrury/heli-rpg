@@ -2311,3 +2311,92 @@ the last piece of the radio system identified in integration-debt.md.
 
 **Reversibility:** high. Each hook is 3-8 lines at the site of the event. `PopulationAt` /
 `PopulationNear` are two static methods on WorldMap. No sim/ changes, no new files.
+
+---
+
+## D-077 — The archipelago becomes real: eight islands, ten committed crossings · 2026-09-20 · **[FRED'S IDEA]**
+
+**Decision:** The region layout is respread so that the eight regions are genuinely separate
+islands. `WorldMap.BuildRegions` and the lobe table in `WorldHeight.Land` move together; The
+Pan and Long Acre deliberately overlap and remain one home island, and every other pair is
+separated by at least 2.5 km of open water.
+
+**Why now.** D-059 decided the world was an archipelago and the data never followed it,
+because it could not: every adjacent pair of regions sat 2.4 to 3.7 km apart and each needed
+a 2.4 km lobe of land under it, so no cut anywhere left a channel the aircraft could not
+glide. Measured, the world was **2 landmasses, the largest 121 km², with exactly one
+committed crossing on the whole map**. It was one island with bays. Fred asked for the
+islands to be spaced out, on the grounds that it would help the range-against-map-size
+problem.
+
+**The thing that makes it cheap.** Spacing regions apart adds **water, not empty land**. Each
+region keeps its own lobe, its own radius and its own site counts, so site density per island
+is exactly what it was — what grows is the sea between them, and D-059 already established
+that an over-water leg is allowed to be empty because crossing it *is* the activity. This is
+the whole of Fred's argument and it holds up.
+
+**The gradient is the gating system** (D-010, D-059). Tier now costs crossings, not kilometres:
+
+| | | |
+|---|---|---|
+| Home island | The Pan + Long Acre overlap | **0 m of water** |
+| Tier 1 | Fenmoor, The Drowning | 2.9–3.2 km hop off home |
+| Tier 2 | Cold Shoulder, Sawtooth Works | 3.4–3.7 km from a tier 1 island, but 12 km direct from home |
+| Tier 3 | Ashmount, The Scald | 7.8–8.0 km committed |
+
+The home island matters more than it looks. The first aircraft is a salvaged one and the tank
+is rarely full; forcing a committed water crossing in the first ten minutes would be a
+different game. Tier 2 being close to tier 1 and far from home is the other deliberate bit —
+island-hopping is the cheap route and the direct line is the expensive one, which is a
+navigation decision rather than a wall.
+
+**Measured, before → after:**
+
+| | before | after |
+|---|---|---|
+| landmasses over 0.5 km² | 2 | **8** |
+| largest landmass | 121 km² | 36 km² |
+| committed crossings between regions | **1** | **10** |
+| water inside the envelope | 29.3 % | 84.7 % |
+| sites placed | 119 | **119** |
+| site shortfalls | 0 | **0** |
+| story roles bound / degraded | 16 / 0 | **16 / 0** |
+
+**Three things broke, and all three were invisible in the layout and obvious in the report.**
+
+1. **`WorldMap.ContentHalfExtent` was still 6500 m** — D-003b's 13 km content envelope. It is
+   a clamp on where a site may be placed, and the four outer islands were entirely outside
+   it, so every candidate position out there was rejected *before the terrain was ever
+   consulted*. The Drowning, Cold Shoulder and Sawtooth Works came back with zero
+   settlements, zero workshops and zero depots; **sites fell from 119 to 64 with 33
+   shortfalls**, and the only things that survived out there were wrecks, which are placed by
+   a different rule. The region height tables were healthy the whole time, which is what made
+   it look like a terrain problem. Now 16000, sized from Ashmount's corner.
+
+2. **`WorldHeight.BasinCentre` is a hard-coded copy of the Wetland region centre**, and
+   moving the region left the drowned basin 4.4 km out in open sea. The existing
+   `BasinCheck` guard caught this on the first run and printed the drift and the distance —
+   the guard was written for exactly this and it earned itself here.
+
+3. **The Drowning's lobe was smaller than its own flood.** `BasinOuter` is 2500 m and the
+   lobe was 2350 m, so the entire island sat inside the basin: highest ground 16 m, and
+   nowhere to stand the relay mast or the overlook the placement plan asks for. It had been
+   getting away with that by borrowing dry ground from the neighbours it overlapped, and it
+   has no neighbours any more. The lobe is now 3100 m, which leaves a 600 m rim of ordinary
+   terrain outside the flood — which is what a drowned basin looks like from the air anyway.
+
+**Also fixed:** the world report's crossing table filtered legs longer than 6.2 km as "not
+legs anybody flies". That was right when the regions were 2.4–6 km apart and wrong the moment
+they moved, so the table printed one row and implied there was nothing to report. Now 13 km.
+
+**Cost.** The world is 33 km across rather than 13. At 55 m/s that is about ten minutes corner
+to corner against three hours of endurance, so it is not a range problem — it is a fuel and
+commitment problem, which is what D-004 and D-059 wanted it to be. Terrain is procedural and
+the streamer only loads near the aircraft, so the extra extent costs travel time rather than
+memory.
+
+**Reversibility:** medium. Two coordinate tables, one constant and one lobe radius; reverting
+them restores the old world exactly. Anything that hard-codes a world extent has to move with
+them — `ContentHalfExtent`, `IslandHalfExtent`, `BasinCentre` and the report threshold are the
+four found so far, and the pattern to expect is a constant that was sized against the old
+13 km envelope and says nothing about which envelope it meant.

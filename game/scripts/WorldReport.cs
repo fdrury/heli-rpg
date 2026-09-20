@@ -385,7 +385,13 @@ public static class WorldReport
             for (int b = a + 1; b < rs.Count; b++)
             {
                 float legLen = rs[a].Centre.DistanceTo(rs[b].Centre);
-                if (legLen > 6200f) continue;   // neighbours only; the rest are not legs
+                // Neighbours only; the rest are not legs anybody flies. The threshold was
+                // 6200 m, which was right when the regions were 2.4 to 6 km apart and
+                // wrong the moment the archipelago spread them out - every real crossing
+                // in the world was longer than that, so this table printed one row and
+                // claimed there was nothing to report. If the layout moves again, check
+                // this number against it.
+                if (legLen > 13000f) continue;
                 int steps = Mathf.Max(2, (int)(legLen / 25f));
                 float wetLen = 0, run = 0, worst = 0;
                 for (int i = 0; i <= steps; i++)

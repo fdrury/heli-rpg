@@ -8,14 +8,20 @@ every choice and why; `docs/wiki/benchmarks/` is where it was measured against t
 
 ## Where it is now
 
-**The core loop closes, people talk, the machine levels up, the map fills in, and now
-there is somewhere to go and a reason to get there.** You can fly a physically simulated
-Huey across a streamed 16 km world, find a named settlement, put it down, shut down, talk
-to whoever lives there, take a contract from the board, fly it, and come back for the
-payout. The main search — 12 authored beats about finding another pilot — gives the
-long-term pull; the contracts give the per-sortie purpose. Eight module bays, each felt in
-the flight model. The kneeboard's five pages show aircraft condition, knowledge, journal,
-map, and active jobs.
+**The core loop closes, people talk, the machine levels up, the map fills in, there is
+somewhere to go and a reason to get there — and now a voice on the radio that knows what
+you did.** You can fly a physically simulated Huey across a streamed archipelago, find a
+named settlement, put it down, shut down, talk to whoever lives there, take a contract from
+the board, fly it, and come back for the payout. The main search — 12 authored beats about
+finding Sera Wray, a flight engineer, and a set of matched blades — gives the long-term
+pull; the contracts give the per-sortie purpose. Eight module bays, each felt in the flight
+model. The kneeboard's five pages show aircraft condition, knowledge, journal, map, and
+active jobs.
+
+**The world is eight islands** (D-077), 33 km corner to corner, with ten committed water
+crossings between them and one home island where The Pan and Long Acre join. Tier costs
+crossings rather than kilometres: tier 1 is a 3 km hop, tier 3 is an 8 km commitment with
+no option anywhere on the leg at a 2:1 glide.
 
 60 fps at 1600x900 on a GTX 1650 Ti, which is well under the GTX 1080 target.
 
@@ -311,7 +317,15 @@ lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, a
    the duration the audio would have taken - because there is no TTS and no recorded VO.
    Everything else about him is live. This is the biggest remaining gap in the feature and
    it is confined to `DjBroadcast` and `RadioReadout`.
-7. **The world has no acoustics.** Still the top item in `benchmarks/audio.md`: no reverb,
+7. **The drowned wreck is dry.** `--worldreport` warns that `DrowningWreck` sits 11.9 m
+   above the waterline, and story beat 8 wants an aircraft half in the water. The region
+   itself is now genuinely wet (38.9% standing water after D-077), so the ground is no
+   longer the problem - the *placement* is. `SiteKind.Wreck` has no height gate at all, so
+   a wreck is allowed in the shallows and none lands there; the next thing to check is
+   whether `SitePads` is grading a dry pad under every site and lifting submerged ones
+   clear. The doc comment on `TryPlace` already says "a wetland wreck wants to be half in
+   the water" and no rule implements it.
+8. **The world has no acoustics.** Still the top item in `benchmarks/audio.md`: no reverb,
    no occlusion, and sites make no sound at all. Landing somewhere and shutting down
    produces silence at exactly the moment the player is most receptive to being told where
    they are.

@@ -52,8 +52,23 @@ public sealed record Region(RegionKind Kind, string Name, Vector2 Centre, float 
 /// </summary>
 public static class WorldMap
 {
-    /// <summary>Half-extent of the content envelope, metres. Smaller than the terrain grid.</summary>
-    public const float ContentHalfExtent = 6500f;
+    /// <summary>
+    /// Half-extent of the content envelope, metres. Smaller than the terrain grid.
+    ///
+    /// This is a CLAMP on where a site may be placed, not a statement about density: sites
+    /// are generated inside their own region's disc, so widening this does not spread the
+    /// same content over more ground. It has to contain every region disc, and when the
+    /// archipelago spread the regions out to +/-14 km it did not - it still read 6500 from
+    /// D-003b's 13 km envelope, so every candidate position on the four outer islands was
+    /// rejected before the terrain was ever consulted. The Drowning, Cold Shoulder and
+    /// Sawtooth Works came back with zero settlements, zero workshops and zero depots, and
+    /// the only sites that survived out there were wrecks, which are placed by a different
+    /// rule. The terrain was fine; the envelope was the wall.
+    ///
+    /// Sized from the layout: Ashmount is the furthest out at (13942, 11699) with a 1800 m
+    /// region radius, so 16000 clears it with room for the placement jitter.
+    /// </summary>
+    public const float ContentHalfExtent = 16000f;
 
     private static List<Region>? _regions;
     private static List<Site>? _sites;
@@ -72,16 +87,45 @@ public static class WorldMap
         // nowhere was ever remote. Measured, you were within 3.1 km of something from ANY
         // point on the map. These are tighter, and the country between them is meant to be
         // empty: that emptiness is what turns a leg into a journey.
+        // D-059 made this an archipelago and the layout did not follow, because it could
+        // not: every adjacent pair of regions was 2.4 to 3.7 km apart and each needed a
+        // 2.4 km lobe of land under it, so there was no cut anywhere that left a channel
+        // the aircraft could not glide across. The measured result was "2 landmasses,
+        // largest 121 km2" and exactly ONE committed crossing on the whole map. It was one
+        // island with bays.
+        //
+        // Fred asked for the islands to be spaced out, on the grounds that it helps the
+        // range-against-map-size problem. It does, and the reason it is free is worth
+        // stating: spacing regions apart adds WATER, not empty land. Each region keeps its
+        // own lobe and its own sites, so site density per island is exactly what it was -
+        // what grows is the sea between them, and an over-water leg is allowed to be empty
+        // because crossing it is the activity.
+        //
+        // The gradient is deliberate and it is the gating system (D-010, D-059):
+        //
+        //   * The Pan and Long Acre OVERLAP. The home island is one landmass and the
+        //     player can learn to fly without ever being committed over water, which
+        //     matters when the first aircraft is a salvaged one and the tank is rarely
+        //     full.
+        //   * Tier 1 is a 2.9 to 3.2 km hop off the home island.
+        //   * Tier 2 is 3.3 to 3.7 km from a tier 1 island - but 7 km direct from home, so
+        //     island-hopping is the cheap route and the direct line is the expensive one.
+        //   * Tier 3 is a 7.8 to 8.0 km committed crossing. At best glide (2:1, so about
+        //     1 km from 500 m) there is no point on those legs with an option.
+        //
+        // The lobe table in WorldHeight.Land is the same eight centres and has to move
+        // with this. If you change one, change both, then run --worldreport: the numbers
+        // that matter are landmass count, committed crossings, and site shortfalls at zero.
         return new List<Region>
         {
-            new(RegionKind.Basin,      "The Pan",          new Vector2(  200,  1100), 1500, 0),
-            new(RegionKind.Farmland,   "Long Acre",        new Vector2(-3100,  -500), 1600, 0),
-            new(RegionKind.Exurb,      "Fenmoor",          new Vector2( 3000, -1400), 1400, 1),
-            new(RegionKind.Wetland,    "The Drowning",     new Vector2(-1600,  4700), 1400, 1),
-            new(RegionKind.Upland,     "Cold Shoulder",    new Vector2( 1500, -4400), 1700, 2),
-            new(RegionKind.Industrial, "Sawtooth Works",   new Vector2(-4800, -3300), 1300, 2),
-            new(RegionKind.City,       "Ashmount",         new Vector2( 4600,  3100), 1800, 3),
-            new(RegionKind.Ashfield,   "The Scald",        new Vector2(-4000,  4300), 1200, 3),
+            new(RegionKind.Basin,      "The Pan",          new Vector2(     0,      0), 1500, 0),
+            new(RegionKind.Farmland,   "Long Acre",        new Vector2( -3850,    500), 1600, 0),
+            new(RegionKind.Exurb,      "Fenmoor",          new Vector2(  4864,  -6225), 1400, 1),
+            new(RegionKind.Wetland,    "The Drowning",     new Vector2(  1746,   8216), 1400, 1),
+            new(RegionKind.Upland,     "Cold Shoulder",    new Vector2( -1046, -11954), 1700, 2),
+            new(RegionKind.Industrial, "Sawtooth Works",   new Vector2( 13002,  -3242), 1300, 2),
+            new(RegionKind.City,       "Ashmount",         new Vector2( 13942,  11699), 1800, 3),
+            new(RegionKind.Ashfield,   "The Scald",        new Vector2(-13856,   8000), 1200, 3),
         };
     }
 

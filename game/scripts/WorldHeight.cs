@@ -41,7 +41,7 @@ public static class WorldHeight
     /// ask when they mean "the world" - neither of them wants to be told that the world is
     /// 250 km across, because neither of them has anything to say about the ocean.
     /// </summary>
-    public const float IslandHalfExtent = 7600f;
+    public const float IslandHalfExtent = 16600f;
 
     private static readonly FastNoiseLite Continent = new()
     {
@@ -110,7 +110,7 @@ public static class WorldHeight
     // BasinCheck below is what stops the copy drifting - the world report prints it.
 
     /// <summary>Centre of the drowned basin. Must match WorldMap's Wetland region centre.</summary>
-    public static readonly Vector2 BasinCentre = new(-1600f, 4700f);
+    public static readonly Vector2 BasinCentre = new(1746f, 8216f);
 
     /// <summary>Carves the valley network. Ridged noise inverted becomes drainage.</summary>
     private static readonly FastNoiseLite Valleys = new()
@@ -224,9 +224,12 @@ public static class WorldHeight
     // not a crossing at all. Splitting them anyway would put sites in the sea, and site
     // shortfalls are the one number that has to stay at zero.
     //
-    // So: the machinery is the archipelago, the table is one island with deep bays, and
-    // the report carries the exact WorldMap.BuildRegions() layout that makes the gaps real
-    // along with the table that goes with it. Moving to it is a data change to both.
+    // That paragraph described the layout as it was, and the layout has since moved: the
+    // regions are spread to between 2.5 and 10 km apart and this table follows them, so
+    // the machinery and the data now agree and the world is genuinely an archipelago. The
+    // reasoning for the new spacing, and the tier gradient it encodes, is in
+    // WorldMap.BuildRegions - it is one decision written down in one place, and this table
+    // is its consequence.
     private readonly record struct Lobe(Vector2 A, Vector2 B, float R);
 
     private static readonly Lobe[] Land =
@@ -234,14 +237,26 @@ public static class WorldHeight
         // Each region's own ground. Radii are sized from the measured reach of the sites
         // each region actually generates, plus enough margin that a site on the edge gets
         // its graded pad on dry land rather than half down the beach.
-        new(new Vector2(  200,  1100), new Vector2(  200,  1100), 2400),  // The Pan
-        new(new Vector2(-3100,  -500), new Vector2(-3100,  -500), 2450),  // Long Acre
-        new(new Vector2( 3000, -1400), new Vector2( 3000, -1400), 2350),  // Fenmoor
-        new(new Vector2(-1600,  4700), new Vector2(-1600,  4700), 2350),  // The Drowning
-        new(new Vector2( 1500, -4400), new Vector2( 1500, -4400), 2550),  // Cold Shoulder
-        new(new Vector2(-4800, -3300), new Vector2(-4800, -3300), 2650),  // Sawtooth Works
-        new(new Vector2( 4600,  3100), new Vector2( 4600,  3100), 2600),  // Ashmount
-        new(new Vector2(-4000,  4300), new Vector2(-4000,  4300), 2250),  // The Scald
+        // Centres track WorldMap.BuildRegions exactly. Only The Pan and Long Acre overlap
+        // (their lobes share about a kilometre) - that union is the home island. Every
+        // other pair is separated by at least 2.5 km of open water, which is past the
+        // aircraft's glide from any sane cruise altitude.
+        new(new Vector2(     0,      0), new Vector2(     0,      0), 2400),  // The Pan
+        new(new Vector2( -3850,    500), new Vector2( -3850,    500), 2450),  // Long Acre
+        new(new Vector2(  4864,  -6225), new Vector2(  4864,  -6225), 2350),  // Fenmoor
+        // The Drowning's lobe is deliberately the largest of the eight, and it is not a
+        // matter of taste. The drowned basin is BasinOuter = 2500 m across, so a 2350 m
+        // lobe puts the entire island inside the flood: the region came back with its
+        // highest ground at 16 m and could not place its relay mast or its overlook
+        // anywhere, because there was nowhere above the water to put them. It used to get
+        // away with a small lobe by borrowing dry ground off the neighbours it overlapped,
+        // and it has no neighbours any more. 3100 m leaves a 600 m rim of ordinary terrain
+        // outside the flood - which is what a drowned basin looks like from the air anyway.
+        new(new Vector2(  1746,   8216), new Vector2(  1746,   8216), 3100),  // The Drowning
+        new(new Vector2( -1046, -11954), new Vector2( -1046, -11954), 2550),  // Cold Shoulder
+        new(new Vector2( 13002,  -3242), new Vector2( 13002,  -3242), 2650),  // Sawtooth Works
+        new(new Vector2( 13942,  11699), new Vector2( 13942,  11699), 2600),  // Ashmount
+        new(new Vector2(-13856,   8000), new Vector2(-13856,   8000), 2250),  // The Scald
     };
 
     /// <summary>How much the shoreline wanders in or out, as a fraction of a lobe radius.</summary>
