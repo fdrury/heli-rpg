@@ -539,7 +539,7 @@ public static class RadioDj
 /// </summary>
 public static class DjCorpus
 {
-    private static DjLine[] Bank(DjTopic topic, string key, params string[] texts)
+    private static DjLine[] Keyed(DjTopic topic, string key, params string[] texts)
     {
         var lines = new DjLine[texts.Length];
         for (int i = 0; i < texts.Length; i++)
@@ -547,7 +547,20 @@ public static class DjCorpus
         return lines;
     }
 
-    private static DjLine[] Bank(DjTopic topic, params string[] texts) => Bank(topic, "x", texts);
+    /// <summary>
+    /// A bank with no sub-key.
+    ///
+    /// This overload was UNREACHABLE and the compiler said nothing. `Bank(topic, "line one",
+    /// "line two")` binds to the keyed overload - a string argument matches `string key`
+    /// before it matches `params string[]` - so every bank declared without a key silently
+    /// lost its first line, which then became the bank's key. It showed up as bank names
+    /// like `dj.CeilingNote.The cloud is right down. On the mast, near enough.` in the
+    /// volume report, and as twenty-one lines the announcer could never say.
+    ///
+    /// Renaming the keyed one to `Keyed` is what makes this reachable. Overloads that differ
+    /// only by an optional-looking leading string are a trap.
+    /// </summary>
+    private static DjLine[] Bank(DjTopic topic, params string[] texts) => Keyed(topic, "x", texts);
 
     // =====================================================================================
     //  The station, and the clock
@@ -608,7 +621,7 @@ public static class DjCorpus
     public static readonly IReadOnlyDictionary<SkyCondition, DjLine[]> Sky =
         new Dictionary<SkyCondition, DjLine[]>
         {
-            [SkyCondition.Clear] = Bank(DjTopic.Sky, "clear",
+            [SkyCondition.Clear] = Keyed(DjTopic.Sky, "clear",
                 "Clear sky. Nothing in it at all. I am not a meteorologist and I want that understood before I say anything else about it.",
                 "It is clear. Properly clear, all the way round, which happens perhaps nine days in a good month and six in a bad one. I count them.",
                 "Clear overhead. My father called this a washing day. He was not often right about the weather but he was right about washing.",
@@ -620,7 +633,7 @@ public static class DjCorpus
                 "Clear sky throughout. Somebody will tell me later that it clouded over in the afternoon at their end. It always does at their end.",
                 "It is clear. I have said so. If it is not clear where you are then one of us is wrong, and it is not the mast."),
 
-            [SkyCondition.Fair] = Bank(DjTopic.Sky, "fair",
+            [SkyCondition.Fair] = Keyed(DjTopic.Sky, "fair",
                 "Fair. Some cloud, not much of it, and none of it with any intention behind it.",
                 "Fair conditions. That is my own word for it. The old sheets said fair and I have kept the word on.",
                 "Fair, with broken cloud. Broken is the technical term and I use it correctly, unlike some.",
@@ -632,7 +645,7 @@ public static class DjCorpus
                 "Fair. The sort of day where nothing goes wrong and nobody notices, which is most days and is the best kind.",
                 "Fair with occasional cloud. I have been asked what occasional means. It means occasional."),
 
-            [SkyCondition.Overcast] = Bank(DjTopic.Sky, "overcast",
+            [SkyCondition.Overcast] = Keyed(DjTopic.Sky, "overcast",
                 "Overcast. Full cover, no breaks, and the light is that grey that makes everything look further away than it is.",
                 "Overcast throughout. It has been the same colour since half past six and I have watched every minute of it.",
                 "Complete cover. I want to stress that overcast is not rain. People hear overcast and they bring the washing in, and then it does not rain, and then they blame me.",
@@ -644,7 +657,7 @@ public static class DjCorpus
                 "Cover is complete. I am obliged to say what the sky is doing, and what the sky is doing is nothing, thoroughly.",
                 "Overcast. If you have come outside and looked up and wondered whether it is going to do anything, I can tell you that it is not, and I can tell you that I have been wrong about that before."),
 
-            [SkyCondition.Rain] = Bank(DjTopic.Sky, "rain",
+            [SkyCondition.Rain] = Keyed(DjTopic.Sky, "rain",
                 "Rain. It is raining, it has been raining, and I have nothing more constructive to add.",
                 "Rain across the district. Steady, not heavy. Steady is worse. Heavy stops.",
                 "It is raining. The gutter at the back of the hut is blocked again and I know exactly whose leaves they are.",
@@ -656,7 +669,7 @@ public static class DjCorpus
                 "Rain, moderate. There is a puddle at the gate that appears in exactly the same place every time and I have measured it twice.",
                 "Rain. Anyone with stock out will already know. Anyone without stock out will not care. That is the whole of the audience accounted for."),
 
-            [SkyCondition.Storm] = Bank(DjTopic.Sky, "storm",
+            [SkyCondition.Storm] = Keyed(DjTopic.Sky, "storm",
                 "There is a storm on us. I will keep broadcasting for as long as the mast and I are both in agreement about it.",
                 "Storm conditions. The set is going to crackle and that is not a fault in the set.",
                 "It is a bad one. I have the hut shut up and the spare cells on charge and I am not going out to look at it, which is a first.",
@@ -698,7 +711,7 @@ public static class DjCorpus
         "You cannot see the works from here, and on a clear day you can count the sheds.");
 
     /// <summary>Colder than it should be. Selected on the sign of the ISA deviation.</summary>
-    public static readonly DjLine[] TemperatureCold = Bank(DjTopic.TemperatureNote, "cold",
+    public static readonly DjLine[] TemperatureCold = Keyed(DjTopic.TemperatureNote, "cold",
         "It is cold. Below what it should be for the time of year, and I have the figures, and I am not going to read them all out.",
         "Cold. Properly cold. There was ice in the butt this morning and there should not be ice in the butt.",
         "It is a cold one. I have the stove in and the hut is warm and the microphone is cold, which is the wrong way round.",
@@ -709,7 +722,7 @@ public static class DjCorpus
         "Cold. That is the whole bulletin. I could pad it out and I am choosing not to, which I would like noted.");
 
     /// <summary>Warmer than it should be, which he says every year and is told so every year.</summary>
-    public static readonly DjLine[] TemperatureWarm = Bank(DjTopic.TemperatureNote, "warm",
+    public static readonly DjLine[] TemperatureWarm = Keyed(DjTopic.TemperatureNote, "warm",
         "It is warm. Warmer than it has any business being, and I say that every year, and every year somebody tells me I said it last year.",
         "Warm. The hut is unbearable by two in the afternoon and I broadcast the afternoon from the doorway, which you may be able to hear.",
         "Well above what it should be. The tar on the track has gone soft, which is the measure I actually use.",
@@ -721,6 +734,8 @@ public static class DjCorpus
 
     /// <summary>Cloud base, when it is on the deck. He will not read out a number he has guessed.</summary>
     public static readonly DjLine[] CeilingNote = Bank(DjTopic.CeilingNote,
+                "The cloud is on the deck. I can hear the drip off the guy-wires, which is how I know without going out.",
+                "Low ceiling. From the door the mast disappears about two-thirds of the way up, and it is oddly companionable.",
         "The cloud is right down. On the mast, near enough. When it is like this I cannot see the aerial from the door and I have to trust the meters.",
         "Cloud base very low across the district. The top of the hill is in it, and the hill is not high.",
         "It is down on the deck. The base has been below the mast head since first light and the meters say it is not moving.",
@@ -737,7 +752,10 @@ public static class DjCorpus
     public static readonly IReadOnlyDictionary<DjSeason, DjLine[]> Season =
         new Dictionary<DjSeason, DjLine[]>
         {
-            [DjSeason.Spring] = Bank(DjTopic.Season, "spring",
+            [DjSeason.Spring] = Keyed(DjTopic.Season, "spring",
+                "Spring. Somebody has put a lamb in the yard at the works and nobody will say whose it is.",
+                "It is spring. The road crew have been past, because the verge is cut and so is one of my guy-wires, and I have not raised it with them yet.",
+                "Spring, officially. I decide when it is officially. I have decided.",
                 "It is spring, whatever the last week has been doing.",
                 "Spring. The track is soft and the drain at the bend is doing what it does every spring, which is nothing.",
                 "Spring, and the light is back in the evenings, which I feel more than I would like to admit on the air.",
@@ -745,7 +763,10 @@ public static class DjCorpus
                 "Spring. The birds are back at the mast. They nest in the junction box and every year I let them, and every year it costs me a fuse.",
                 "First proper spring week. I have the card from last year and we are eleven days behind it, and eleven days is nothing, and I have still written it down."),
 
-            [DjSeason.Summer] = Bank(DjTopic.Season, "summer",
+            [DjSeason.Summer] = Keyed(DjTopic.Season, "summer",
+                "Summer. The hut gets to thirty-one in the afternoon. I have measured that repeatedly and said so out loud to people who did not ask.",
+                "It is summer and the water is low at the cut. That is a fact and not a complaint.",
+                "High summer. I have taken the door off the hut. It has changed the acoustic and I am not sorry.",
                 "Midsummer, near enough. The evenings go on and on and there is nobody to spend them with, which I say as a scheduling matter.",
                 "Summer. Dust on everything. The dust gets in the set and the set gets noisy and there is nothing to be done about either.",
                 "It is the height of summer and the grass is off, and the low ground looks like it did before, from up here, if you do not look closely.",
@@ -753,7 +774,10 @@ public static class DjCorpus
                 "Long days. I have been broadcasting since half five and it was already light, and it will be light for hours yet, and that is a lot of hours to fill.",
                 "Summer. The water is down. It always goes down in July and people always tell me about it as though it were news."),
 
-            [DjSeason.Autumn] = Bank(DjTopic.Season, "autumn",
+            [DjSeason.Autumn] = Keyed(DjTopic.Season, "autumn",
+                "Autumn. The light goes at four and takes the afternoon with it.",
+                "It is autumn and everything smells like the burn. It always does at this time of year. That is the season and not the ash, and I would like that on the record.",
+                "Autumn. I have put the second jumper on. There is no third jumper.",
                 "It is autumn. The light has changed. It goes in a week and you cannot say which week until it has gone.",
                 "Autumn. Leaves in the gutter, which we have discussed, and will discuss again.",
                 "The nights are drawing in. That is not a figure of speech at this latitude, that is four minutes a day, and I have the table.",
@@ -761,7 +785,10 @@ public static class DjCorpus
                 "It is the back end of the year. Everything gets put away in these weeks and then nothing happens for four months.",
                 "Autumn. I like this part. I am aware that saying so is not a weather report."),
 
-            [DjSeason.Winter] = Bank(DjTopic.Season, "winter",
+            [DjSeason.Winter] = Keyed(DjTopic.Season, "winter",
+                "Winter. The set runs better cold. I run worse. On balance the Service improves.",
+                "It is winter and the mast ices. It sheds about eleven in the morning, and I have learned not to be underneath it at eleven.",
+                "Deep winter. I have not seen anybody in nine days and the Service has gone out on every one of them.",
                 "Winter. It is dark when I sign on and dark when I sign off, and in between there is a grey bit.",
                 "Deep winter. The fuel goes twice as fast, the daylight is six hours, and I would not live anywhere else, which I know says something about me.",
                 "It is winter, and the road over the top will be what it always is, and people will try it anyway.",
@@ -773,7 +800,9 @@ public static class DjCorpus
     public static readonly IReadOnlyDictionary<DjDaypart, DjLine[]> Daypart =
         new Dictionary<DjDaypart, DjLine[]>
         {
-            [DjDaypart.Night] = Bank(DjTopic.Daypart, "night",
+            [DjDaypart.Night] = Keyed(DjTopic.Daypart, "night",
+                "The overnight. Recorded Tuesday, if that matters, and it does not.",
+                "Night service. Somewhere out there a generator is doing the same job I am and doing it better.",
                 "This is the overnight service. I recorded this earlier and I am asleep.",
                 "Overnight, the Service runs unattended. If something has gone wrong with it, it has been wrong for some hours.",
                 "The night hours. Nobody is at the desk. The transmitter does not need anybody at the desk, which took me years to accept.",
@@ -782,7 +811,9 @@ public static class DjCorpus
                 "The Service continues through the night. I do not. I am fifty-four.",
                 "This is the overnight. If you are up at this hour you have your reasons and they are not my business."),
 
-            [DjDaypart.Dawn] = Bank(DjTopic.Daypart, "dawn",
+            [DjDaypart.Dawn] = Keyed(DjTopic.Daypart, "dawn",
+                "Dawn. The mast is the first thing the sun touches here and I have never once gone out to see it.",
+                "Early. The meters settled overnight and I am choosing to believe that means something.",
                 "Morning. It is early, and I am here, and the kettle has not gone on yet, which I consider a scandal.",
                 "First light. From up here you get it about four minutes before the low ground does, and I have never stopped feeling smug about four minutes.",
                 "Early. The Service is on. I have been up since five and I will say that most mornings, because most mornings it is true.",
@@ -791,7 +822,9 @@ public static class DjCorpus
                 "Early morning on the Service. I have the cards out, the log open and the kettle on, in that order, which is the correct order.",
                 "Morning. There is a light on at the far farm, which there is every morning, and every morning I note it, and that is what I have instead of a colleague."),
 
-            [DjDaypart.Morning] = Bank(DjTopic.Daypart, "morning",
+            [DjDaypart.Morning] = Keyed(DjTopic.Daypart, "morning",
+                "Morning proper. The kettle has been on twice, which tells you how the morning is going.",
+                "Mid-morning. This is the hour when people remember that they want things. I write them down.",
                 "Mid-morning. This is the busiest part of the day for the Service, which means I have three things to read instead of one.",
                 "Through the morning now. People are about. I can see three of them from the window and I am not going to say who, because that would be gossip.",
                 "Morning continues. I have done the rounds, checked the aerial, and had a disagreement with the gate.",
@@ -800,7 +833,9 @@ public static class DjCorpus
                 "Mid-morning bulletin, which is what I call it when there is no bulletin.",
                 "Coming up through the morning. The light is good, the set is behaving, and the generator has not done the thing it does."),
 
-            [DjDaypart.Midday] = Bank(DjTopic.Daypart, "midday",
+            [DjDaypart.Midday] = Keyed(DjTopic.Daypart, "midday",
+                "Midday. I eat at the desk. There is no rule against it. I have checked.",
+                "Noon. The Service does not stop for lunch. I do, at the desk, quietly, during a long track.",
                 "Middle of the day. I break for twenty minutes at one and the Service plays on without me, which nobody has ever noticed.",
                 "It is the middle of the day, which is the flattest part of it and the hardest to fill.",
                 "Midday. I have eaten. I mention it because the alternative is silence, and silence sounds like a fault.",
@@ -809,7 +844,9 @@ public static class DjCorpus
                 "Middle of the day. I have a rule about not doing lost property before two, and I am going to break it, because I have nothing else.",
                 "Around noon. The hut gets warm about now and the set drifts a fraction when it does, and I nudge it, and that is my afternoon."),
 
-            [DjDaypart.Afternoon] = Bank(DjTopic.Daypart, "afternoon",
+            [DjDaypart.Afternoon] = Keyed(DjTopic.Daypart, "afternoon",
+                "Afternoon. The dead part of the day, which I say with affection.",
+                "Afternoon service. The light comes round to the window and I move the chair. Every day. I have never once moved the desk.",
                 "Afternoon. This is the part of the day the Service does best. I am not going to explain why.",
                 "Into the afternoon. The cards come out at two. They have come out at two for eleven years.",
                 "Afternoon on the Service. The light goes long and the shadows come off the ridge and it is, frankly, the best hour up here.",
@@ -818,7 +855,9 @@ public static class DjCorpus
                 "The afternoon hours. If you have the Service on in a shed somewhere, that is what it is for.",
                 "Afternoon. I will be here until eleven. I am always here until eleven."),
 
-            [DjDaypart.Evening] = Bank(DjTopic.Daypart, "evening",
+            [DjDaypart.Evening] = Keyed(DjTopic.Daypart, "evening",
+                "Evening. Whatever I did not do today has moved to tomorrow. It always moves. It never arrives.",
+                "Evening service. The hut cools down and ticks as it goes, and I have mostly got used to it.",
                 "Evening. The Service carries on. The light goes and the signal actually improves, which is a thing about this band I have never fully understood.",
                 "Into the evening. This is when I get the requests, which is to say this is when I read the requests, which is not the same thing.",
                 "Evening on the Service. The generator goes on to the night setting at nine and you may hear it change note.",
@@ -1110,7 +1149,7 @@ public static class DjCorpus
         new Dictionary<DjHeatBand, DjLine[]>
         {
             // 0.05 - 0.25. One person half-noticed something, once.
-            [DjHeatBand.Seen] = Bank(DjTopic.Aircraft, "seen",
+            [DjHeatBand.Seen] = Keyed(DjTopic.Aircraft, "seen",
                 "Somebody at {REGION} says they heard the helicopter go over. They say that most weeks, so I am passing it on and I am not standing behind it.",
                 "A report from {REGION}. Heard, not seen. That is the whole of the report and I have written it on a card.",
                 "{CALLER} at {REGION} reckons the helicopter went over on Tuesday. {CALLER} also reckons a great many things.",
@@ -1123,7 +1162,7 @@ public static class DjCorpus
                 "{REGION} report hearing it. I put these on a card and the card goes in the box, and nobody has ever asked to see the box."),
 
             // 0.25 - 0.55. Several reports, and they agree.
-            [DjHeatBand.Watching] = Bank(DjTopic.Aircraft, "watching",
+            [DjHeatBand.Watching] = Keyed(DjTopic.Aircraft, "watching",
                 "{REGION} has had it over more than once now. People up there are looking up, which is not something people do any more.",
                 "The helicopter has been over {REGION} again. That is three reports and they agree with each other, which is unusual.",
                 "They are talking about it at {REGION}. Not worried. Talking. There is a difference and I am going to preserve it.",
@@ -1136,7 +1175,7 @@ public static class DjCorpus
                 "There is a sort of expectation at {REGION} now. Nobody has said anything official. You can hear it in how they say it."),
 
             // 0.55 - 0.85. Ready for it, and it has cost somebody something.
-            [DjHeatBand.Expecting] = Bank(DjTopic.Aircraft, "expecting",
+            [DjHeatBand.Expecting] = Keyed(DjTopic.Aircraft, "expecting",
                 "{REGION} is on the hop. That is the word that was used to me and I am using it back, because I do not have a better one.",
                 "They are ready for it at {REGION}. Whatever ready means up there, and I would rather not know.",
                 "The people at {REGION} have things pointed at the sky. That is not gossip. That is what {CALLER} told me, and {CALLER} works there.",
@@ -1149,7 +1188,7 @@ public static class DjCorpus
                 "There has been shooting at {REGION}. I say that plainly, because saying it any other way would be worse."),
 
             // 0.85+. Standing to, and it is the only subject there is.
-            [DjHeatBand.Waiting] = Bank(DjTopic.Aircraft, "waiting",
+            [DjHeatBand.Waiting] = Keyed(DjTopic.Aircraft, "waiting",
                 "{REGION} is standing to. That is the phrase that came up the line and I have not softened it.",
                 "There is nothing coming out of {REGION} but this one subject. Nothing. No market, no notices, no birthdays.",
                 "{REGION} has been like this for days and I have run out of neutral ways to say it, so here is the unneutral one: they are waiting.",
@@ -1823,6 +1862,18 @@ public sealed class DjHost
         Offer(DjTopic.Ident, 0.45);
         Offer(DjTopic.TimeCheck, 0.80);
         Offer(DjTopic.Sky, 1.60);
+        // The conditional weather topics sit at ordinary conversational weight, which is
+        // right: they are only offered at all when the weather is doing something, so the
+        // gate does the selecting and the weight only decides how he paces it among the
+        // other things on his mind.
+        //
+        // These were briefly inflated to 2.40 to fix an announcer who "would not mention a
+        // gale". He mentioned it fine; the test driving him had frozen his clock at noon,
+        // so he had spoken twice in a simulated twenty-nine hours. Measured against a
+        // session that actually runs, a full storm gets 18 wind remarks, 19 on the
+        // visibility, 13 on the cloudbase and 11 on the cold out of 609 segments - about
+        // one line in forty each at these weights, which is a man remarking on the weather
+        // rather than a man obsessed with it. A calm clear day still gets none of any.
         Offer(DjTopic.WindNote, 1.05, w.GustMs > 6.0 || w.WindSpeedMs > 9.0);
         Offer(DjTopic.VisibilityNote, 1.10, w.VisibilityM < 6000);
         Offer(DjTopic.TemperatureNote, 0.85, Math.Abs(w.IsaDeviation) > 5.0);
@@ -2004,11 +2055,31 @@ public sealed class DjHost
             _bags[key] = bag;
         }
 
-        int i = _rng.Next(bag.Count);
-        DjLine line = bag[i];
-        bag.RemoveAt(i);
+        // A shuffle bag alone is not enough, and the seam is at the refill.
+        //
+        // Emptying a bag guarantees every line is heard once per cycle, but says nothing
+        // across the boundary: the last line of one cycle and the first of the next can be
+        // the same line, and a listener does not perceive cycles, only "he just said that".
+        // Every bank in the corpus failed on exactly that, always at the first refill.
+        //
+        // So the bag is filtered by a rolling memory of the last (n-1) lines from this key.
+        // With a full memory that leaves precisely the one line not recently heard, which
+        // makes each cycle a permutation that never collides with its neighbour.
+        if (!_recent.TryGetValue(key, out Queue<string>? recent))
+            _recent[key] = recent = new Queue<string>();
+
+        List<DjLine> candidates = bag.FindAll(l => !recent.Contains(l.Id));
+        if (candidates.Count == 0) candidates = bag;          // corpus too thin; say something
+
+        DjLine line = candidates[_rng.Next(candidates.Count)];
+        bag.Remove(line);
+
+        recent.Enqueue(line.Id);
+        while (recent.Count > Math.Max(pool.Count - 1, 0)) recent.Dequeue();
         return line;
     }
+
+    private readonly Dictionary<string, Queue<string>> _recent = new();
 
     /// <summary>
     /// Fill the tokens.

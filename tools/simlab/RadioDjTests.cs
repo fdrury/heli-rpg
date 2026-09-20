@@ -62,7 +62,23 @@ public static class RadioDjTests
         double clock = startClock;
         for (int i = 0; i < boundaries; i++)
         {
-            DjBreak? link = host.OnTrackBoundary(world(clock));
+            DjWorld w = world(clock);
+
+            // A world builder that ignores the clock it is handed silently disables every
+            // gate the announcer has, because all of them are elapsed-time gates measured
+            // against `w.ClockSeconds`. Two of these lambdas were written `_ => W(...)`,
+            // which pins the clock at noon forever: the first boundary forces a break, the
+            // gap since it never grows, and the station says nothing for the remaining 499.
+            // The storm test read "no visibility remark in a 29-hour murk" and it was true -
+            // he had spoken twice all session. An hour went into reweighting topics that
+            // were never being picked from.
+            if (Math.Abs(w.ClockSeconds - clock) > 1e-6)
+                throw new InvalidOperationException(
+                    $"Session: the world builder returned clock {w.ClockSeconds:F0} at " +
+                    $"boundary {i} where the session clock is {clock:F0}. Pass the clock " +
+                    "through - W(clock, ...) - or every elapsed-time gate is dead.");
+
+            DjBreak? link = host.OnTrackBoundary(w);
             if (link is not null) said.AddRange(link.Segments);
             clock += trackSeconds;
         }
@@ -398,7 +414,7 @@ public static class RadioDjTests
         // The composer's soft gates: a calm, clear, temperate world must never RAISE wind,
         // visibility or ceiling as a subject.
         var calmHost = new DjHost(2024);
-        List<DjSegment> calm = Session(calmHost, _ => W(wind: 3, gust: 1, vis: 20000, cloudBase: 2200, isa: 0),
+        List<DjSegment> calm = Session(calmHost, clock => W(clock, wind: 3, gust: 1, vis: 20000, cloudBase: 2200, isa: 0),
                                        172 * 86400, 500);
         int wind = calm.Count(s => s.Topic == DjTopic.WindNote);
         int vis = calm.Count(s => s.Topic == DjTopic.VisibilityNote);
@@ -409,9 +425,10 @@ public static class RadioDjTests
             wrong.Add("he raised a weather subject the weather was not doing");
 
         var foulHost = new DjHost(2025);
-        List<DjSegment> foul = Session(foulHost, _ => W(sky: SkyCondition.Storm, wind: 16, gust: 12,
-                                                        vis: 1200, cloudBase: 180, isa: -9),
+        List<DjSegment> foul = Session(foulHost, clock => W(clock, sky: SkyCondition.Storm, wind: 16, gust: 12,
+                                                           vis: 1200, cloudBase: 180, isa: -9),
                                        172 * 86400, 500);
+        Console.WriteLine($"  storm session produced {foul.Count} segments across {foulHost.Breaks} breaks");
         Console.WriteLine($"  storm, gale, murk, low base, cold: wind {foul.Count(s => s.Topic == DjTopic.WindNote)}, " +
                           $"visibility {foul.Count(s => s.Topic == DjTopic.VisibilityNote)}, " +
                           $"ceiling {foul.Count(s => s.Topic == DjTopic.CeilingNote)}, " +
