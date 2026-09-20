@@ -9,7 +9,7 @@ public static class DialogueTests
                            double now = 3600, int parts = 0, double carried = 0,
                            bool medical = false, string[]? knows = null,
                            string[]? fitted = null, string? passenger = null,
-                           string? sling = null)
+                           string? sling = null, bool night = false)
     {
         var c = new TalkContext
         {
@@ -27,6 +27,7 @@ public static class DialogueTests
             CarriedMass = carried,
             PassengerId = passenger,
             SlingLoadId = sling,
+            ArrivedAtNight = night,
         };
         if (knows is not null) foreach (string k in knows) c.KnownIds.Add(k);
         if (fitted is not null) foreach (string f in fitted) c.FittedIds.Add(f);
@@ -1017,6 +1018,138 @@ public static class DialogueTests
         Console.WriteLine("  Act III trades verified: 4 reward lines, fitted/passenger/medical gates, " +
                           "two-visit sequence, new knowledge ids in Knows.All");
         return null;
+    }
+
+    /// <summary>
+    /// D-094: world-state-reactive settler dialogue. Settlers should react to night arrival,
+    /// story progress, passenger presence and sling loads. Verifies that the right lines
+    /// fire under the right conditions and stay silent when their gates are unmet.
+    /// </summary>
+    public static string? SettlerReactivity()
+    {
+        Console.WriteLine("  settlers react to world state: night, story, passengers, sling loads");
+        Console.WriteLine();
+
+        var bank = DialogueCorpus.SettlerLines(DialogueCorpus.RegionTag.Basin, SiteKindTag.Settlement);
+        double clock = 500_000;
+        string? failure = null;
+
+        // ---- Night lines fire when ArrivedAtNight is true -----------------------
+        Console.WriteLine("  night arrival:");
+        var nightFirst = Ctx(meetings: 0, now: clock, night: true);
+        var dayFirst = Ctx(meetings: 0, now: clock, night: false);
+
+        bool anyNightFirst = bank.Lines.Any(l => l.Id.StartsWith("settler.night.") && l.Matches(nightFirst));
+        bool anyDayFirst = bank.Lines.Any(l => l.Id.StartsWith("settler.night.") && l.Matches(dayFirst));
+        Console.WriteLine($"    first visit at night: {(anyNightFirst ? "night line legal" : "NO night line")}");
+        Console.WriteLine($"    first visit by day:   {(anyDayFirst ? "NIGHT LINE LEGAL" : "no night line")}");
+        if (!anyNightFirst) failure ??= "no night settler line legal on first night visit";
+        if (anyDayFirst) failure ??= "night settler line legal during the day";
+
+        clock += 86400;
+        var nightReturn = Ctx(meetings: 3, hoursSince: 40, now: clock, night: true);
+        bool anyNightReturn = bank.Lines.Any(l => l.Id.StartsWith("settler.night.return") && l.Matches(nightReturn));
+        Console.WriteLine($"    returning at night:   {(anyNightReturn ? "return night line legal" : "NO return night line")}");
+        if (!anyNightReturn) failure ??= "no night return line for returning visitor at night";
+
+        // Night parting
+        bool anyNightBye = bank.Lines.Any(l => l.Id.StartsWith("settler.night.bye") && l.Matches(nightFirst));
+        Console.WriteLine($"    night parting:        {(anyNightBye ? "legal" : "NOT legal")}");
+        if (!anyNightBye) failure ??= "no night parting line legal at night";
+
+        // ---- Story-progress lines fire after the knowledge gate -----------------
+        Console.WriteLine();
+        Console.WriteLine("  story progress:");
+        var storyTests = new (string label, string lineId, string[] knowsBefore, string[] knowsAfter)[]
+        {
+            ("callsign heard",
+             "settler.heard.callsign",
+             Array.Empty<string>(),
+             new[] { DialogueCorpus.Knows.Callsign }),
+
+            ("wreck found",
+             "settler.heard.wreck",
+             new[] { DialogueCorpus.Knows.Callsign, DialogueCorpus.Knows.Manifest },
+             new[] { DialogueCorpus.Knows.Callsign, DialogueCorpus.Knows.Manifest, DialogueCorpus.Knows.Wreck }),
+
+            ("Wray found",
+             "settler.heard.wray",
+             new[] { DialogueCorpus.Knows.Callsign, DialogueCorpus.Knows.Manifest,
+                     DialogueCorpus.Knows.Wreck, DialogueCorpus.Knows.Roster },
+             new[] { DialogueCorpus.Knows.Callsign, DialogueCorpus.Knows.Manifest,
+                     DialogueCorpus.Knows.Wreck, DialogueCorpus.Knows.Roster, DialogueCorpus.Knows.Wray }),
+        };
+
+        foreach (var (label, lineId, knowsBefore, knowsAfter) in storyTests)
+        {
+            clock += 86400;
+            var before = Ctx(meetings: 3, hoursSince: 40, now: clock, knows: knowsBefore);
+            var after = Ctx(meetings: 3, hoursSince: 40, now: clock, knows: knowsAfter);
+
+            var line = bank.Lines.FirstOrDefault(l => l.Id == lineId);
+            if (line is null) { failure ??= $"{lineId} not found in settler bank"; continue; }
+
+            bool matchesBefore = line.Matches(before);
+            bool matchesAfter = line.Matches(after);
+            Console.WriteLine($"    {label,-20} before: {(matchesBefore ? "LEGAL" : "blocked")}  " +
+                              $"after: {(matchesAfter ? "legal" : "BLOCKED")}");
+            if (matchesBefore) failure ??= $"{lineId} matches before the knowledge gate";
+            if (!matchesAfter) failure ??= $"{lineId} does not match after the knowledge gate";
+        }
+
+        // ---- Passenger lines fire with Wray aboard ------------------------------
+        Console.WriteLine();
+        Console.WriteLine("  passenger awareness:");
+        clock += 86400;
+        var withWray = Ctx(meetings: 3, hoursSince: 40, now: clock, passenger: "wray");
+        var noWray = Ctx(meetings: 3, hoursSince: 40, now: clock);
+
+        var paxLine = bank.Lines.FirstOrDefault(l => l.Id == "settler.passenger.wray");
+        if (paxLine is null) { failure ??= "settler.passenger.wray not in bank"; }
+        else
+        {
+            bool matchesWith = paxLine.Matches(withWray);
+            bool matchesWithout = paxLine.Matches(noWray);
+            Console.WriteLine($"    Wray aboard:  {(matchesWith ? "legal" : "BLOCKED")}");
+            Console.WriteLine($"    nobody:       {(matchesWithout ? "LEGAL" : "blocked")}");
+            if (!matchesWith) failure ??= "settler.passenger.wray does not match with Wray aboard";
+            if (matchesWithout) failure ??= "settler.passenger.wray matches without a passenger";
+        }
+
+        // ---- Sling lines fire with blade_pair on the hook -----------------------
+        Console.WriteLine();
+        Console.WriteLine("  sling load awareness:");
+        clock += 86400;
+        var withSling = Ctx(meetings: 3, hoursSince: 40, now: clock, sling: "blade_pair");
+        var noSling = Ctx(meetings: 3, hoursSince: 40, now: clock);
+
+        var slingLine = bank.Lines.FirstOrDefault(l => l.Id == "settler.sling.blades");
+        if (slingLine is null) { failure ??= "settler.sling.blades not in bank"; }
+        else
+        {
+            bool matchesWith = slingLine.Matches(withSling);
+            bool matchesWithout = slingLine.Matches(noSling);
+            Console.WriteLine($"    blade pair:   {(matchesWith ? "legal" : "BLOCKED")}");
+            Console.WriteLine($"    nothing:      {(matchesWithout ? "LEGAL" : "blocked")}");
+            if (!matchesWith) failure ??= "settler.sling.blades does not match with blade_pair on hook";
+            if (matchesWithout) failure ??= "settler.sling.blades matches without a sling load";
+        }
+
+        // ---- Count: the bank must have grown meaningfully -----------------------
+        Console.WriteLine();
+        int nightCount = bank.Lines.Count(l => l.Id.StartsWith("settler.night."));
+        int storyCount = bank.Lines.Count(l => l.Id.StartsWith("settler.heard."));
+        int paxCount = bank.Lines.Count(l => l.Id.StartsWith("settler.passenger."));
+        int slingCount = bank.Lines.Count(l => l.Id.StartsWith("settler.sling."));
+        int total = nightCount + storyCount + paxCount + slingCount;
+        Console.WriteLine($"  reactive lines: {nightCount} night, {storyCount} story, " +
+                          $"{paxCount} passenger, {slingCount} sling = {total} total");
+        if (nightCount < 4) failure ??= $"only {nightCount} night lines, expected at least 4";
+        if (storyCount < 8) failure ??= $"only {storyCount} story lines, expected at least 8";
+        if (paxCount < 3) failure ??= $"only {paxCount} passenger lines, expected at least 3";
+        if (slingCount < 2) failure ??= $"only {slingCount} sling lines, expected at least 2";
+
+        return failure;
     }
 }
 

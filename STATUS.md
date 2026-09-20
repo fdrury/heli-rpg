@@ -137,6 +137,12 @@ upland terrain-masking chart freely, Halvard Ferren trades the emitter-location 
 rewards follow the salvage path (bag, then install at a workshop); knowledge rewards call
 `Progress.Learn`. Both are idempotent and persist through save/load. One simlab test verifies
 reward attachment, condition gating, catalog references, and idempotency.
+**World-state-reactive settler dialogue** (D-094): 23 new baked lines make the procedural
+NPCs react to story progress (settlers mention the callsign, the wreck, the roster, finding
+Wray), night arrival, Wray in the right seat, and the blade pair on the hook.
+`Requirement.Night()` enables night-gated dialogue. Story-progress lines use `Knows()`
+with `Unknown()` negative gates so they age out as the arc advances, keeping the world
+current with the player's journey.
 **Knowledge-gated dialogue now works** (D-092): `BuildTalkContext` populates `KnownIds` from
 `Progress.AllKnown` and `FittedIds` from `Loadout.Installed`, so every `Requirement.Knows()`,
 `Unknown()`, and the new `Fitted()` prefix correctly gate dialogue on what the player knows
@@ -438,6 +444,15 @@ Story build order item 8: "Everything else, region by region, in tier order."
    hook; Juno has a greeting that fires only when Wray is in the right seat. Wray's
    hook-approval and ceiling lines use `Fitted("hook")`. One new simlab test verifies
    all four reward lines, the two-visit Sparrow trade sequence, and every new gate type.
+5. ~~**World-state-reactive settler dialogue**~~ **DONE** (D-094). 23 new settler lines
+   that react to night arrival, story progress, passenger presence, and sling loads.
+   `Requirement.Night()` gates dialogue on `ArrivedAtNight`. Story-progress lines use
+   `Knows()`/`Unknown()` to track the player's journey through the search arc — settlers
+   mention the callsign, the wreck, the roster, and finding Wray as the player learns each
+   beat, with negative gates so lines age out as the story moves on. Passenger lines react
+   to Wray in the right seat; sling lines react to the blade pair on the hook. One new
+   simlab test verifies all four categories fire under the right conditions and stay silent
+   when their gates are unmet.
 
 ## Open questions for Fred
 

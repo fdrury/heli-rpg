@@ -2047,6 +2047,115 @@ public static class DialogueCorpus
         L("settler.wry.bye",
           "Not the drying ground next time. Or the drying ground. It is not worth a conversation.",
           "parting", 1, Requirement.Meetings(2, 99)),
+
+        // ---- Night arrival (D-094) -------------------------------------------------
+        // ArrivedAtNight is populated from SceneMood.SunNow.IsNight. Flying at night is
+        // unusual and dangerous and people should notice.
+        L("settler.night.greet",
+          "You flew that in the dark. Nobody does that. Nobody should.",
+          "greeting", 6, Requirement.Night(), Requirement.Meetings(0, 0)),
+        L("settler.night.greet.b",
+          "I heard you before I saw the light. Nobody comes in at night.",
+          "greeting", 6, Requirement.Night(), Requirement.Meetings(0, 0)),
+        L("settler.night.return",
+          "At this hour. Right. Come in.",
+          "greeting", 5, Requirement.Night(), Requirement.Meetings(1, 99)),
+        L("settler.night.return.b",
+          "You are either very good or very lost. Come in out of the dark.",
+          "greeting", 5, Requirement.Night(), Requirement.Meetings(1, 99)),
+        L("settler.night.bye",
+          "Wait for light. That is not a suggestion.",
+          "parting", 5, Requirement.Night()),
+        L("settler.night.bye.b",
+          "If you must go, follow the river. It is the only thing you can see.",
+          "parting", 5, Requirement.Night()),
+
+        // ---- Story-progress-aware (D-094) ------------------------------------------
+        // Settlers react to what the player has learned. These use Knows() so they fire
+        // only after the relevant search beat. Weight 5-6 so they beat common talk but
+        // not region-specific lines. Per story.md 9: nobody tells you where to fly next,
+        // nobody explains the collapse, nobody calls the aircraft Hugh.
+
+        // After Beat 2 — someone is asking after a callsign. Word travels.
+        L("settler.heard.callsign",
+          "Somebody was asking after a callsign. Sierra something. That you?",
+          "talk", 5, Requirement.Meetings(1, 99), Requirement.Knows(Knows.Callsign),
+          Requirement.Unknown(Knows.Manifest)),
+
+        // After Beat 4 — the broadcast is real and people know about it
+        L("settler.heard.rota",
+          "There is a voice on the radio some mornings. You know about that.",
+          "talk", 5, Requirement.Meetings(1, 99), Requirement.Knows(Knows.Rota),
+          Requirement.Unknown(Knows.Wreck)),
+        L("settler.heard.rota.b",
+          "Six forty in the morning, if you want to hear it. I have heard it once. The pressure was wrong.",
+          "talk", 5, Requirement.Meetings(2, 99), Requirement.Knows(Knows.Rota)),
+
+        // After Beat 6 — the manifest, the ferry, the tail number
+        L("settler.heard.manifest",
+          "Word is you found paperwork from a flight that never closed. People remember that flight.",
+          "talk", 5, Requirement.Meetings(1, 99), Requirement.Knows(Knows.Manifest),
+          Requirement.Unknown(Knows.Cairn)),
+
+        // After Beat 8 — the wreck, somebody survived
+        L("settler.heard.wreck",
+          "They are saying you found the aircraft. In the water. And that nobody was in it.",
+          "talk", 6, Requirement.Meetings(1, 99), Requirement.Knows(Knows.Wreck),
+          Requirement.Unknown(Knows.Roster)),
+
+        // After Beat 10 — the cairn, four names, hers absent
+        L("settler.heard.cairn",
+          "Four names on a stone and one of them missing. That is what I heard.",
+          "talk", 5, Requirement.Meetings(1, 99), Requirement.Knows(Knows.Cairn),
+          Requirement.Unknown(Knows.Wray)),
+
+        // After Beat 11 — the roster, she was alive
+        L("settler.heard.roster",
+          "Alive. Four years after. And she walked away from the works on her own legs.",
+          "talk", 6, Requirement.Meetings(1, 99), Requirement.Knows(Knows.Roster),
+          Requirement.Unknown(Knows.Wray)),
+
+        // After Beat 12 — you found her
+        L("settler.heard.wray",
+          "You found her, then. Whatever happens now, you found her.",
+          "greeting", 6, Requirement.Meetings(1, 99), Requirement.Knows(Knows.Wray),
+          Requirement.Unknown(Knows.Window)),
+        L("settler.heard.wray.b",
+          "The woman at the turbine. I have heard the name now. I did not need to.",
+          "talk", 5, Requirement.Meetings(1, 99), Requirement.Knows(Knows.Wray)),
+
+        // After Beat 14 — the window is known, finale is coming
+        L("settler.heard.window",
+          "Whatever you are planning, the look on your face says it is soon.",
+          "greeting", 5, Requirement.Meetings(1, 99), Requirement.Knows(Knows.Window)),
+
+        // ---- Passenger-aware (D-094) -----------------------------------------------
+        // Wray in the right seat is a big moment — the aircraft has carried one person
+        // for six years. Anyone standing next to it can see there are two.
+        L("settler.passenger.wray",
+          "There is someone in the right seat. I have never seen that before.",
+          "greeting", 7, Requirement.Meetings(1, 99), Requirement.Passenger("wray")),
+        L("settler.passenger.wray.b",
+          "Two of you. That changes the sound of it, coming in.",
+          "greeting", 7, Requirement.Meetings(2, 99), Requirement.Passenger("wray")),
+        L("settler.passenger.wray.talk",
+          "She did not get out. You did. That says something about the hurry you are in.",
+          "talk", 6, Requirement.Passenger("wray")),
+        L("settler.passenger.wray.bye",
+          "Safe out. Both of you.",
+          "parting", 5, Requirement.Passenger("wray")),
+
+        // ---- Sling-load-aware (D-094) ----------------------------------------------
+        // The blade pair on the hook: 420 kg, visible, and the point of everything.
+        L("settler.sling.blades",
+          "Whatever is on the wire under you, it is heavy. I felt it in the ground.",
+          "greeting", 7, Requirement.Sling("blade_pair")),
+        L("settler.sling.blades.b",
+          "You are carrying something important. I can tell by the way you came in.",
+          "greeting", 6, Requirement.Sling("blade_pair")),
+        L("settler.sling.blades.bye",
+          "Careful lifting with that load. Straight up, no drift.",
+          "parting", 6, Requirement.Sling("blade_pair")),
     };
 
     // ------------------------------------------------------------------ region registers

@@ -3169,3 +3169,69 @@ in `Knows.All`.
 **Reversibility:** high. The reward lines revert to LT() with one edit each; the five depth
 lines delete cleanly; the Requirement prefixes and TalkContext fields are unused outside
 this file and the test. `Knows.All` shrinks by three entries.
+
+### D-094 — World-state-reactive settler dialogue · 2026-09-20
+
+**Decision:** Add 23 new baked lines to `CommonSettlerLines()` that make the procedural
+settler NPCs react to world state: night arrival, story progress, passenger presence, and
+sling loads. This is the first concrete work of story build order item 8 ("everything else,
+region by region, in tier order") — the world should feel like it noticed what the player
+has been doing.
+
+**What was built:**
+
+One new `Requirement` factory:
+- `Night()` — checks `TalkContext.ArrivedAtNight` via a `"night"` key in `Numeric()`.
+  Populated from `SceneMood.SunNow.IsNight` in `BuildTalkContext`.
+
+Six night-arrival lines (weight 5–6):
+- Two first-visit night greetings, two returning night greetings, two night partings.
+- Nobody flies at night in this world, so landing at night is unusual and the dialogue
+  says so without making it dramatic.
+
+Ten story-progress lines (weight 5–6):
+- After `search.callsign`: "someone was asking after a callsign"
+- After `search.rota`: settlers mention the 06:40 broadcast (two variants)
+- After `search.manifest`: word about found paperwork
+- After `search.wreck`: the aircraft in the water, nobody in it
+- After `search.cairn`: four names on a stone, one missing
+- After `search.roster`: she was alive, walked away on her own legs
+- After `search.wray`: "you found her" (two variants)
+- After `search.window`: the look on your face
+- Each line uses `Unknown()` negative gates so it ages out when the next beat arrives.
+  A settler who said "they are saying you found the aircraft" stops saying it once you
+  have found Wray — the world stays current.
+
+Four passenger-reactive lines (weight 5–7):
+- Two greetings noting a second person in the right seat
+- One talk line about Wray not getting out
+- One parting addressing both of them
+
+Three sling-load-reactive lines (weight 6–7):
+- Two greetings about the weight under the aircraft
+- One parting about careful lifting
+
+**Why common lines, not region-specific:** story progress is world-wide knowledge — news
+travels. A Basin settler and an Upland settler both hear that the wreck was found. Putting
+these lines in `CommonSettlerLines()` rather than in `RegionLines()` means every settler in
+every region can surface them. The existing region lines (weight 4) still provide local
+colour, while the story lines (weight 5–6) surface when their conditions are met.
+
+**Why negative gates:** without `Unknown()` negative gates, a settler who mentions the
+callsign would still mention it ten hours later when the player has found Wray. The
+negative gate says "this line is only interesting while the story is in this window."
+The selector's specificity scoring handles the rest: more-gated lines beat less-gated ones.
+
+**Voice compliance:** all 23 lines follow story.md §9. Nobody is a chosen one. Nobody
+explains the collapse. Nobody calls the aircraft Hugh. Nobody thanks emotionally. The
+passenger lines do not name Wray — they say "someone in the right seat", because a
+generic settler does not know who she is.
+
+**Test:** `DialogueTests.SettlerReactivity` verifies all four categories: night lines fire
+with `ArrivedAtNight = true` and not without; story-progress lines are blocked before the
+knowledge gate and legal after; passenger lines fire with Wray aboard; sling lines fire
+with `blade_pair` on the hook. Also counts: 6 night, 10 story, 4 passenger, 3 sling = 23.
+
+**Reversibility:** high. Delete the 23 lines from `CommonSettlerLines()`, remove
+`Requirement.Night()` and the `"night"` case in `Numeric()`, remove the test. No save
+format change, no TalkContext field change (ArrivedAtNight already existed).

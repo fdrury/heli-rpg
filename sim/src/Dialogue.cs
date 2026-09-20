@@ -162,6 +162,7 @@ public readonly record struct Requirement(string Key, double Min, double Max)
         "hours_since" => c.HoursSinceLastMeeting >= Min && c.HoursSinceLastMeeting <= Max,
         "carried" => c.CarriedMass >= Min && c.CarriedMass <= Max,
         "medical" => (c.CarriedMedical ? 1.0 : 0.0) >= Min && (c.CarriedMedical ? 1.0 : 0.0) <= Max,
+        "night" => (c.ArrivedAtNight ? 1.0 : 0.0) >= Min && (c.ArrivedAtNight ? 1.0 : 0.0) <= Max,
         _ => true,
     };
 
@@ -175,6 +176,9 @@ public readonly record struct Requirement(string Key, double Min, double Max)
     /// <summary>Whether medical stock is visibly aboard. Sparrow's entire price is this.</summary>
     public static Requirement Medical(bool carrying) =>
         carrying ? new("medical", 1, 1) : new("medical", 0, 0);
+
+    /// <summary>Whether the pilot arrived after dark (D-094).</summary>
+    public static Requirement Night() => new("night", 1, 1);
 
     /// <summary>This line may only be said once the player has learned <paramref name="id"/>.</summary>
     public static Requirement Knows(string id) => new(KnowsPrefix + id, 0, 0);
