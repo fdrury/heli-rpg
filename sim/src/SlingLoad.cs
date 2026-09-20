@@ -460,6 +460,42 @@ public class SlingLoad : IExternalLoad
 }
 
 /// <summary>
+/// Named sling-load configurations that exist in the game world.
+///
+/// A blade pair is the only one that matters for the story: two UH-1 blades with
+/// grips and tie bars, 420 kg, slung on a 5 m strop.  Identified by a string id so
+/// the game layer can persist what is on the hook through save/load without
+/// serialising the dynamics.
+/// </summary>
+public static class SlingLoads
+{
+    /// <summary>
+    /// Two matched main-rotor blades, grips and tie bars.  story.md §7.7.
+    ///
+    /// 420 kg is two blades at 145 kg each plus grips and tie bars (story.md §5).
+    /// The drag area is higher than an inert block because the pair is long and
+    /// awkward — 7.3 m blades bundled crosswise present more frontal area than a
+    /// compact load of the same weight.  2.0 m² is a bundled pair in tie bars with
+    /// the leading edges presented forward; the real number is between the bucket's
+    /// 0.9 and a Bambi bucket at 2.5.
+    /// </summary>
+    public static SlingLoad BladePair() => new()
+    {
+        Name = "blade_pair",
+        EmptyMass = 420.0,
+        CableLength = 5.0,
+        DragArea = 2.0,
+    };
+
+    /// <summary>Create a named load by id, or null if the id is not recognised.</summary>
+    public static SlingLoad? ById(string id) => id switch
+    {
+        "blade_pair" => BladePair(),
+        _ => null,
+    };
+}
+
+/// <summary>
 /// A collapsible water bucket on the end of the cable.
 ///
 /// <para><b>Filling.</b> Hover low enough to put the bucket in the lake and it floods. The

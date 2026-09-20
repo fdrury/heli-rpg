@@ -2965,3 +2965,65 @@ crew" rather than "incoming contact", and is distinct from all three.
 value, the `Passenger` reward kind, the `wray.board` line, `Progress.PassengerAboard`,
 `SaveData.PassengerAboard`, the capture/apply lines, the event subscription and
 `SyncPassenger()` in Main.cs. The NPC restore fix should stay.
+
+---
+
+### D-091 — Blade pair sling load · 2026-09-21
+
+**Decision:** Wire the 420 kg blade pair as a named `SlingLoad` configuration attached to
+the cargo hook. story.md §7.7: "the load is a MassItem at the hook position, 420 kg, plus
+a drag delta." The sling physics (`SlingLoad.cs`) already existed with pendulum dynamics,
+cable tension, drag and ground contact; this decision uses the full system rather than the
+"smallest version" MassItem shortcut.
+
+**What was built:**
+
+  * `SlingLoads.BladePair()`: factory method returning a configured `SlingLoad` (420 kg,
+    5 m cable, 2.0 m² drag area). The class also provides `SlingLoads.ById()` for
+    save/load lookups. 420 kg is two blades at 145 kg each plus grips and tie bars
+    (story.md §5). 2.0 m² drag is higher than the water bucket's 0.9 because a 7.3 m
+    blade pair in tie bars is long and awkward.
+  * `Progress.SlingLoadId`: nullable string tracking what hangs on the hook. The load's
+    physical parameters come from the factory, not from save data.
+  * `SaveData.SlingLoadId`: capture and apply alongside PassengerAboard. A save written
+    before this field existed loads as null — correct, because the blade pair is an
+    Act III event.
+  * `DialogueRewardKind.SlingLoad`: fourth reward kind. `DeliverReward` sets
+    `Progress.SlingLoadId` when the hook module is installed. Event raised for the game
+    layer.
+  * `SyncSlingLoad()` in Main.cs: creates or removes the load on `Helicopter.Hook`,
+    clearing the load if the hook module has been removed. Called on load and on the
+    `SlingLoadAttached` event.
+  * Five simlab tests: catalog consistency, trim effect (+0.029 collective, +90 kW),
+    ceiling cost (-1250 m OGE), save round-trip, and the finale feasibility scenario.
+
+**Measured effects at 500 m, ISA, 400 kg fuel:**
+
+  | condition      | collective | pitch deg | power kW | ceiling m |
+  |----------------|-----------|-----------|----------|-----------|
+  | bare           | 0.492     | 4.24      | 713      | 3500      |
+  | blade pair     | 0.521     | 3.28      | 803      | 2250      |
+  | blade pair +20 | —         | —         | —        | 1625      |
+
+**Finale feasibility (story.md §5 mandate):** worst plausible case is 220 flight hours
+(rotor ceiling 0.58), ISA+10, Wray aboard (68 kg), hook module (28 kg), blade pair
+(420 kg), 300 kg fuel. The aircraft lifts to 120 m, cruises 10 km at 15 m/s, and arrives
+with 265 kg fuel remaining. The finale closes. This was measured before the dialogue was
+authored, as §5 requires.
+
+**Why the full SlingLoad, not a MassItem:** §7.7 calls the MassItem the "smallest version
+today" and gives 80% of the feel. But the sling physics already exist and are verified by
+five existing tests. Using them costs nothing extra and the player gets the remaining 20%
+— the nose-down trim, the swing in a turn, the cable tension in the climb. The pendulum
+is not the stretch goal it was when §7.7 was written; it shipped in D-040.
+
+**Why 2.0 m² drag:** The water bucket uses 0.9 m² (compact, round). A blade pair bundled
+in tie bars is 7.3 m long and roughly 0.53 m wide; dangling from a hook it presents a
+projected area of about 3.8 m² at Cd ~0.5. 2.0 m² is conservative — bundled pair with
+leading edges forward, not broadside. The exact value is tunable without changing any
+interface.
+
+**Reversibility:** high. Remove `SlingLoads` class, `Progress.SlingLoadId`,
+`SaveData.SlingLoadId`, the capture/apply lines, `DialogueRewardKind.SlingLoad`, the
+`DeliverReward` case, `SlingLoadAttached` event, `SyncSlingLoad()` in Main.cs, and
+`BladePairTests.cs`. The existing sling physics and tests are untouched.

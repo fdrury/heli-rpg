@@ -51,6 +51,8 @@ public sealed partial class SiteInteraction : Node
     public event Action<ModuleDef>? ModuleRemoved;
     /// <summary>Raised when a passenger boards via dialogue reward (D-090).</summary>
     public event Action<string>? PassengerBoarded;
+    /// <summary>Raised when a sling load is attached via dialogue reward (D-091).</summary>
+    public event Action<string>? SlingLoadAttached;
 
     /// <summary>Actions available at this instant. Empty when airborne or away from a site.</summary>
     public IReadOnlyList<SiteAction> Actions => _actions;
@@ -864,6 +866,17 @@ public sealed partial class SiteInteraction : Node
                     }
                     PassengerBoarded?.Invoke(reward.Id);
                     GD.Print($"[reward] passenger: {reward.Id}");
+                }
+                break;
+
+            case DialogueRewardKind.SlingLoad:
+                if (Progress.SlingLoadId != reward.Id && Loadout.IsInstalled("hook"))
+                {
+                    Progress.SlingLoadId = reward.Id;
+                    Progress.Journal("Load on the hook.");
+                    Notice?.Invoke("Load attached");
+                    SlingLoadAttached?.Invoke(reward.Id);
+                    GD.Print($"[reward] sling load: {reward.Id}");
                 }
                 break;
         }

@@ -27,6 +27,21 @@ public sealed partial class Main : Node3D
     private ThreatWorld _threats = null!;
     private FlightHud _hud = null!;
     private BindingPanel _bindings = null!;
+    private GameMenu _menu = null!;
+
+    /// <summary>
+    /// The player has left the title screen. Distinguishes "paused" from "not started yet",
+    /// which the menu needs in order to know where Back goes.
+    /// </summary>
+    public bool Started { get; set; }
+
+    /// <summary>An automated mode is running. No title screen, no pause.</summary>
+    private bool _headless;
+
+    /// <summary>For the menu. Saving is gated on being parked (D-036); this reports why.</summary>
+    public void SaveGame() => TrySave();
+    public void LoadGame() => TryLoad();
+    public void OpenBindings() => _bindings.Visible = true;
     private DialoguePanel _dialogue = null!;
     private CodaServer _codaServer = null!;
     private PilotController _pilot = null!;
@@ -182,6 +197,9 @@ public sealed partial class Main : Node3D
         // "your controller is supported".
         _bindings = new BindingPanel(_heli.Input) { Name = "Bindings" };
         layer.AddChild(_bindings);
+
+        _menu = new GameMenu(this) { Name = "Menu" };
+        layer.AddChild(_menu);
         _hud.SetRotorTime(_rotorTime);
         _hud.SetSidearm(_sidearm);
         _hud.SetGunPod(_gunpod);
@@ -220,6 +238,13 @@ public sealed partial class Main : Node3D
         var args = new System.Collections.Generic.List<string>();
         args.AddRange(OS.GetCmdlineArgs());
         args.AddRange(OS.GetCmdlineUserArgs());
+        // Every --flag this game takes is an automated mode of some sort, and none of them
+        // want a title screen sitting in front of them waiting for somebody to press Enter.
+        // Checked as a class rather than listed, because the list grows and a test that
+        // hangs on a paused tree is a confusing way to find out one was missed.
+        foreach (string a2 in args)
+            if (a2.StartsWith("--") && a2.Length > 2) _headless = true;
+
         foreach (string arg in args)
         {
             if (arg == "--selftest")
@@ -251,6 +276,17 @@ public sealed partial class Main : Node3D
                 WorldReport.Run();
                 GetTree().Quit(0);
                 return;
+            }
+            if (arg == "--menushot")
+            {
+                // Show the menu and photograph it. The title screen is the one part of this
+                // game that cannot be checked by measuring something, and the project rule
+                // is that anything visual gets looked at rather than assumed.
+                Settings.Load();
+                Settings.Camera = _heli.GetViewport()?.GetCamera3D();
+                _menu.ShowTitle();
+                AddChild(new MenuShot(_menu) { Name = "MenuShot" });
+                break;
             }
             if (arg == "--inputreport")
             {
@@ -392,7 +428,22 @@ public sealed partial class Main : Node3D
         // D-090: passenger boards → apply mass and start copilot callouts.
         _play.PassengerBoarded += _ => SyncPassenger();
 
+        // D-091: sling load attached → put it on the hook.
+        _play.SlingLoadAttached += _ => SyncSlingLoad();
+
         GD.Print("[main] Rotorwash flight test ready");
+
+        // The title screen, once the world is actually built. It is the paused game with a
+        // menu over it rather than a separate scene, so there is no loading wait between
+        // pressing NEW SORTIE and flying - the loading already happened while the player
+        // was reading the menu.
+        //
+        // Every headless mode skips it, for the obvious reason: a test that pauses the tree
+        // and waits for somebody to press Enter is a test that hangs.
+        Settings.Load();
+        Settings.Camera = _heli.GetViewport()?.GetCamera3D();
+        if (_headless) { Started = true; Settings.Apply(); }
+        else _menu.ShowTitle();
     }
 
     // ------------------------------------------------------------- aircraft
@@ -564,12 +615,16 @@ public sealed partial class Main : Node3D
                     foreach (string line in FlightInput.DescribeDevices()) GD.Print("[input] " + line);
                 return;
             case Key.Escape:
+                // Escape used to call GetTree().Quit() here, with no confirmation and no
+                // pause. One stray keypress ended the session, which is a hostile thing to
+                // do to anybody trying to playtest. It opens the menu now; quitting is two
+                // deliberate choices away and offers to save on the way out.
                 if (_mode == GameMode.OnFoot && Input.MouseMode == Input.MouseModeEnum.Captured)
                 {
                     Input.MouseMode = Input.MouseModeEnum.Visible;
                     return;
                 }
-                GetTree().Quit();
+                _menu.TogglePause();
                 return;
         }
 
@@ -1274,6 +1329,9 @@ public sealed partial class Main : Node3D
 
         // D-090: passenger mass and copilot callouts
         SyncPassenger();
+
+        // D-091: sling load on the hook
+        SyncSlingLoad();
     }
 
     /// <summary>
@@ -1336,6 +1394,42 @@ public sealed partial class Main : Node3D
         }
 
         _heli.Sim.InvalidateMass();
+    }
+
+    /// <summary>
+    /// Attach or remove whatever is on the cargo hook. Called on load and when the
+    /// load changes. The hook module must be installed; if it has been removed the
+    /// load is silently cleared — the player already dropped it.
+    /// </summary>
+    private void SyncSlingLoad()
+    {
+        string? loadId = _play.Progress.SlingLoadId;
+
+        if (loadId is not null && !_play.Loadout.IsInstalled("hook"))
+        {
+            _play.Progress.SlingLoadId = null;
+            loadId = null;
+        }
+
+        if (loadId is not null)
+        {
+            var load = SlingLoads.ById(loadId);
+            if (load is not null)
+            {
+                _heli.Sim.Hook = load;
+                load.Reset(_heli.Sim);
+                GD.Print($"[sling] attached: {loadId} ({load.Mass} kg)");
+            }
+            else
+            {
+                _heli.Sim.Hook = null;
+                _play.Progress.SlingLoadId = null;
+            }
+        }
+        else
+        {
+            _heli.Sim.Hook = null;
+        }
     }
 
     /// <summary>Re-sync threat field fitted flags from the current loadout.</summary>

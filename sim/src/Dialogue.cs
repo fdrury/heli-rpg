@@ -178,6 +178,8 @@ public enum DialogueRewardKind
     Knowledge,
     /// <summary>A person boards the aircraft. The player now has crew.</summary>
     Passenger,
+    /// <summary>Attach a load to the cargo hook. story.md §7.7.</summary>
+    SlingLoad,
 }
 
 /// <summary>One hand-vetted line. Thousands of these are generated offline and shipped.</summary>

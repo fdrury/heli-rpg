@@ -67,6 +67,14 @@ public sealed class Progress
     public string? PassengerAboard { get; set; }
 
     /// <summary>
+    /// What is hanging on the cargo hook, or null. Identified by a string id
+    /// that maps to <see cref="SlingLoads.ById"/>.  The hook module must be
+    /// installed for the load to be attached; the load's mass, drag and cable
+    /// dynamics are set by the factory, not stored here.  story.md §7.7.
+    /// </summary>
+    public string? SlingLoadId { get; set; }
+
+    /// <summary>
     /// Salvaged components aboard but not fitted: the heavy, awkward, valuable things.
     ///
     /// Lives here rather than beside the aircraft because it is part of the character

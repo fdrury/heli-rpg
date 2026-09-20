@@ -121,6 +121,13 @@ public sealed class SaveData
     /// </summary>
     public string? PassengerAboard { get; set; }
 
+    /// <summary>
+    /// The sling load on the cargo hook, if any. A save written before this field
+    /// existed loads with no load, which is correct — the blade pair is the finale
+    /// and earlier saves cannot have it.
+    /// </summary>
+    public string? SlingLoadId { get; set; }
+
     // ================================================================ JSON
 
     private static readonly JsonSerializerOptions Opts = new()
@@ -192,6 +199,7 @@ public sealed class SaveData
         ContractsCompleted = p.ContractsCompleted;
         SearchStage = p.Search.Stage;
         PassengerAboard = p.PassengerAboard;
+        SlingLoadId = p.SlingLoadId;
 
         LegClosedAt.Clear();
         LegClosedAt.AddRange(p.Search.LegClosedAt);
@@ -262,6 +270,7 @@ public sealed class SaveData
         p.ContractsCompleted = ContractsCompleted;
         p.Search.Stage = SearchStage;
         p.PassengerAboard = PassengerAboard;
+        p.SlingLoadId = SlingLoadId;
 
         for (int i = 0; i < Math.Min(LegClosedAt.Count, 4); i++)
             p.Search.LegClosedAt[i] = LegClosedAt[i];

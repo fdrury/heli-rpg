@@ -253,6 +253,11 @@ public static class Program
         Run("pax_fuel", PassengerTests.CalloutFuel);
         Run("pax_save", PassengerTests.SaveRoundTrip);
         Run("pax_board", PassengerTests.BoardingDialogue);
+        Run("bp_catalog", BladePairTests.Catalog);
+        Run("bp_trim", BladePairTests.TrimEffect);
+        Run("bp_ceiling", BladePairTests.CeilingCost);
+        Run("bp_save", BladePairTests.SaveRoundTrip);
+        Run("bp_finale", BladePairTests.Finale);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 

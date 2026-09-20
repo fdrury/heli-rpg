@@ -1,6 +1,6 @@
 # ROTORWASH — status
 
-*Last updated: 2026-09-20*
+*Last updated: 2026-09-21*
 
 A single-player post-apocalyptic RPG about the last helicopter pilot in the world.
 Godot 4.7.2 (.NET). `docs/wiki/00-vision.md` is what it is; `docs/wiki/decisions.md` is
@@ -151,6 +151,19 @@ meetings. `Progress.PassengerAboard` persists through save/load. The NPC restore
 uses `DialogueCorpus.Named()` for all nine story characters, not just Mattie — a pre-existing
 bug that would have given named NPCs generic settler dialogue after load. Eight simlab tests
 verify mass, CG shift, all five callout categories, save round-trip, and dialogue gating.
+
+**Blade pair sling load** — the 420 kg finale load on the cargo hook (D-091, story.md
+§7.7). `SlingLoads.BladePair()` creates a named SlingLoad configuration: 420 kg (two
+blades at 145 kg each plus grips and tie bars), 5 m cable, 2.0 m² drag area. The game
+layer tracks the load via `Progress.SlingLoadId`, persisted through save/load;
+`SyncSlingLoad()` in Main.cs attaches/detaches the load on the `Helicopter.Hook` when
+triggered by a `DialogueRewardKind.SlingLoad` reward or on load. The hook module must be
+installed. The measured cost: +0.029 collective, +90 kW power, -1250 m hover ceiling at
+sea level. The **finale feasibility scenario** flies the worst plausible case — 220 h
+rotor (ceiling 0.58), ISA+10, Wray aboard (68 kg), hook module (28 kg), blade pair
+(420 kg), 300 kg fuel — from sea level to 120 m, cruises 10 km at 15 m/s, and arrives
+with 265 kg fuel remaining. The finale closes. Five simlab tests: catalog, trim, ceiling,
+save round-trip, and the finale scenario.
 
 **Play** — refuel, repair, salvage, survey, tune a relay, ask around, contract board.
 Carried load is real mass and is felt in the hover. The kneeboard records facts, not
@@ -393,9 +406,10 @@ Story build order item 8: "Everything else, region by region, in tier order."
 1. ~~**Passengers.**~~ **DONE** (D-090). Sera Wray in the right seat: 68 kg mass, co-pilot
    callouts (torque, Nr, altitude, fuel, threat) via RadioStrip in warm amber, boarding
    reward, save/load.
-2. **Cargo hook sling load** (story.md §7.7). The 420 kg blade pair slung under the hook
-   as an external load. Mass at the hook point, drag delta, trim and power effects.
-   The finale cannot close without this.
+2. ~~**Cargo hook sling load**~~ **DONE** (D-091). 420 kg blade pair on the cargo hook:
+   SlingLoads.BladePair() factory, Progress.SlingLoadId persistence, SyncSlingLoad() in
+   game layer, DialogueRewardKind.SlingLoad for story triggers. Finale feasibility
+   measured: closes with 265 kg fuel margin at worst ceiling (0.58), ISA+10, full load.
 3. **Bel's trade completion** — wreck position knowledge granted after the generator lift
    contract. Requires the hoist module and a contract completion hook.
 4. **Act III NPC dialogue depth** — Wray, Juno, Sparrow thread lines need reward tags
