@@ -1,6 +1,6 @@
 # ROTORWASH — status
 
-*Last updated: 2026-09-19*
+*Last updated: 2026-09-20*
 
 A single-player post-apocalyptic RPG about the last helicopter pilot in the world.
 Godot 4.7.2 (.NET). `docs/wiki/00-vision.md` is what it is; `docs/wiki/decisions.md` is

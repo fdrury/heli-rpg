@@ -259,6 +259,24 @@ public sealed partial class ThreatWorld : Node
         _heli.Sim.Damage.Apply(e.Hit, e.Severity, DamageCause.Gunfire, e.Note);
         _play?.Progress.Journal($"Hit by {e.Name}. {e.Hit} is {_heli.Sim.Damage.Health(e.Hit):P0}.");
         GD.PrintErr($"[threat] HIT: {e.Note} (severity {e.Severity:F2})");
+
+        // D-074: being shot at is news — the region hears about it.
+        if (_play is not null && _emitterRegion.TryGetValue(e.EmitterId, out int shotRid))
+        {
+            string region = shotRid < WorldMap.Regions.Count
+                ? WorldMap.Regions[shotRid].Name : "unknown";
+            // Find the emitter's position for a population check.
+            int witnesses = 0;
+            foreach (var t in Field.Tracks)
+            {
+                if (t.Emitter.Id != e.EmitterId) continue;
+                float gx = (float)t.Emitter.East;
+                float gz = (float)-t.Emitter.North;
+                witnesses = WorldMap.PopulationNear(gx, gz);
+                break;
+            }
+            _play.Progress.RecordDeed(DjDeedKind.ShotAt, region, 0, witnesses);
+        }
     }
 
     // ------------------------------------------------------------- interface

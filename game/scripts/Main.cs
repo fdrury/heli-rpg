@@ -39,6 +39,11 @@ public sealed partial class Main : Node3D
     private GameMode _mode = GameMode.Flying;
     private bool _middleMouseHeld;
 
+    // D-074: track recently buzzed sites so we record one deed per flyover, not one per frame.
+    private readonly System.Collections.Generic.Dictionary<int, double> _buzzed = new();
+    private const float BuzzAglThreshold = 30f;       // below this AGL over a site = a buzz
+    private const double BuzzCooldownSeconds = 300.0;  // 5 minutes game-time between buzzes of the same site
+
     /// <summary>Current game mode, read by HUD and other systems.</summary>
     public GameMode Mode => _mode;
     public RotorTime RotorTimeSystem => _rotorTime;
@@ -263,9 +268,21 @@ public sealed partial class Main : Node3D
         }
 
         _landing.Touchdown += r =>
+        {
             GD.Print($"[landing] {r.Summary} - {r.VerticalSpeed:F2} m/s, {r.GroundSpeed:F1} m/s ground, " +
                      $"{r.RollDegrees:F1} deg bank on a {r.SlopeDegrees:F1} deg slope" +
                      (r.StructuralDamage > 0.01 ? $"  [damage {r.StructuralDamage:P0}]" : ""));
+
+            // D-074: a hard landing the pilot walked away from is news.
+            if (r.StructuralDamage > 0.1)
+            {
+                var pos = _heli.GlobalPosition;
+                var nearest = WorldMap.Nearest(new Vector2(pos.X, pos.Z));
+                string place = nearest?.Name ?? "nowhere";
+                int witnesses = WorldMap.PopulationNear(pos.X, pos.Z);
+                _play.Progress.RecordDeed(DjDeedKind.Crashed, place, 0, witnesses);
+            }
+        };
         _landing.RotorStrike += what => GD.PrintErr($"[landing] ROTOR STRIKE: {what}");
         _sites.Entered += s2 => GD.Print($"[world] over {s2.Name} ({s2.Kind}, {s2.Region}, tier {s2.Tier})");
         _play.Notice += n => GD.Print($"[play] {n}");
@@ -629,6 +646,30 @@ public sealed partial class Main : Node3D
         GD.Print($"[encounter] {site.Name} cleared");
     }
 
+    /// <summary>
+    /// D-074: flying below <see cref="BuzzAglThreshold"/> over a site records a Buzzed deed.
+    /// One per site per <see cref="BuzzCooldownSeconds"/> so the list stays short.
+    /// </summary>
+    private void CheckBuzz(Vector3 pos)
+    {
+        float agl = pos.Y - WorldHeight.At(pos.X, pos.Z);
+        if (agl > BuzzAglThreshold || agl < 0) return;
+
+        var site = _sites.CurrentSite;
+        if (site is null) return;
+
+        float dist = new Vector2(pos.X, pos.Z).DistanceTo(site.Position);
+        if (dist > site.Radius + 100f) return;   // must be over or near the site
+
+        double clock = _play.Progress.Clock;
+        if (_buzzed.TryGetValue(site.Id, out double lastBuzz) && clock - lastBuzz < BuzzCooldownSeconds)
+            return;
+
+        _buzzed[site.Id] = clock;
+        int witnesses = WorldMap.PopulationAt(site);
+        _play.Progress.RecordDeed(DjDeedKind.Buzzed, site.Name, 0, witnesses);
+    }
+
     /// <summary>Remove all hostile NPCs from the scene. Called when boarding.</summary>
     private void DespawnEncounter()
     {
@@ -729,6 +770,10 @@ public sealed partial class Main : Node3D
         // Fog of war: reveal the map as the aircraft flies.
         Vector3 p = _heli.GlobalPosition;
         _fog.Reveal(-p.Z, p.X);   // Godot X=east, -Z=north
+
+        // D-074: flying low over a site is a buzz — the washing comes off the line.
+        if (_mode == GameMode.Flying && !_landing.OnGround)
+            CheckBuzz(p);
 
         // Rotor Time: charge from flight, drain when active.
         if (_mode == GameMode.Flying)

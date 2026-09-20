@@ -499,6 +499,46 @@ public static class WorldMap
         return best;
     }
 
+    /// <summary>
+    /// Estimated population of one site. Seed-varied so not every settlement is the same
+    /// size, but deterministic so the count is stable across frames.
+    ///
+    /// The number is a rough head-count, not a census: it decides whether a deed was
+    /// witnessed and by how many, which gates whether the radio announcer ever mentions
+    /// it. Zero means nobody saw it and it never happened as far as the district is
+    /// concerned (D-074).
+    /// </summary>
+    public static int PopulationAt(Site site)
+    {
+        // Seed from site id so the number is stable.
+        uint h = (uint)(site.Id * 2654435761);
+        float t = (h & 0xFFFF) / 65535f;   // 0..1
+        return site.Kind switch
+        {
+            SiteKind.Settlement => 30 + (int)(t * 50),   // 30-80
+            SiteKind.Farmstead  =>  3 + (int)(t * 10),   // 3-13
+            SiteKind.Workshop   =>  5 + (int)(t * 10),   // 5-15
+            SiteKind.Airfield   => 10 + (int)(t * 20),   // 10-30
+            SiteKind.Depot      =>  2 + (int)(t *  6),   // 2-8
+            SiteKind.FuelCache  =>      (int)(t *  3),   // 0-3
+            SiteKind.Relay      =>      (int)(t *  2),   // 0-2
+            _                   => 0,                     // wrecks, overlooks
+        };
+    }
+
+    /// <summary>
+    /// Total estimated population within <paramref name="radius"/> metres of a point.
+    /// Used for the deed witness count (D-074): a delivery to a settlement surrounded by
+    /// farmsteads has more witnesses than one to an isolated fuel cache.
+    /// </summary>
+    public static int PopulationNear(float x, float z, float radius = 3000f)
+    {
+        int total = 0;
+        foreach (Site s in Near(new Vector2(x, z), radius))
+            total += PopulationAt(s);
+        return total;
+    }
+
     /// <summary>One-line summary, for logging and the eventual map screen.</summary>
     public static string Describe()
     {

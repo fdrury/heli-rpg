@@ -355,6 +355,10 @@ public sealed partial class SiteInteraction : Node
 
                     Progress.Journal($"Searched {site.Name}: {found}.");
                     Notice?.Invoke(found);
+
+                    // D-074: the district hears about salvage runs.
+                    int witnesses = WorldMap.PopulationNear(site.Position.X, site.Position.Y);
+                    Progress.RecordDeed(DjDeedKind.Salvaged, site.Name, 1, witnesses);
                 });
                 return true;
             }));
@@ -507,6 +511,18 @@ public sealed partial class SiteInteraction : Node
         int cycle = (int)(Progress.Clock / BoardRefreshInterval);
         if (!_boards.TryGetValue(site.Id, out var cached) || cached.cycle != cycle)
         {
+            // D-074: any contract from the old board that was never accepted is a decline.
+            if (cached.board is not null)
+            {
+                foreach (var old in cached.board)
+                {
+                    if (old.Accepted) continue;
+                    int pop = WorldMap.PopulationAt(site);
+                    Progress.RecordDeed(DjDeedKind.Declined, site.Name, 0, pop);
+                    break;  // one deed per board refresh, not one per contract
+                }
+            }
+
             var stubs = BuildSiteStubs();
             var board = ContractBoard.Generate(
                 site.Id, site.Name, site.Position.X, site.Position.Y,
@@ -579,6 +595,16 @@ public sealed partial class SiteInteraction : Node
         {
             Notice?.Invoke($"Done: {c.Title}");
             GD.Print($"[contract] Completed: {c.Title}");
+
+            // D-074: the district hears about deliveries.
+            var target = WorldMap.SiteById(c.TargetSiteId);
+            if (target is not null)
+            {
+                int witnesses = WorldMap.PopulationAt(target);
+                Progress.RecordDeed(DjDeedKind.Delivered, target.Name,
+                    c.Kind == ContractKind.Deliver ? c.CargoAmount : 1,
+                    witnesses);
+            }
         }
 
         // Prune old completed contracts after 1 game-day.
@@ -658,6 +684,10 @@ public sealed partial class SiteInteraction : Node
 
         // Journal
         Progress.RestoreJournal(progress.Journal_);
+
+        // Deeds (D-074): what the district is still talking about.
+        foreach (var d in progress.Deeds)
+            Progress.RestoreDeed(d);
 
         // Contracts
         Progress.RestoreContracts(progress.Contracts);

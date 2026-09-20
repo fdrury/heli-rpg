@@ -2269,3 +2269,35 @@ fixes upstream made the fallbacks unnecessary.
 
 **Reversibility:** N/A — no code was changed. If a future seed or placement change re-introduces
 shortfalls, the fallback chains and the worldreport will catch it immediately.
+
+## D-076 — Wire the deed feed: the announcer talks about what you actually did
+
+*2026-09-19*
+
+**Decision.** Six of eight `DjDeed` hooks are now wired to `Progress.RecordDeed`, closing the
+feedback loop that makes the radio announcer discuss the player's actions (D-074). Two hooks
+(`WaterDrop`, `Rescued`) are deferred until the corresponding gameplay systems exist.
+
+| deed | hook site | witnesses |
+|---|---|---|
+| `Delivered` | `SiteInteraction.CheckContractCompletion` | `PopulationAt(target)` |
+| `Salvaged` | `SiteInteraction.AddSalvage` | `PopulationNear(site)` |
+| `Declined` | `SiteInteraction.AddContractBoard` | `PopulationAt(source)` |
+| `Crashed` | `Main._landing.Touchdown` (>10% structural damage) | `PopulationNear(pos)` |
+| `ShotAt` | `ThreatWorld.OnStruck` | `PopulationNear(emitter)` |
+| `Buzzed` | `Main.CheckBuzz` (<30 m AGL, 5 min cooldown) | `PopulationAt(site)` |
+
+**Population model.** `WorldMap.PopulationAt(Site)` gives a seed-varied head-count per site
+kind (settlements 30-80, farmsteads 3-13, wrecks 0). `PopulationNear(x, z, radius)` sums
+all sites within 3 km. This is the witness count the announcer gates against: a delivery to
+a populated settlement is news; a salvage run at an isolated wreck is not.
+
+**Also fixed:** deed restoration in `SiteInteraction.RestoreState` — the loaded progress's
+deeds were not being copied to the live instance, so they were lost on save/load.
+
+**Why.** The announcer system was completely built (corpus, knowability gates, distortion,
+test harness) but the feed was empty — he never mentioned anything the player did. This was
+the last piece of the radio system identified in integration-debt.md.
+
+**Reversibility:** high. Each hook is 3-8 lines at the site of the event. `PopulationAt` /
+`PopulationNear` are two static methods on WorldMap. No sim/ changes, no new files.
