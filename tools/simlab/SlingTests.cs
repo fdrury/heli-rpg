@@ -624,12 +624,38 @@ public static class SlingTests
         bucket.Reset(h);
 
         var ap = new Autopilot { CollectiveTrim = 0.55 };
+
+        // Settle in the dip BEFORE the clock starts.
+        //
+        // Autopilot.CollectiveTrim is a slow self-adjusting integrator, not a setting, and
+        // 0.55 is well above what this aircraft actually hovers on (~0.48). Started cold in
+        // the dip it spends the first twenty seconds walking the trim down, and the machine
+        // climbs to sixty metres while it does - so the bucket left the water at about two
+        // seconds and the test reported "the water query is not reaching it" when the query
+        // was working perfectly and immersion read 0.33 on the first frame. Measuring a
+        // departing aircraft again (D-042).
+        //
+        // So: fly the dip until the trim has converged, then empty the bucket and start
+        // measuring. That is also the honest condition - a pilot arrives in the hover
+        // trimmed for an empty bucket, not for whatever the last sortie left him in.
+        for (double t = 0; t < 25; t += Dt)
+        {
+            h.Input = ap.Update(h, new AutopilotDemand
+                { Altitude = dipAlt, ForwardSpeed = 0, LateralSpeed = 0, Heading = 0 }, Dt);
+            h.Step(Dt);
+        }
+        double settledAlt = h.State.Altitude;
+        double settledImmersion = bucket.Immersion;
+        bucket.SetContents(0);
+
         Console.WriteLine($"  lake surface {lake.Level:F0} m, bed {-12.0:F0} m, 12 m cable, " +
                           $"hover at {dipAlt:F1} m");
+        Console.WriteLine($"  settled at {settledAlt:F1} m with the bucket {settledImmersion:P0} under, " +
+                          $"collective {h.Input.Collective:F3}");
         Console.WriteLine("      t s   immersion   contents kg   felt kg   hook kg   collective   alt m");
 
         double targetAlt = dipAlt;
-        double dumpClimb = 0, altAtDump = 0;
+        double dumpClimb = 0, altAtDump = 0, frozenCollective = 0;
         bool dumped = false;
         var fillTrace = new List<(double t, double kg)>();
         double fullAt = -1;
@@ -642,13 +668,30 @@ public static class SlingTests
             if (!dumped && t >= 45)
             {
                 altAtDump = h.State.Altitude;
+                frozenCollective = h.Input.Collective;
                 bucket.Dump();
                 dumped = true;
             }
 
+            // After the dump the COLLECTIVE freezes where the pilot left it, and nothing
+            // else does.
+            //
+            // An altitude-holding autopilot cannot show what dumping half a tonne does: it
+            // sees the balloon and takes the lever straight back off, so the measured climb
+            // is zero by construction. That is what this test read before, and it was
+            // measuring the autopilot rather than the aeroplane.
+            //
+            // Freezing every control instead is the opposite mistake, and it was worth
+            // watching once: with the cyclic locked too the machine diverged, rolled over
+            // and went from 61 m into the lake bed in five seconds. Correct - hands-off
+            // survival is about six seconds (Trim.cs) - but it measures the bare airframe's
+            // instability, not the dump. A pilot still flies the thing; what lags is the
+            // lever. So hold the lever and leave the rest of him working.
             var demand = new AutopilotDemand
                 { Altitude = targetAlt, ForwardSpeed = 0, LateralSpeed = 0, Heading = 0 };
-            h.Input = ap.Update(h, demand, Dt);
+            Controls cmd = ap.Update(h, demand, Dt);
+            if (dumped) cmd.Collective = frozenCollective;
+            h.Input = cmd;
             h.Step(Dt);
 
             if (dumped) dumpClimb = Math.Max(dumpClimb, h.State.Altitude - altAtDump);
@@ -665,10 +708,15 @@ public static class SlingTests
 
         Console.WriteLine();
         Console.WriteLine($"  full at t = {fullAt:F1} s; dumping 500 kg at {altAtDump:F0} m " +
-                          $"threw the aircraft {dumpClimb:F0} m up");
+                          $"and holding the lever at {frozenCollective:F3} threw the " +
+                          $"aircraft {dumpClimb:F0} m up in the 25 s that followed");
 
         if (bucket.ContentsMass > 1e-6) return "the dump did not empty the bucket";
-        if (fullAt < 0) return "the bucket never filled - the water query is not reaching it";
+        if (fullAt < 0)
+            return settledImmersion <= 0
+                ? "the bucket never got wet - the water query is not reaching it"
+                : $"the bucket was {settledImmersion:P0} under at the start and still never " +
+                  "filled - it is in the water and not taking any on";
         if (fullAt > 25) return $"the bucket took {fullAt:F0} s to fill, which is not a few seconds";
         if (fillTrace.Count < 4) return "the trace is too short to show anything";
 
@@ -683,7 +731,8 @@ public static class SlingTests
             return $"the bucket gained only {mid.kg - early.kg:F0} kg over five seconds of dipping - " +
                    "the fill is not something the pilot has to hold a hover for";
         if (dumpClimb < 3)
-            return $"dumping half a tonne only gained {dumpClimb:F1} m - the aircraft did not leap";
+            return $"dumping half a tonne on a frozen lever only gained {dumpClimb:F1} m - " +
+                   "the aircraft did not leap";
 
         // --- and it does not fill over dry land -------------------------------
         var dry = MakeHeli(400, 0, groundElev: -12);
