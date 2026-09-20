@@ -2776,3 +2776,113 @@ repair limit, not the current condition — which is what the player needs to pl
 **Reversibility:** high. Remove the ceiling constants and property, revert the one-line
 changes to `Repair`/`RepairAll`, revert the kneeboard to the health-derived proxy, and
 delete the test file. No other system depends on the ceiling.
+
+---
+
+## D-087 — A ring around a citadel, and terrain rules that bend · 2026-09-20 · **[FRED'S IDEA]**
+
+**Decision.** The eight regions are laid out as a ring of seven around **The Scald** at the
+centre, rotated 55 degrees. The Scald is the citadel: it is Act III, the sealed magazine, the
+blades, the thing the whole search is for, and it also carries the Upland Service's
+transmitter. Separately, the site placement rules gain **terrain desperation passes** in the
+same shape as the existing spacing ones.
+
+**Why the ring.** Fred asked: *"If the final island is a well defended central island, could
+you force travel around an outside ring of islands?"* D-077 had put the home island in the
+middle and raised tier with radius, so every trip was radial — out to the rim and back — and
+the safest place on the map was the middle of it. Inverting that gives four things the old
+shape could not:
+
+  * **The endgame is visible from everywhere and unreachable.** A citadel you fly around for
+    a whole campaign is a better object than one over the horizon.
+  * **Gating is D-010's air defence rather than distance.** Hexagonal geometry means a hop
+    to the centre and a hop to the next island along are *necessarily* the same length, so
+    the centre being close and lethal is the design rather than a compromise: you are not
+    kept out by fuel, you are kept out by what is down there.
+  * **Opposite sides of the ring are where circulation actually bites.** The Pan to Ashmount
+    is 21 km straight across and goes directly through the citadel's envelope; round the ring
+    it is two ordinary hops. That is a navigation decision with a reason behind it.
+  * **The transmitter gets the best position on the map.** Every island is equidistant from
+    the hub, so one mast covers the whole world instead of half of it — and it is the last
+    place the player can reach, so the station is with them from the first minute and
+    destroying it is an endgame choice rather than an early accident.
+
+**Measured:** 8 landmasses, 117 sites, 16/16 story roles bound with none degraded, and
+**every** inter-region leg a committed crossing — 4.7 to 8.1 km of open water, against a 2:1
+glide that buys about a kilometre from 500 m. The home island stays effectively dry (1% water
+on the Pan–Long Acre leg, longest gap 25 m), so a player can still learn to fly without being
+committed. The world is 28.4 km across, smaller than D-077's 33 km: a ring packs eight
+islands more tightly than a tiered spiral.
+
+**The rotation was measured, not chosen.** `--ringscan` exists because guessing failed three
+times in a row. The layout says where a region *is*; the continental noise field decides what
+the ground is like once it gets there; and the two know nothing about each other. At 0 degrees
+Cold Shoulder — the region literally called Upland, whose relay mast and overlook both need
+ground above 110 m — landed on a patch topping out at **109 m**. Rotated to clear that, it
+took Fenmoor's mast and Long Acre's airfield instead.
+
+**Which is the real finding, and the more valuable half of this entry.** Whack-a-mole across
+three rotations is evidence that the *thresholds* are wrong, not the angles. The height and
+slope bands in `TryPlace` describe what a place of that kind would really want — a relay on a
+ridge above 110 m, a runway under four and a half degrees — and they were being enforced as
+absolutes against a noise field that has never heard of them. `Place` already had three
+passes of widening *spacing* desperation for exactly this reason, and the argument transfers
+without modification: **a region missing the only mast in it is a far worse outcome than a
+mast on ground that is merely the highest available.** So the terrain bands now relax through
+1.0 → 0.55 → 0.25 after the ideal has genuinely failed everywhere, with the relay's floor
+relaxing *downward* because it is the one rule that wants a minimum rather than a maximum.
+
+Effect, on the same layout: shortfalls 5 → 2, relays 7 → 8, airfields 4 → 5, sites 114 → 117.
+The two that remain are overlooks, which carry no loot and no story role.
+
+**Reversibility:** high for the layout — two coordinate tables and a rotation; the shape of
+the change is identical to D-077's and the same verification (`--worldreport`: landmasses,
+shortfalls, story roles) covers it. Medium for the relaxation, in the sense that it is now
+load-bearing: it is what stops the next layout move costing a day of hand-tuning, and
+removing it would reintroduce silent placement failure for any region that lands on
+unsuitable noise.
+
+**Open for Fred:** ~~the citadel's defences are not built yet.~~ Resolved by D-088.
+
+---
+
+## D-088 — Citadel air defence ring · 2026-09-20
+
+**Decision.** The Scald gets a dedicated layered air defence network beyond the normal
+site-based placement, placed in concentric rings around the world centre at fixed angular
+positions:
+
+  * **3 SAMs** at 2.0 km, 120° apart — overlapping engagement zones covering 120–6000 m AGL.
+    From 2 km, their 11 km engagement range extends past the ring islands at 10.5 km.
+  * **4 MANPADS** at 1.5 km, 90° apart, offset 45° from the SAMs — low-level denial for
+    anyone ducking under the SAM floor at 120 m AGL.
+  * **3 guns** at 0.8 km, 120° apart, offset 60° from the SAMs — deck coverage on the
+    final approach, inside 1200 m.
+  * **2 search radars** at 3.0 km, 180° apart — extends the detection umbrella to 22 km,
+    which reaches all seven ring islands from the centre.
+
+Total: 12 dedicated citadel emitters. Combined with the site-based defences The Scald
+already has, plus its tier-3 aerostat, the centre is now layered at every altitude band.
+
+**Why.** D-087 designed the ring layout so that the centre is close and lethal — "you are
+not kept out by fuel, you are kept out by what is down there." The site-based placement
+algorithm gave The Scald roughly the same threat density as any other tier-3 region, which
+meant a straight crossing from The Pan to Ashmount through the centre was no more dangerous
+than skirting the ring. The geometry argument for the ring only works if the centre is
+genuinely dangerous.
+
+**Measured.** A straight 21 km crossing through the citadel at clear line of sight:
+
+  * 50 m AGL: 12 hits, peak exposure 1.00, locked ✓
+  * 300 m AGL: 45 hits, peak exposure 1.00, locked ✓
+  * 900 m AGL: 56 hits, peak exposure 1.00, locked ✓
+
+113 total hits across three altitude bands. The citadel is lethal at every altitude. Fixed
+angular positions mean the layout is deterministic and learnable. The gun pod (D-081) can
+destroy emitters at 800 m, so the defence ring is not a permanent wall — it is a problem
+the player can methodically dismantle over multiple sorties as the endgame approaches.
+
+**Reversibility:** high. The entire ring is placed by `PlaceCitadelRing` in `ThreatWorld.cs`,
+a single method that can be deleted or retuned (radii, counts, angular offsets) without
+touching any other system. The emitters use the same `ThreatField.Make` factory as every
+other emplacement. One new simlab test (`citadel_ring`) verifies the crossing is lethal.

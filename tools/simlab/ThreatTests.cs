@@ -255,4 +255,102 @@ public static class ThreatTests
         if (inflation < 1.3) return $"the detour only inflated the route {inflation:F2}x";
         return null;
     }
+
+    /// <summary>
+    /// The citadel defence ring (D-088): build the same layout that ThreatWorld.PlaceCitadelRing
+    /// uses and verify that a straight crossing through The Scald is genuinely dangerous at
+    /// every altitude band, while the ring route outside stays survivable.
+    /// </summary>
+    public static string? CitadelRing()
+    {
+        Console.WriteLine("  citadel air defence: a straight crossing must be lethal");
+
+        // Reconstruct the citadel ring in pure sim, same geometry as ThreatWorld.
+        var field = new ThreatField(55000);
+        int id = 0;
+        void Ring(ThreatKind kind, double radius, int count, double startDeg)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                double deg = startDeg + 360.0 / count * i;
+                double rad = deg * Math.PI / 180.0;
+                double n = Math.Sin(rad) * radius;
+                double e = Math.Cos(rad) * radius;
+                field.Add(ThreatField.Make(id++, $"Scald {kind} {i + 1}", kind, n, e));
+            }
+        }
+
+        Ring(ThreatKind.Sam,         2000, 3, 0);
+        Ring(ThreatKind.Manpads,     1500, 4, 45);
+        Ring(ThreatKind.Gun,          800, 3, 60);
+        Ring(ThreatKind.SearchRadar, 3000, 2, 90);
+
+        Console.WriteLine($"  {id} emitters placed in the citadel ring");
+
+        // Fly straight through the centre at three altitudes.
+        // The ring islands are at ~10.5 km, so the crossing is ~21 km.
+        double[] altitudes = { 50, 300, 900 };
+        var results = new List<(double agl, int hits, double peakExp)>();
+        Console.WriteLine($"  {"altitude",-12} {"hits",-8} {"peak exposure",-16} {"locked"}");
+
+        foreach (double agl in altitudes)
+        {
+            var trial = new ThreatField(55000 + (int)agl);
+            int tid = 0;
+            // Same layout.
+            void RingT(ThreatKind kind, double radius, int count, double startDeg)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    double deg = startDeg + 360.0 / count * i;
+                    double rad = deg * Math.PI / 180.0;
+                    double n = Math.Sin(rad) * radius;
+                    double e = Math.Cos(rad) * radius;
+                    trial.Add(ThreatField.Make(tid++, $"Scald {kind} {i + 1}", kind, n, e));
+                }
+            }
+            RingT(ThreatKind.Sam,         2000, 3, 0);
+            RingT(ThreatKind.Manpads,     1500, 4, 45);
+            RingT(ThreatKind.Gun,          800, 3, 60);
+            RingT(ThreatKind.SearchRadar, 3000, 2, 90);
+
+            int hits = 0;
+            trial.Struck += ev => { if (ev.Severity > 0) hits++; };
+            double peakExp = 0;
+            bool locked = false;
+
+            // Fly north to south through (0, 0) — 21 km at 50 m/s = 420 s.
+            double fromN = 10500, toN = -10500;
+            const int steps = 800;
+            for (int s = 0; s <= steps; s++)
+            {
+                double f = s / (double)steps;
+                double n = fromN + (toN - fromN) * f;
+                double len = Math.Abs(toN - fromN) / steps;
+                trial.Update(n, 0, agl, 0, 50, len / 50.0, _ => true);
+                peakExp = Math.Max(peakExp, trial.Exposure);
+                if (trial.AnyLocked) locked = true;
+            }
+
+            Console.WriteLine($"  {agl + " m",-12} {hits,-8} {peakExp,-16:F2} {locked}");
+            results.Add((agl, hits, peakExp));
+        }
+
+        // At every altitude, the crossing must produce a lock.
+        foreach (var (agl, hits, peakExp) in results)
+        {
+            if (peakExp < 0.95)
+                return $"the citadel ring never locked at {agl} m AGL (peak {peakExp:F2})";
+        }
+
+        // At least one altitude must produce hits on a 21 km crossing.
+        int totalHits = 0;
+        foreach (var (_, hits, _) in results) totalHits += hits;
+        if (totalHits == 0)
+            return "a straight crossing through the citadel produced zero hits at any altitude";
+
+        Console.WriteLine($"  total hits across all altitudes: {totalHits}");
+        Console.WriteLine("  the citadel is lethal to overfly");
+        return null;
+    }
 }

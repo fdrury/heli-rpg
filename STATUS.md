@@ -22,10 +22,16 @@ fixes it. Eight module bays, each felt in the flight model. The kneeboard's six 
 aircraft condition, knowledge, journal, map, active jobs, and the search thread — the
 four-leg ferry route that is the arc's spine.
 
-**The world is eight islands** (D-077), 33 km corner to corner, with ten committed water
-crossings between them and one home island where The Pan and Long Acre join. Tier costs
-crossings rather than kilometres: tier 1 is a 3 km hop, tier 3 is an 8 km commitment with
-no option anywhere on the leg at a 2:1 glide.
+**The world is a ring around a citadel** (D-087), 28.4 km across. Seven islands sit on a
+10.5 km ring; **The Scald** is at the hub - Act III, the sealed magazine, the blades - and
+it carries the radio transmitter, so the station covers the whole world and is the last
+place the player can reach. Every inter-region leg is a committed crossing of 4.7 to 8.1 km
+against a 2:1 glide that buys about a kilometre from 500 m; the home island (The Pan and
+Long Acre joined) stays dry so there is somewhere to learn. Hexagonal geometry makes a hop
+to the centre and a hop round the ring the same length, so the citadel is gated by air
+defence rather than by distance. A dedicated defence ring (D-088) — 3 SAMs, 4 MANPADS,
+3 guns, 2 search radars in concentric rings — makes the centre genuinely lethal at every
+altitude band. A straight crossing produces 113 hits; the gun pod can dismantle it.
 
 60 fps at 1600x900 on a GTX 1650 Ti, which is well under the GTX 1080 target.
 
@@ -113,6 +119,10 @@ you below 120 m AGL at all; the aerostat looks down and ignores the dead ground 
 else misses. Chaff takes a SAM from 7 hits to 0 and does nothing to a heat seeker; flares
 the reverse. 45 s in two envelopes: everything damaged, 62% forced down, none deleted. The
 RWR logs every emitter that paints you, so the sortie that nearly killed you pays out.
+The Scald carries a dedicated citadel defence ring (D-088): 12 emitters in three concentric
+layers — SAMs at 2 km, MANPADS at 1.5 km, guns at 0.8 km, search radars at 3 km — that
+make the centre lethal to overfly at every altitude band. Fixed angular positions mean the
+layout is deterministic and learnable; the gun pod (D-081) can destroy them one at a time.
 
 **Dialogue** — a baked corpus conditioned on state, with a selector that prefers the most
 specific match, plus the local-model coda contract: gated on whether the spoken line covers

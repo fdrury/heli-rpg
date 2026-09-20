@@ -127,6 +127,60 @@ public sealed partial class ThreatWorld : Node
             Field.Add(ThreatField.Make(aeid, $"{region.Name} aerostat", ThreatKind.Aerostat,
                                        -host.Position.Y, host.Position.X));
         }
+
+        // --- Citadel defence ring (D-088) -----------------------------------
+        //
+        // The Scald sits at the centre of the world and is the endgame destination.
+        // D-087 designed the ring so that the centre is close and lethal — you are
+        // not kept out by fuel, you are kept out by what is down there. The site-based
+        // emitters give The Scald roughly the same coverage as any other tier-3 region,
+        // which does not make it lethal to overfly. This ring does.
+        //
+        // Three layers, fixed angles so the player can learn the layout:
+        //   SAMs at 2 km — overlapping engagement zones covering the middle band
+        //   MANPADS at 1.5 km — low-level denial for anyone ducking under the SAMs
+        //   Guns at 0.8 km — deck coverage on the final approach
+        //   Search radars at 3 km — extended detection umbrella
+        //
+        // The gun pod (D-081) can destroy emitters, so these are not a permanent wall
+        // but a problem that can be methodically dismantled over multiple sorties.
+        id = PlaceCitadelRing(id);
+    }
+
+    /// <summary>
+    /// Dedicated air defence network around The Scald. Fixed angular positions at
+    /// known radii from the world centre, so the layout is deterministic and learnable.
+    /// </summary>
+    private int PlaceCitadelRing(int nextId)
+    {
+        int id = nextId;
+        int rid = (int)RegionKind.Ashfield;
+
+        // The Scald is at (0, 0) in both Godot and NED coordinates.
+        const float cx = 0f, cz = 0f;
+
+        void Ring(ThreatKind kind, string label, float radius, int count, float startDeg)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                float deg = startDeg + 360f / count * i;
+                float rad = Mathf.DegToRad(deg);
+                float ex = cx + Mathf.Cos(rad) * radius;
+                float ez = cz + Mathf.Sin(rad) * radius;
+                // NED: north = -godot Z, east = +godot X.
+                int eid = id++;
+                _emitterRegion[eid] = rid;
+                Field.Add(ThreatField.Make(eid, $"Scald {label} {i + 1}", kind, -ez, ex));
+            }
+        }
+
+        Ring(ThreatKind.Sam,         "battery",  2000f, 3, 0f);     // 120° apart
+        Ring(ThreatKind.Manpads,     "picket",   1500f, 4, 45f);    //  90° apart, offset from SAMs
+        Ring(ThreatKind.Gun,         "gun pit",   800f, 3, 60f);    // 120° apart, offset from SAMs
+        Ring(ThreatKind.SearchRadar, "radar",    3000f, 2, 90f);    // 180° apart
+
+        GD.Print($"[threat] citadel ring: {id - nextId} emitters around The Scald");
+        return id;
     }
 
     private static ThreatKind PickKind(RandomNumberGenerator rng, int tier, int index) => tier switch

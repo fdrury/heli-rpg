@@ -132,6 +132,7 @@ public static class Program
         Run("countermeasures", ThreatTests.Countermeasures);
         Run("survivability", ThreatTests.Survivability);
         Run("routeinflation", ThreatTests.RouteInflation);
+        Run("citadel_ring", ThreatTests.CitadelRing);
         Run("combat_zones", CombatTests.ZoneResolution);
         Run("combat_npc", CombatTests.NpcHealthEffects);
         Run("combat_attrition", CombatTests.NpcAttrition);
@@ -200,6 +201,12 @@ public static class Program
         Run("rebuild_watched", RebuildTests.NobodyWatchesAWallGrow);
         Run("rebuild_cousins", RebuildTests.TheCousins);
         Run("rebuild_save", RebuildTests.DamageSurvivesSave);
+        Run("strafe_hits", BuildingGunneryTests.HitsToLevel);
+        Run("strafe_kinds", BuildingGunneryTests.SafeKinds);
+        Run("strafe_work", BuildingGunneryTests.WorkDayClassification);
+        Run("strafe_rebuild", BuildingGunneryTests.StrafeThenRebuild);
+        Run("strafe_deed", BuildingGunneryTests.DeedReachesAnnouncer);
+        Run("strafe_save", BuildingGunneryTests.StrafeDamageSaves);
         Run("search_guard", RadioDjTests.SearchThreadPremiseGuard);
         Run("dj_schedule", RadioDjTests.Scheduling);
         Run("dj_site", RadioDjTests.BroadcastSite);
