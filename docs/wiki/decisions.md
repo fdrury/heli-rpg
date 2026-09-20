@@ -2923,3 +2923,45 @@ again, and no need for a "reward already delivered" gate that would add state to
 field), a helper in `DialogueCorpus` (`LR`), three tagged lines, one method in
 `SiteInteraction`, and one line in `DialoguePanel`. Removing `Reward` and reverting to `LT`
 restores the prior state. No save/load format changes — modules and knowledge already persist.
+
+## D-090 — Passengers: Sera Wray in the right seat · 2026-09-20
+
+**Decision.** The "smallest version today" from story.md §7.6: Wray is a mass item at the
+co-pilot seat, a dialogue reward that sets a flag in Progress, and a callout system that
+feeds the radio strip during flight. No visible figure — the game's last flight has a second
+voice in it without a single line of new visual work.
+
+**What it is:**
+  * `Passenger` record in sim/: id, name, mass (68 kg), seat position `(2.00, 0.62, -0.25)`.
+    Mirrors the pilot's left seat. The CG shifts measurably rightward.
+  * `CopilotCallouts` in sim/: pure .NET, no Godot. Called every frame while airborne with
+    a passenger aboard. Checks torque (>85%), Nr (<95%), altitude (descending below 120 ft),
+    fuel (<25%, <10%), and threat engagement. Returns a `RadioMessage` with kind `Copilot`
+    (warm amber on the HUD, distinct from all other message kinds). Priority: threat > Nr >
+    torque > altitude > fuel. Minimum 8 s between any call; category cooldowns prevent spam.
+  * `DialogueRewardKind.Passenger`: third reward kind alongside Module and Knowledge.
+    Fires on `wray.board` ("I am in. Do not wait for me to be comfortable. Go."), gated on
+    Window knowledge + standing ≥ 0.5 + at least two meetings.
+  * `Progress.PassengerAboard`: nullable string, persisted in SaveData. The game layer adds
+    the mass item when non-null and creates the callout system.
+  * NPC restore fix: the load path now uses `DialogueCorpus.Named()` for all nine story
+    characters, resolving via `StoryPlaces.For()`. Previously only Mattie got her authored
+    bank; everyone else fell through to generic settler lines on reload.
+
+**Why not a module:** A passenger is a person, not equipment. Modules have drag, fuel delta,
+and a parts cost; passengers have none of that. The mass system already handles arbitrary
+named items. Making Wray a module would put her in the bag next to the gun pod.
+
+**Why callouts via RadioStrip:** story.md §7.6 says "her calling the torque in flight is
+the radio strip from §7.4 in a different colour." The RadioStrip already handles queuing,
+word-by-word reveal, and suppression during engagement. Adding a fourth `RadioMessageKind`
+was one enum value and one line in the HUD colour switch.
+
+**Why warm amber:** The existing colours are: broadcast (cool blue), directed (green),
+intercepted (warm red). Amber sits between green and red on the spectrum, reads as "internal
+crew" rather than "incoming contact", and is distinct from all three.
+
+**Reversibility:** high. Remove `Passenger.cs`, `CopilotCallouts.cs`, the `Copilot` enum
+value, the `Passenger` reward kind, the `wray.board` line, `Progress.PassengerAboard`,
+`SaveData.PassengerAboard`, the capture/apply lines, the event subscription and
+`SyncPassenger()` in Main.cs. The NPC restore fix should stay.

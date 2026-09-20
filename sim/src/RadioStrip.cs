@@ -12,6 +12,8 @@ public enum RadioMessageKind
     Directed,
     /// <summary>Overheard hostile traffic while inside a threat envelope.</summary>
     Intercepted,
+    /// <summary>Co-pilot callout — torque, altitude, fuel. Different HUD colour (story.md §7.6).</summary>
+    Copilot,
 }
 
 /// <summary>One radio message to display on the HUD strip.</summary>

@@ -50,6 +50,7 @@ public sealed partial class FlightHud : Control
     private static readonly Color RadioBroadcast = new(0.72f, 0.82f, 0.90f, 0.92f);
     private static readonly Color RadioDirected = new(0.65f, 0.92f, 0.72f, 0.92f);
     private static readonly Color RadioIntercepted = new(0.95f, 0.55f, 0.45f, 0.92f);
+    private static readonly Color RadioCopilot = new(0.92f, 0.85f, 0.60f, 0.92f);  // warm amber, distinct from all others
 
     private static readonly Color Dim = new(0.62f, 0.72f, 0.66f, 0.85f);
     private static readonly Color Bright = new(0.80f, 0.94f, 0.84f, 0.95f);
@@ -698,6 +699,7 @@ public sealed partial class FlightHud : Control
         {
             RadioMessageKind.Directed => RadioDirected,
             RadioMessageKind.Intercepted => RadioIntercepted,
+            RadioMessageKind.Copilot => RadioCopilot,
             _ => RadioBroadcast,
         };
 

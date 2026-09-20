@@ -115,6 +115,12 @@ public sealed class SaveData
     /// </summary>
     public double TotalFlightHours { get; set; }
 
+    /// <summary>
+    /// The passenger aboard, if any. A save written before this field existed
+    /// loads with no passenger, which is correct.
+    /// </summary>
+    public string? PassengerAboard { get; set; }
+
     // ================================================================ JSON
 
     private static readonly JsonSerializerOptions Opts = new()
@@ -185,6 +191,7 @@ public sealed class SaveData
 
         ContractsCompleted = p.ContractsCompleted;
         SearchStage = p.Search.Stage;
+        PassengerAboard = p.PassengerAboard;
 
         LegClosedAt.Clear();
         LegClosedAt.AddRange(p.Search.LegClosedAt);
@@ -254,6 +261,7 @@ public sealed class SaveData
 
         p.ContractsCompleted = ContractsCompleted;
         p.Search.Stage = SearchStage;
+        p.PassengerAboard = PassengerAboard;
 
         for (int i = 0; i < Math.Min(LegClosedAt.Count, 4); i++)
             p.Search.LegClosedAt[i] = LegClosedAt[i];

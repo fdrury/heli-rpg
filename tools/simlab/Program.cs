@@ -245,6 +245,14 @@ public static class Program
         Run("strip_suppressed", RadioStripTests.Suppressed);
         Run("strip_queue", RadioStripTests.QueueOrder);
         Run("strip_voicebeat", RadioStripTests.VoiceBeat);
+        Run("pax_mass", PassengerTests.WrayMass);
+        Run("pax_cg", PassengerTests.CgShift);
+        Run("pax_torque", PassengerTests.CalloutTorque);
+        Run("pax_nr", PassengerTests.CalloutNr);
+        Run("pax_alt", PassengerTests.CalloutAltitude);
+        Run("pax_fuel", PassengerTests.CalloutFuel);
+        Run("pax_save", PassengerTests.SaveRoundTrip);
+        Run("pax_board", PassengerTests.BoardingDialogue);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 

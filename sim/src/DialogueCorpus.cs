@@ -1407,6 +1407,17 @@ public static class DialogueCorpus
             LT("wray.thread.bye",
               "Go and do the ordinary flying. I will still be here, and the pump will still be here, and the eighth night comes round whatever we do.",
               ThreadParting, 5, Requirement.Knows(Knows.Window)),
+
+            // --- Boarding: the moment she gets in (D-090) ----------------------------
+            // Gated on Window knowledge + sufficient standing + at least two meetings.
+            // The reward sets Progress.PassengerAboard, which adds her mass to the
+            // airframe and starts the copilot callout system.
+            LR("wray.board",
+              "I am in. Do not wait for me to be comfortable. Go.",
+              Thread, 10,
+              new DialogueReward(DialogueRewardKind.Passenger, "wray"),
+              Requirement.Knows(Knows.Window), Requirement.Standing(0.5, 1),
+              Requirement.Meetings(2, 99)),
         });
         return b;
     }

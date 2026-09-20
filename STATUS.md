@@ -138,6 +138,20 @@ rewards follow the salvage path (bag, then install at a workshop); knowledge rew
 `Progress.Learn`. Both are idempotent and persist through save/load. One simlab test verifies
 reward attachment, condition gating, catalog references, and idempotency.
 
+**Passengers** — Sera Wray in the right seat (D-090, story.md §7.6). `Passenger` is a
+record in sim/ holding identity, mass and seat position; `CopilotCallouts` generates
+contextual radio messages based on flight state. Wray is 68 kg in the right seat at
+`(2.00, 0.62, -0.25)`, mirroring the pilot; the CG shifts measurably and the trim changes.
+She calls torque (>85%), Nr (<95%), altitude (descending below 120 ft), fuel (<25%, <10%),
+and threat engagement — short diagnostic readings, not encouragement, because that is what
+a flight engineer does. Callouts appear on the radio strip in warm amber, distinct from all
+other message kinds. Boarding is triggered by a `DialogueRewardKind.Passenger` reward on the
+`wray.board` dialogue line, gated on Window knowledge + standing ≥ 0.5 + at least two
+meetings. `Progress.PassengerAboard` persists through save/load. The NPC restore path now
+uses `DialogueCorpus.Named()` for all nine story characters, not just Mattie — a pre-existing
+bug that would have given named NPCs generic settler dialogue after load. Eight simlab tests
+verify mass, CG shift, all five callout categories, save round-trip, and dialogue gating.
+
 **Play** — refuel, repair, salvage, survey, tune a relay, ask around, contract board.
 Carried load is real mass and is felt in the hover. The kneeboard records facts, not
 inferences, and shows the empty bays.
@@ -263,14 +277,14 @@ accumulates in `AccrueFlightHours`. Both persist through save/load. One simlab t
 (`search_legs`) verifies leg closure stamps and save round-trip.
 
 **Radio strip** — in-flight text for radio messages (D-085). A two-line word-by-word
-reveal strip at the bottom of the HUD carries three kinds of radio call: scheduled
-broadcasts (cool blue), directed calls (green), intercepted traffic (warm red). Messages
-are suppressed during threat engagement. Beat 5 (`search.voice`) fires the first time the
-player is airborne during the 06:40 weather window after learning about the rota — a
-METAR-style broadcast mentioning knots, the tell Doss described. This is the moment the
-game stops being a sandbox: the world speaks to you in flight. `RadioStrip` lives in sim/
-(pure .NET, no Godot dependency); six simlab tests verify queue management, word-reveal
-timing, suppression, and the beat 5 gate. Story.md build order items 1–7 are now complete.
+reveal strip at the bottom of the HUD carries four kinds of radio call: scheduled
+broadcasts (cool blue), directed calls (green), intercepted traffic (warm red), and
+co-pilot callouts (warm amber). Messages are suppressed during threat engagement. Beat 5
+(`search.voice`) fires the first time the player is airborne during the 06:40 weather
+window after learning about the rota — a METAR-style broadcast mentioning knots, the tell
+Doss described. This is the moment the game stops being a sandbox: the world speaks to you
+in flight. `RadioStrip` lives in sim/ (pure .NET, no Godot dependency); six simlab tests
+verify queue management, word-reveal timing, suppression, and the beat 5 gate.
 
 **Rotor ceiling** — the clock on the search (D-086). `MainRotorCeiling` degrades with
 total flight hours (0.0019/h, floor 0.55) and caps how far `Repair` can restore the main
@@ -375,12 +389,10 @@ godot --headless --path game -- --djreport
 
 Story build order item 8: "Everything else, region by region, in tier order."
 
-0. ~~**Dialogue rewards.**~~ **DONE** (D-089). NPC capability trades now actually grant
-   modules and knowledge when the line is delivered. Three Act II trades wired: Nell → RWR
-   module, Osie → upland terrain chart, Ferren → emitter-location chart.
-1. **Passengers** (story.md §7.6). Sera Wray must ride in the right seat for the finale.
-   A mass item at the co-pilot position, dialogue bank that opens on landing at Ashmount,
-   voice callouts during the final flight through the radio strip.
+0. ~~**Dialogue rewards.**~~ **DONE** (D-089).
+1. ~~**Passengers.**~~ **DONE** (D-090). Sera Wray in the right seat: 68 kg mass, co-pilot
+   callouts (torque, Nr, altitude, fuel, threat) via RadioStrip in warm amber, boarding
+   reward, save/load.
 2. **Cargo hook sling load** (story.md §7.7). The 420 kg blade pair slung under the hook
    as an external load. Mass at the hook point, drag delta, trim and power effects.
    The finale cannot close without this.

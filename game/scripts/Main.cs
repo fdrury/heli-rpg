@@ -37,6 +37,7 @@ public sealed partial class Main : Node3D
     private StormEffects _storm = null!;
     private FogOfWar _fog = new();
     private RadioStrip _radioStrip = new();
+    private CopilotCallouts? _copilotCallouts;
     private Label _debugLabel = null!;
     private bool _showDebug;
     private GameMode _mode = GameMode.Flying;
@@ -387,6 +388,9 @@ public sealed partial class Main : Node3D
                     break;
             }
         };
+
+        // D-090: passenger boards → apply mass and start copilot callouts.
+        _play.PassengerBoarded += _ => SyncPassenger();
 
         GD.Print("[main] Rotorwash flight test ready");
     }
@@ -956,6 +960,21 @@ public sealed partial class Main : Node3D
             _rotorTime.UpdateCharge(delta);
         _rotorTime.UpdateDrain(delta);
 
+        // D-090: copilot callouts — Wray calls the torque, Nr, altitude, fuel.
+        if (_copilotCallouts is not null && _mode == GameMode.Flying && !_landing.OnGround)
+        {
+            var sim = _heli.Sim;
+            var cs = new CopilotState(
+                sim.Telemetry.TorquePercent,
+                sim.Telemetry.RotorRpmPercent,
+                sim.Telemetry.HeightAgl,
+                sim.Telemetry.VerticalSpeed,
+                sim.Fuel / System.Math.Max(sim.Airframe.FuelCapacity, 1),
+                _threats.Field.AnyEngaging);
+            var msg = _copilotCallouts.Update(delta, cs);
+            if (msg is not null) _radioStrip.Enqueue(msg);
+        }
+
         // D-085: radio strip — suppress during threat engagement, update word reveal.
         _radioStrip.Suppressed = _threats.Field.AnyEngaging;
         _radioStrip.Update(delta);
@@ -1201,17 +1220,20 @@ public sealed partial class Main : Node3D
         data.ApplyLoadout(loadout);
         _play.RestoreState(progress, loadout);
 
-        // NPCs
+        // NPCs — use the authored bank for story characters, generic for settlers.
         var restoredNpcs = new System.Collections.Generic.Dictionary<int, (NpcMind, DialogueBank)>();
         foreach (var npcSave in data.Npcs)
         {
             var mind = SaveData.RestoreNpcMind(npcSave);
-            // Recreate the dialogue bank with lines from the corpus, then restore usage.
             var site = WorldMap.SiteById(npcSave.SiteId);
             DialogueBank bank;
-            if (site is not null && site.Kind == SiteKind.Settlement
-                && site.Region == RegionKind.Basin && IsFirstSettlement(site))
-                bank = DialogueCorpus.MattieLines();
+
+            // Named story characters get their authored dialogue bank, just as
+            // GetOrCreateNpc does on first meeting.
+            string? storyNpcId = site is not null ? StoryPlaces.For(site.Id)?.NpcId : null;
+            var named = storyNpcId is not null ? DialogueCorpus.Named(storyNpcId) : null;
+            if (named is not null)
+                bank = named.Value.Bank;
             else
                 bank = DialogueCorpus.SettlerLines();
             bank.RestoreUsage(npcSave.LineUsage);
@@ -1249,6 +1271,9 @@ public sealed partial class Main : Node3D
         // Fog of war
         if (data.FogGrid is not null)
             _fog.FromBytes(data.FogGrid);
+
+        // D-090: passenger mass and copilot callouts
+        SyncPassenger();
     }
 
     /// <summary>
@@ -1282,6 +1307,35 @@ public sealed partial class Main : Node3D
         // SAS authority and gun pod
         _heli.SasAuthority = _play.Loadout.IsInstalled("sas") ? 1f : 0f;
         _gunpod.Installed = _play.Loadout.IsInstalled("gunpod");
+    }
+
+    /// <summary>
+    /// Apply or remove the passenger's mass and start/stop the copilot callout system.
+    /// Called on boarding (via dialogue reward), on load, and when the passenger leaves.
+    /// </summary>
+    private void SyncPassenger()
+    {
+        var af = _heli.Sim.Airframe;
+        string? paxId = _play.Progress.PassengerAboard;
+
+        // Remove any existing passenger mass first.
+        af.Mass.Remove("passenger");
+
+        if (paxId is not null)
+        {
+            var pax = Passenger.ById(paxId);
+            if (pax is not null)
+            {
+                af.Mass.Add("passenger", pax.Position, pax.Mass);
+                _copilotCallouts ??= new CopilotCallouts(pax.Name);
+            }
+        }
+        else
+        {
+            _copilotCallouts = null;
+        }
+
+        _heli.Sim.InvalidateMass();
     }
 
     /// <summary>Re-sync threat field fitted flags from the current loadout.</summary>

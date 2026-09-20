@@ -60,6 +60,13 @@ public sealed class Progress
     public SearchThread Search { get; } = new();
 
     /// <summary>
+    /// Who is riding in the right seat, or null. Set by DialogueRewardKind.Passenger.
+    /// This is not a module or cargo — it is a person who agreed to fly with you, and
+    /// their mass is real mass at a real position (story.md §7.6).
+    /// </summary>
+    public string? PassengerAboard { get; set; }
+
+    /// <summary>
     /// Salvaged components aboard but not fitted: the heavy, awkward, valuable things.
     ///
     /// Lives here rather than beside the aircraft because it is part of the character

@@ -176,6 +176,8 @@ public enum DialogueRewardKind
     Module,
     /// <summary>Learn a Knowledge entry — a chart, a threat site, a frequency.</summary>
     Knowledge,
+    /// <summary>A person boards the aircraft. The player now has crew.</summary>
+    Passenger,
 }
 
 /// <summary>One hand-vetted line. Thousands of these are generated offline and shipped.</summary>

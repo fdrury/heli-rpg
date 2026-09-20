@@ -49,6 +49,8 @@ public sealed partial class SiteInteraction : Node
     public event Action<ModuleDef>? ModuleInstalled;
     /// <summary>Raised when a module is removed. Main wires the system-specific effects.</summary>
     public event Action<ModuleDef>? ModuleRemoved;
+    /// <summary>Raised when a passenger boards via dialogue reward (D-090).</summary>
+    public event Action<string>? PassengerBoarded;
 
     /// <summary>Actions available at this instant. Empty when airborne or away from a site.</summary>
     public IReadOnlyList<SiteAction> Actions => _actions;
@@ -847,6 +849,21 @@ public sealed partial class SiteInteraction : Node
                 {
                     Notice?.Invoke($"Learned: {reward.Label ?? reward.Id}");
                     GD.Print($"[reward] knowledge: {reward.Id}");
+                }
+                break;
+
+            case DialogueRewardKind.Passenger:
+                if (Progress.PassengerAboard != reward.Id)
+                {
+                    Progress.PassengerAboard = reward.Id;
+                    var pax = Passenger.ById(reward.Id);
+                    if (pax is not null)
+                    {
+                        Progress.Journal($"{pax.Name} is aboard.");
+                        Notice?.Invoke($"{pax.Name} is aboard");
+                    }
+                    PassengerBoarded?.Invoke(reward.Id);
+                    GD.Print($"[reward] passenger: {reward.Id}");
                 }
                 break;
         }
