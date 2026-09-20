@@ -216,13 +216,22 @@ distance math.
 **Mission structure** — contract board at settlements and main-search breadcrumbs (D-049).
 Settlements generate 2-3 contracts from their neighbours: deliveries, scout missions,
 recovery jobs, and relay messages. Contracts reference real sites, use real stock types,
-and pay in things the game already tracks. The main search is 12 authored beats gated on
-world state (visited count, knowledge, time), telling the story of finding Kara Morrow —
-a pilot who vanished heading east with charts and frequencies worth more than fuel.
+and pay in things the game already tracks. The main search is 11 authored beats gated on
+world state, telling the story of finding Sera Wray — a flight engineer who signed Hugh's
+logbook for nine years and knows where the last serviceable rotor blades are.
 Progress, contracts and search stage survive save/load. A fifth kneeboard page (JOBS)
 shows active contracts, the search thread's current hint, and completed count. Eight
 simlab tests verify generation, completion, payout, delivery logic, round-trip, search
 gating, determinism, and full integration.
+
+**Story engine readiness** — place-based beat gates, dialogue at story sites, night
+awareness (D-083). Beat gates now check that the player has visited the site whose story
+role carries the beat's information (`ThreadContext.Visited`), so "the wreck" cannot fire
+while parked at a basin farmstead. Counters remain as floors to prevent stacking. Talk is
+available at any site where StoryPlaces declares an NPC, not only at Settlements — story
+NPCs at airfields, workshops and depots can be spoken to. `ArrivedAtNight` reads the sun
+elevation so night-gated dialogue lines work. `ThreadContext` lives in sim/ (pure .NET);
+the game layer populates it from StoryPlaces role bindings.
 
 **Look-around** — cockpit head-look (D-070). In cockpit mode the pilot can look around
 inside the airframe: middle-mouse drag, hat switch / D-pad, or numpad 4/6/8/2 slew the
@@ -362,6 +371,12 @@ lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, a
    live in `sim/` with no Godot dependency; six simlab tests verify open ground, valley,
    water, AGL fade, every site kind's waveform, and wind response. The helicopter audio now
    routes through the Reverb bus so terrain acoustics shape its sound.
+9. ~~**Story engine readiness.**~~ **DONE** (D-083). Three pieces from story.md §7 that
+   make the search thread and dialogue system usable by the authored beats: `ThreadContext`
+   with place-based gates (§7.2) so beats fire where the story says they happen, not
+   wherever counters overflow; Talk at non-Settlement sites (§7.5) so story NPCs at
+   airfields, workshops and depots can be spoken to; `ArrivedAtNight` driven by the sun
+   (§7.8) so night-gated dialogue lines work.
 
 ## Open questions for Fred
 

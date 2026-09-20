@@ -1,4 +1,50 @@
+using System.Collections.Generic;
+
 namespace Rotorwash.Sim;
+
+/// <summary>
+/// World state the search thread needs beyond Progress (story.md §7.2).
+///
+/// Populated by the game layer (<c>SiteInteraction.CheckSearchThread</c>), which already
+/// runs every frame and has access to everything listed here. Pure .NET, no Godot types,
+/// testable in simlab.
+///
+/// <c>VisitedRoles</c> carries the role ids (e.g. "place.mattie") whose bound sites
+/// the player has visited. The game layer computes this from StoryPlaces once per check,
+/// so the sim layer never references StoryPlaces or RegionKind.
+/// </summary>
+public readonly struct ThreadContext
+{
+    /// <summary>The game clock in seconds.</summary>
+    public readonly double GameClock;
+    /// <summary>True when the aircraft is airborne (not on the ground).</summary>
+    public readonly bool Airborne;
+    /// <summary>The site id where the aircraft is parked, or -1.</summary>
+    public readonly int ParkedSiteId;
+    /// <summary>True when the sun is below -12° elevation (full night).</summary>
+    public readonly bool IsNight;
+    /// <summary>
+    /// Story-role ids (e.g. "place.mattie") whose bound sites the player has visited.
+    /// Populated from StoryPlaces by the game layer.
+    /// </summary>
+    public readonly HashSet<string> VisitedRoles;
+
+    public ThreadContext(double gameClock, bool airborne, int parkedSiteId,
+                         bool isNight, HashSet<string>? visitedRoles = null)
+    {
+        GameClock = gameClock;
+        Airborne = airborne;
+        ParkedSiteId = parkedSiteId;
+        IsNight = isNight;
+        VisitedRoles = visitedRoles ?? new HashSet<string>();
+    }
+
+    /// <summary>True if the player has visited the site that plays this story role.</summary>
+    public bool Visited(string roleId) => VisitedRoles.Contains(roleId);
+
+    /// <summary>An empty context for tests that do not need world state.</summary>
+    public static ThreadContext Empty => new(0, false, -1, false);
+}
 
 /// <summary>
 /// The main quest: you are looking for someone.
@@ -21,11 +67,11 @@ namespace Rotorwash.Sim;
 /// D-008: no other helicopter pilots exist. Wray is a flight engineer, not a pilot.
 /// D-050: corrected from "Kara Morrow, a pilot" which violated D-008.
 ///
-/// NOTE: The gates here are counter-based (VisitedCount, CountKnown) as a floor to
-/// prevent beats from stacking. story.md specifies place-based triggers (talk to Mattie,
-/// visit the Fenmoor airfield, search the Drowning wreck) which require site-role
-/// resolution — mapping story roles to generated site IDs. That system does not exist
-/// yet; when it does, these gates should be replaced with the predicates in story.md §2.
+/// D-083: Gates are now place-based (story.md §7.2). Each beat requires that the player
+/// has visited the site whose story role carries the beat's information, plus a counter
+/// floor to prevent beats from stacking if multiple role sites are visited quickly.
+/// The visited-role check uses string ids ("place.mattie" etc.) resolved by StoryPlaces
+/// in the game layer and passed via ThreadContext.VisitedRoles.
 /// </summary>
 public sealed class SearchThread
 {
@@ -44,15 +90,15 @@ public sealed class SearchThread
         Stage > 0 && Stage <= Beats.Length ? Beats[Stage - 1].Journal : "";
 
     /// <summary>
-    /// Check whether the next beat should trigger, given current progress.
+    /// Check whether the next beat should trigger, given current progress and world state.
     /// Returns the beat if it fires, null otherwise.
     /// </summary>
-    public SearchBeat? TryAdvance(Progress progress)
+    public SearchBeat? TryAdvance(Progress progress, ThreadContext ctx)
     {
         if (Stage >= Beats.Length) return null;
 
         SearchBeat beat = Beats[Stage];
-        if (!beat.Gate(progress)) return null;
+        if (!beat.Gate(progress, ctx)) return null;
 
         Stage++;
         return beat;
@@ -61,7 +107,7 @@ public sealed class SearchThread
     // ---------------------------------------------------------------- beats
 
     /// <summary>
-    /// The 12 authored beats of the main search, following docs/wiki/story.md.
+    /// The 11 authored beats of the main search, following docs/wiki/story.md.
     ///
     /// Each beat has:
     /// - A gate: what the player must have done for this to trigger.
@@ -73,6 +119,12 @@ public sealed class SearchThread
     /// verb. Act II (Fenmoor, The Drowning, Cold Shoulder, Sawtooth Works) follows the
     /// ferry route leg by leg. Act III (Ashmount, The Scald) finds her and makes the
     /// last flight.
+    ///
+    /// Gates are place-based with counter floors (D-083). Each beat requires visiting the
+    /// story-role site that carries its information, so "the wreck" cannot fire while
+    /// parked at a basin farmstead, and "the cairn" cannot fire without climbing to the
+    /// ridge. Counter floors prevent beats from stacking if the player visits several
+    /// role sites on one sortie.
     /// </summary>
     public static readonly SearchBeat[] Beats =
     {
@@ -81,7 +133,8 @@ public sealed class SearchThread
 
         new(
             "The correction",
-            gate: p => p.VisitedCount >= 2,
+            gate: (p, ctx) => p.VisitedCount >= 2
+                              && ctx.Visited("place.mattie"),
             journal: "Mattie looked at the logbook. \"That is not a frequency. That is the back half " +
                      "of a callsign. Sierra four three. You have been listening for a number for six " +
                      "years and it was a name all along.\"",
@@ -91,7 +144,9 @@ public sealed class SearchThread
 
         new(
             "The band",
-            gate: p => p.VisitedCount >= 4 && p.CountKnown(KnowledgeKind.Frequency) >= 1,
+            gate: (p, ctx) => p.VisitedCount >= 4
+                              && p.CountKnown(KnowledgeKind.Frequency) >= 1
+                              && ctx.Visited("place.long_mast"),
             journal: "Every relay logged is one candidate eliminated. Airband, 118 to 152 MHz. " +
                      "Thirty-four paired channels. The mast at Long Acre is next.",
             hint: "Airband: 34 candidates. Every relay narrows it. Keep tuning.",
@@ -100,7 +155,9 @@ public sealed class SearchThread
 
         new(
             "The broadcast",
-            gate: p => p.VisitedCount >= 6 && p.CountKnown(KnowledgeKind.Frequency) >= 2,
+            gate: (p, ctx) => p.VisitedCount >= 6
+                              && p.CountKnown(KnowledgeKind.Frequency) >= 2
+                              && ctx.Visited("place.doss"),
             journal: "A man at Long Acre has listened to the same carrier at 06:40 every morning " +
                      "for six years. A weather sequence, read by a rota of four people. He can tell " +
                      "them apart. One of them, he says, \"says the wind speeds in knots. Nobody says knots.\"",
@@ -113,7 +170,9 @@ public sealed class SearchThread
 
         new(
             "The manifest",
-            gate: p => p.VisitedCount >= 10 && p.CountKnown(KnowledgeKind.Chart) >= 2,
+            gate: (p, ctx) => p.VisitedCount >= 10
+                              && p.CountKnown(KnowledgeKind.Chart) >= 2
+                              && ctx.Visited("place.nell"),
             journal: "A woman at Fenmoor kept the load manifest because her brother's name is on it. " +
                      "Tail number, routing, and the fact that the aircraft was 420 kg over gross. " +
                      "That is why it did not make the uplands.",
@@ -123,7 +182,9 @@ public sealed class SearchThread
 
         new(
             "The wreck",
-            gate: p => p.VisitedCount >= 14 && p.CountKnown(KnowledgeKind.ThreatSite) >= 1,
+            gate: (p, ctx) => p.VisitedCount >= 14
+                              && p.CountKnown(KnowledgeKind.ThreatSite) >= 1
+                              && ctx.Visited("place.wreck"),
             journal: "A wreck in the wetlands, half in the water, tail boom up. The tail number " +
                      "matches. The cabin is empty. The liferaft cradle is empty and the strap was " +
                      "cut clean — the door was opened from the inside.",
@@ -133,7 +194,9 @@ public sealed class SearchThread
 
         new(
             "The cairn",
-            gate: p => p.VisitedCount >= 18 && p.CountKnown(KnowledgeKind.Chart) >= 3,
+            gate: (p, ctx) => p.VisitedCount >= 18
+                              && p.CountKnown(KnowledgeKind.Chart) >= 3
+                              && ctx.Visited("place.cairn"),
             journal: "A man in the uplands buried four of them and can still recite their names. " +
                      "Seven came up out of the water and walked into the hills in November. " +
                      "Four names on the cairn. Wray is not one of them.",
@@ -143,7 +206,9 @@ public sealed class SearchThread
 
         new(
             "The roster",
-            gate: p => p.VisitedCount >= 20 && p.CountKnown(KnowledgeKind.Frequency) >= 3,
+            gate: (p, ctx) => p.VisitedCount >= 20
+                              && p.CountKnown(KnowledgeKind.Frequency) >= 3
+                              && ctx.Visited("place.ferren"),
             journal: "The works took three walkers in and put them to work. The shop roster has " +
                      "her name against a four-year span and a leaving date. She was alive four " +
                      "years after the crash and she left on her own legs, heading for Ashmount.",
@@ -156,7 +221,9 @@ public sealed class SearchThread
 
         new(
             "The water",
-            gate: p => p.VisitedCount >= 24 && p.CountKnown(KnowledgeKind.Chart) >= 4,
+            gate: (p, ctx) => p.VisitedCount >= 24
+                              && p.CountKnown(KnowledgeKind.Chart) >= 4
+                              && ctx.Visited("place.wray"),
             journal: "Ashmount. Someone at the edge of the city knows who pumps the water: a woman " +
                      "in her sixties with a bad hip, who rebuilt a ventilation fan into a turbine. " +
                      "She has run it for six years. Three hundred people drink because of her.",
@@ -166,7 +233,9 @@ public sealed class SearchThread
 
         new(
             "Sera Wray",
-            gate: p => p.VisitedCount >= 26 && p.CountKnown(KnowledgeKind.ThreatSite) >= 3,
+            gate: (p, ctx) => p.VisitedCount >= 26
+                              && p.CountKnown(KnowledgeKind.ThreatSite) >= 3
+                              && p.Knows("search.water"),
             journal: "\"Your track is out. I could hear it from the cut. How long has it been " +
                      "doing that?\" She is sixty-one. She has a bad hip. She did not come because " +
                      "for the first two years she believed Hugh had burned.",
@@ -176,7 +245,8 @@ public sealed class SearchThread
 
         new(
             "The magazine",
-            gate: p => p.VisitedCount >= 28 && p.Knows("search.wray"),
+            gate: (p, ctx) => p.VisitedCount >= 28
+                              && p.Knows("search.wray"),
             journal: "The blade stock she inventoried is in a hardened magazine at a depot deep in " +
                      "the ash country, under an aerostat, behind a door that has been sealed since " +
                      "it burned. She has known where they are for six years. She had no way to reach them.",
@@ -186,7 +256,9 @@ public sealed class SearchThread
 
         new(
             "The window",
-            gate: p => p.VisitedCount >= 30 && p.Knows("search.magazine"),
+            gate: (p, ctx) => p.VisitedCount >= 30
+                              && p.Knows("search.magazine")
+                              && ctx.Visited("place.juno"),
             journal: "Juno Kessel runs the Ashmount tether crew. The aerostat comes down every " +
                      "eighth night to swap its gas bag. Ninety minutes of nobody looking down. " +
                      "\"What you do with it is not my business and I would like it kept that way.\"",
@@ -200,14 +272,14 @@ public sealed class SearchThread
 public sealed class SearchBeat
 {
     public string Name;
-    public Func<Progress, bool> Gate;
+    public Func<Progress, ThreadContext, bool> Gate;
     public string Journal;
     public string Hint;
     public string? KnowledgeId;
     public string? KnowledgeLabel;
     public string? KnowledgeDetail;
 
-    public SearchBeat(string name, Func<Progress, bool> gate, string journal, string hint,
+    public SearchBeat(string name, Func<Progress, ThreadContext, bool> gate, string journal, string hint,
                       string? knowledgeId = null, string? knowledgeLabel = null,
                       string? knowledgeDetail = null)
     {

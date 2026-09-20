@@ -2625,3 +2625,46 @@ Four simlab tests: `nav_cardinals`, `nav_distance`, `nav_relbearing`, `nav_round
 
 **Reversibility:** high. Delete `Navigation.cs`, remove `DrawCompass`, `SetNavTargets`,
 `UpdateNavTargets`, and `DrawBearingLines`. No other system depends on the compass.
+
+## D-083 — Story engine readiness: place-based gates, dialogue at story sites, night awareness · 2026-09-20
+
+**Decision.** Three changes that make the search thread and dialogue system usable by
+story.md's authored beats:
+
+1. **`ThreadContext` struct and place-based beat gates (story.md §7.2).** `SearchBeat.Gate`
+   now takes `(Progress, ThreadContext)` instead of `(Progress)`. `ThreadContext` carries
+   the game clock, airborne flag, parked site id, night flag, and a `HashSet<string>` of
+   visited story-role ids (e.g. `"place.mattie"`, `"place.wreck"`). Each beat's gate now
+   requires that the player has visited the site whose story role carries the beat's
+   information — so "the cairn" cannot fire while parked at a basin farmstead, and
+   "the manifest" cannot fire without visiting Nell's settlement. Counter thresholds remain
+   as floors to prevent beats from stacking if several role sites are visited quickly.
+
+2. **Talk at non-Settlement sites (story.md §7.5).** `SiteInteraction.RebuildActions` now
+   offers Talk at any site where `StoryPlaces.For(site.Id)?.NpcId` is not null, not only
+   at Settlements. This lets story NPCs like Juno Kessel (at an airfield) and Halvard Ferren
+   (who may degrade to a workshop or depot) be spoken to. Generic settlers are not spawned
+   at non-settlements — the guard is the `StoryPlaces` NPC declaration.
+
+3. **`ArrivedAtNight` is no longer hard-coded false (story.md §7.8).** `BuildTalkContext`
+   now reads `SceneMood.SunNow.IsNight` (sun elevation ≤ −12°), so dialogue lines gated on
+   `ArrivedAtNight` — including several finale lines — work.
+
+**Architecture.** `ThreadContext` lives in `sim/src/SearchThread.cs` (pure .NET, no Godot
+dependency). The game layer builds it in `SiteInteraction.BuildThreadContext()`, which
+iterates `StoryPlaces.Specs` and checks `Progress.HasVisited` for each role's bound site id,
+passing the visited set as string ids so the sim layer never references `StoryPlaces` or
+`RegionKind`. One new simlab assertion in `search_advance` verifies that the place gate
+actually blocks: a context with no visited roles prevents advancement even when the counter
+threshold is met.
+
+**Why.** The search thread note said: *"The gates here are counter-based. story.md specifies
+place-based triggers which require site-role resolution. That system does not exist yet."*
+StoryPlaces now exists and resolves all sixteen roles. The counter-only gates let beat 6
+("a wreck in the wetlands") fire while parked at a basin farmstead, which makes the story
+read as generated filler. The place-based gates ensure the player is at the right site —
+where the journal entry describes what is actually around them.
+
+**Reversibility:** high. `ThreadContext` is one struct, the gate signature change is
+mechanical, and the game-layer `BuildThreadContext` is 15 lines. Reverting to counter-only
+gates is a find-replace of the lambda signatures and dropping the `ctx.Visited()` clauses.

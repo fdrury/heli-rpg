@@ -176,7 +176,10 @@ public sealed partial class SiteInteraction : Node
                 break;
         }
 
-        if (site.Kind == SiteKind.Settlement) AddTalk(site);
+        // Talk at settlements (always) and at non-settlements where a story NPC lives
+        // (story.md §7.5: Juno is at an airfield, Ferren may fall to a workshop or depot).
+        if (site.Kind == SiteKind.Settlement || StoryPlaces.For(site.Id)?.NpcId is not null)
+            AddTalk(site);
 
         if (site.Kind is SiteKind.Workshop or SiteKind.Airfield or SiteKind.Settlement)
             AddRepairs(site);
@@ -570,7 +573,8 @@ public sealed partial class SiteInteraction : Node
         if (Progress.Clock - _lastSearchCheck < 60) return;
         _lastSearchCheck = Progress.Clock;
 
-        var beat = Progress.Search.TryAdvance(Progress);
+        var ctx = BuildThreadContext();
+        var beat = Progress.Search.TryAdvance(Progress, ctx);
         if (beat is null) return;
 
         // Journal the clue.
@@ -797,8 +801,29 @@ public sealed partial class SiteInteraction : Node
             PreviousMeetings = npc.Meetings,
             ArrivedDamaged = worst.Health < 0.6,
             ArrivedLowOnFuel = fuelFrac < 0.25,
-            ArrivedAtNight = false,      // TODO: day/night cycle
+            ArrivedAtNight = SceneMood.SunNow.IsNight,
             Standing = npc.Standing,
         };
+    }
+
+    private ThreadContext BuildThreadContext()
+    {
+        // Resolve which story-role sites the player has visited, using the role ids
+        // from StoryPlaces.Specs. This bridges the game→sim boundary: the sim layer
+        // sees only string ids, never StoryPlaces or RegionKind.
+        var visited = new HashSet<string>();
+        foreach (var spec in StoryPlaces.Specs)
+        {
+            int sid = StoryPlaces.SiteId(spec.Role);
+            if (sid >= 0 && Progress.HasVisited(sid))
+                visited.Add(spec.Id);
+        }
+
+        return new ThreadContext(
+            gameClock: Progress.Clock,
+            airborne: !_landing.OnGround,
+            parkedSiteId: Parked?.Id ?? -1,
+            isNight: SceneMood.SunNow.IsNight,
+            visitedRoles: visited);
     }
 }

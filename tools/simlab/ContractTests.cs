@@ -199,33 +199,52 @@ public static class ContractTests
         return null;
     }
 
-    /// <summary>Search thread advances when gates are met.</summary>
+    /// <summary>Search thread advances when gates are met, including place checks.</summary>
     public static string? SearchAdvance()
     {
         var progress = Progress.NewGame();
 
-        // Stage 0 gate: VisitedCount >= 2
-        if (progress.Search.TryAdvance(progress) is not null)
+        // A context with all roles "visited" so place gates are satisfied.
+        // This isolates the test to counter and knowledge gates.
+        var allRoles = new HashSet<string>
+        {
+            "place.mattie", "place.doss", "place.long_mast", "place.nell",
+            "place.field", "place.bel", "place.wreck", "place.osie",
+            "place.cairn", "place.ferren", "place.saw_relay", "place.wray",
+            "place.juno", "place.tether", "place.sparrow", "place.magazine",
+        };
+        var ctx = new ThreadContext(0, false, -1, false, allRoles);
+
+        // Stage 0 gate: VisitedCount >= 2 AND visited Mattie
+        if (progress.Search.TryAdvance(progress, ctx) is not null)
             return "search advanced too early";
 
         progress.MarkVisited(1);
         progress.MarkVisited(2);
 
-        var beat = progress.Search.TryAdvance(progress);
+        var beat = progress.Search.TryAdvance(progress, ctx);
         if (beat is null) return "search did not advance at stage 0";
         if (beat.Name != "The correction") return $"wrong beat: {beat.Name}";
         if (progress.Search.Stage != 1) return $"stage: {progress.Search.Stage}";
 
-        // Stage 1 gate: VisitedCount >= 4 AND has a frequency
+        // Stage 1 gate: VisitedCount >= 4 AND has a frequency AND visited Long Acre mast
         progress.MarkVisited(3);
         progress.MarkVisited(4);
-        if (progress.Search.TryAdvance(progress) is not null)
+        if (progress.Search.TryAdvance(progress, ctx) is not null)
             return "advanced without frequency";
 
         progress.Learn(new Knowledge(KnowledgeKind.Frequency, "freq.test", "Test Freq", "test"));
-        beat = progress.Search.TryAdvance(progress);
+        beat = progress.Search.TryAdvance(progress, ctx);
         if (beat is null) return "search did not advance at stage 1";
         if (progress.Search.Stage != 2) return $"stage after 1: {progress.Search.Stage}";
+
+        // Verify place gates matter: without the role, the beat should not fire.
+        var progress2 = Progress.NewGame();
+        var emptyCtx = new ThreadContext(0, false, -1, false, new HashSet<string>());
+        progress2.MarkVisited(1);
+        progress2.MarkVisited(2);
+        if (progress2.Search.TryAdvance(progress2, emptyCtx) is not null)
+            return "search advanced without visited role — place gate broken";
 
         Console.WriteLine($"  Search stage: {progress.Search.Stage}");
         Console.WriteLine($"  Current hint: {progress.Search.CurrentHint}");
