@@ -199,6 +199,7 @@ public static class Program
         Run("rebuild_empty", RebuildTests.EmptyPlacesStayDown);
         Run("rebuild_watched", RebuildTests.NobodyWatchesAWallGrow);
         Run("rebuild_cousins", RebuildTests.TheCousins);
+        Run("rebuild_save", RebuildTests.DamageSurvivesSave);
         Run("search_guard", RadioDjTests.SearchThreadPremiseGuard);
         Run("dj_schedule", RadioDjTests.Scheduling);
         Run("dj_site", RadioDjTests.BroadcastSite);

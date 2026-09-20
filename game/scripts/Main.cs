@@ -138,6 +138,12 @@ public sealed partial class Main : Node3D
         };
         AddChild(_play);
 
+        // The streamer needs the ledger so a site it builds comes up in whatever state the
+        // player left it, and so the rebuild tick has something to advance. Set here rather
+        // than in the constructor because Progress lives on SiteInteraction, which needs
+        // the streamer's path and therefore has to be built after it.
+        _sites.Progress = _play.Progress;
+
         _codaServer = new CodaServer { Name = "CodaServer" };
         AddChild(_codaServer);
         _play.CodaServer = _codaServer;

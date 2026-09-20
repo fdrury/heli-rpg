@@ -95,6 +95,9 @@ public sealed class SaveData
     /// callback window, so this list stays short whatever the length of the campaign.
     /// </summary>
     public List<DeedSave> Deeds { get; set; } = new();
+
+    /// <summary>What the player has knocked down, and how far it has got back up.</summary>
+    public List<SiteDamageSave> Damage { get; set; } = new();
     public int ContractsCompleted { get; set; }
     public int SearchStage { get; set; }
 
@@ -162,6 +165,16 @@ public sealed class SaveData
         foreach (SalvagePart part in p.Cargo.Parts)
             Cargo.Add(new CargoPartSave { Id = part.Def.Id, Condition = part.Condition });
 
+        Damage.Clear();
+        foreach ((int id, SiteDamage dmg) in p.DamagedSites)
+        {
+            if (dmg.Untouched) continue;
+            var save = new SiteDamageSave { SiteId = id, PopulationLost = dmg.PopulationLost };
+            foreach ((int index, double remaining) in dmg.Snapshot())
+                save.Ruins.Add(new RuinSave { Index = index, Remaining = remaining });
+            Damage.Add(save);
+        }
+
         Deeds.Clear();
         foreach (DjDeed d in p.Deeds)
             Deeds.Add(new DeedSave
@@ -210,6 +223,13 @@ public sealed class SaveData
 
         foreach (var k in Knowledge)
             p.RestoreKnowledge(new Sim.Knowledge(k.Kind, k.Id, k.Label, k.Detail));
+
+        foreach (SiteDamageSave sd in Damage)
+        {
+            var d = new SiteDamage();
+            d.Restore(sd.PopulationLost, sd.Ruins.Select(r => (r.Index, r.Remaining)));
+            p.RestoreDamage(sd.SiteId, d);
+        }
 
         // A deed whose kind has left the enum is dropped rather than throwing, the same rule
         // the cargo list follows: a save written by an older build must still open.
@@ -372,6 +392,25 @@ public sealed class KnowledgeSave
 /// One salvaged part aboard. Id plus wear; the catalog supplies the rest.
 /// Matches the <c>(string Id, double Condition)</c> tuple <c>Cargo.Restore</c> takes.
 /// </summary>
+/// <summary>
+/// One site's structural damage. The rebuild queue is stored in order, because the order is
+/// the model: work goes into the oldest ruin first, and a save that reshuffled it would have
+/// the village start a different house after a reload.
+/// </summary>
+public sealed class SiteDamageSave
+{
+    public int SiteId { get; set; }
+    public int PopulationLost { get; set; }
+    public List<RuinSave> Ruins { get; set; } = new();
+}
+
+/// <summary>One structure that is down, and the person-days left to put it back.</summary>
+public sealed class RuinSave
+{
+    public int Index { get; set; }
+    public double Remaining { get; set; }
+}
+
 /// <summary>One deed, flattened. The kind is stored by name so the enum can be reordered.</summary>
 public sealed class DeedSave
 {

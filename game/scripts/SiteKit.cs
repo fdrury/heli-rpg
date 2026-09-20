@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Rotorwash.Sim;
 
 namespace Rotorwash;
 
@@ -83,24 +84,61 @@ public static class SiteKit
     public static Palette Materials => _palette ??= Palette.Build();
 
     /// <summary>Build the whole site. Returns a node positioned at the site's ground point.</summary>
-    public static Node3D Build(Site site)
+    /// <summary>
+    /// The mast is the FIRST structure a relay builds, so its ordinal is zero.
+    ///
+    /// Depended on from outside - the Upland Service asks whether structure 0 of its
+    /// transmitter site is standing before it goes on the air. If BuildRelay ever stops
+    /// putting the mast first, that breaks silently and the station simply never comes
+    /// back, so the ordering is part of the contract rather than a detail of the builder.
+    /// </summary>
+    public const int MastIndex = 0;
+
+    /// <summary>
+    /// Which structures at this site are down, and the counter that names them.
+    ///
+    /// A structure's identity is its ORDINAL within the site's build - first building is 0,
+    /// second is 1 - which works only because the whole build is driven by an RNG seeded
+    /// from the site id and therefore produces the same structures in the same order every
+    /// time it is streamed in. That is already load-bearing for the world looking the same
+    /// twice; this leans on it once more.
+    /// </summary>
+    private sealed class Plan
+    {
+        public SiteDamage? Damage;
+        private int _next;
+
+        /// <summary>
+        /// Take the next ordinal and say what state that structure is in: 1 whole, 0 flat,
+        /// in between under construction.
+        /// </summary>
+        public double Take(double workDays)
+        {
+            int i = _next++;
+            if (Damage is null || !Damage.IsRuined(i)) return 1.0;
+            return Damage.RebuildFraction(i, workDays);
+        }
+    }
+
+    public static Node3D Build(Site site, SiteDamage? damage = null)
     {
         var root = new Node3D { Name = $"Site_{site.Id}_{site.Kind}" };
         var rng = new RandomNumberGenerator { Seed = (ulong)(site.Id * 7919 + 13) };
         Vector3 origin = site.Ground;
         root.Position = origin;
+        var plan = new Plan { Damage = damage };
 
         switch (site.Kind)
         {
-            case SiteKind.FuelCache: BuildFuelCache(root, rng, site); break;
-            case SiteKind.Settlement: BuildSettlement(root, rng, site); break;
-            case SiteKind.Workshop: BuildWorkshop(root, rng, site); break;
-            case SiteKind.Wreck: BuildWreck(root, rng, site); break;
-            case SiteKind.Relay: BuildRelay(root, rng, site); break;
-            case SiteKind.Depot: BuildDepot(root, rng, site); break;
-            case SiteKind.Airfield: BuildAirfield(root, rng, site); break;
-            case SiteKind.Farmstead: BuildFarmstead(root, rng, site); break;
-            default: BuildOverlook(root, rng, site); break;
+            case SiteKind.FuelCache: BuildFuelCache(root, rng, site, plan); break;
+            case SiteKind.Settlement: BuildSettlement(root, rng, site, plan); break;
+            case SiteKind.Workshop: BuildWorkshop(root, rng, site, plan); break;
+            case SiteKind.Wreck: BuildWreck(root, rng, site, plan); break;
+            case SiteKind.Relay: BuildRelay(root, rng, site, plan); break;
+            case SiteKind.Depot: BuildDepot(root, rng, site, plan); break;
+            case SiteKind.Airfield: BuildAirfield(root, rng, site, plan); break;
+            case SiteKind.Farmstead: BuildFarmstead(root, rng, site, plan); break;
+            default: BuildOverlook(root, rng, site, plan); break;
         }
 
         // The authored-site layer: if this site plays a story role, the role's prop goes on
@@ -112,7 +150,7 @@ public static class SiteKit
 
     // ---------------------------------------------------------------- site types
 
-    private static void BuildFuelCache(Node3D root, RandomNumberGenerator rng, Site site)
+    private static void BuildFuelCache(Node3D root, RandomNumberGenerator rng, Site site, Plan plan)
     {
         // Small, and deliberately hard to see until you are close: the whole point of a
         // fuel cache is that finding it is worth something.
@@ -129,7 +167,7 @@ public static class SiteKit
         Clutter(root, rng, 14f, 6);
     }
 
-    private static void BuildSettlement(Node3D root, RandomNumberGenerator rng, Site site)
+    private static void BuildSettlement(Node3D root, RandomNumberGenerator rng, Site site, Plan plan)
     {
         int houses = rng.RandiRange(7, 14);
         // Lay a street and hang the buildings off it. A ring of huts reads as generated;
@@ -146,20 +184,20 @@ public static class SiteKit
             float side = rng.Randf() < 0.5f ? -1 : 1;
             float offset = side * rng.RandfRange(9f, 19f);
             Vector3 p = along * t + across * offset;
-            Building(root, rng, Local(root, p), rng.RandfRange(6f, 11f), rng.RandfRange(5f, 9f),
+            Building(root, rng, plan, Local(root, p), rng.RandfRange(6f, 11f), rng.RandfRange(5f, 9f),
                      rng.RandfRange(3.2f, 6.0f), streetAngle + (side > 0 ? Mathf.Pi : 0),
                      collapsed: rng.Randf() < 0.30f);
         }
 
-        WaterTower(root, rng, Local(root, along * rng.RandfRange(-40, 40) + across * rng.RandfRange(22, 34)));
+        WaterTower(root, rng, plan, Local(root, along * rng.RandfRange(-40, 40) + across * rng.RandfRange(22, 34)));
         Fence(root, rng, 78f, 26);
         Clutter(root, rng, 70f, 22);
         Vehicle(root, rng, Local(root, along * rng.RandfRange(-30, 30) + across * rng.RandfRange(-8, 8)));
     }
 
-    private static void BuildWorkshop(Node3D root, RandomNumberGenerator rng, Site site)
+    private static void BuildWorkshop(Node3D root, RandomNumberGenerator rng, Site site, Plan plan)
     {
-        Building(root, rng, Vector3.Zero, 18f, 12f, 6.5f, rng.Randf() * Mathf.Tau, collapsed: false, shed: true);
+        Building(root, rng, plan, Vector3.Zero, 18f, 12f, 6.5f, rng.Randf() * Mathf.Tau, collapsed: false, shed: true);
         Pad(root, rng, 16f, 16f, new Vector3(18f, 0, 0));
         for (int i = 0; i < 3; i++)
             Vehicle(root, rng, Local(root, new Vector3(rng.RandfRange(-22, 22), 0, rng.RandfRange(-22, 22))));
@@ -167,7 +205,7 @@ public static class SiteKit
         Clutter(root, rng, 26f, 14);
     }
 
-    private static void BuildWreck(Node3D root, RandomNumberGenerator rng, Site site)
+    private static void BuildWreck(Node3D root, RandomNumberGenerator rng, Site site, Plan plan)
     {
         // Airframes, vehicles, a lorry on its side. The only other aircraft in the world
         // are the ones that did not make it, and they should be a genuine event to find.
@@ -183,21 +221,21 @@ public static class SiteKit
         Clutter(root, rng, 20f, 12);
     }
 
-    private static void BuildRelay(Node3D root, RandomNumberGenerator rng, Site site)
+    private static void BuildRelay(Node3D root, RandomNumberGenerator rng, Site site, Plan plan)
     {
-        Mast(root, rng, Vector3.Zero, rng.RandfRange(38f, 62f));
-        Building(root, rng, Local(root, new Vector3(9, 0, 4)), 6f, 5f, 3f, rng.Randf() * Mathf.Tau, false);
+        Mast(root, rng, plan, Vector3.Zero, rng.RandfRange(38f, 62f));
+        Building(root, rng, plan, Local(root, new Vector3(9, 0, 4)), 6f, 5f, 3f, rng.Randf() * Mathf.Tau, false);
         Fence(root, rng, 22f, 14);
         Clutter(root, rng, 20f, 5);
     }
 
-    private static void BuildDepot(Node3D root, RandomNumberGenerator rng, Site site)
+    private static void BuildDepot(Node3D root, RandomNumberGenerator rng, Site site, Plan plan)
     {
         for (int i = 0; i < rng.RandiRange(3, 6); i++)
         {
             float a = Mathf.Tau * i / 6f + rng.RandfRange(-0.3f, 0.3f);
             float r = rng.RandfRange(18f, 46f);
-            Building(root, rng, Local(root, new Vector3(Mathf.Cos(a) * r, 0, Mathf.Sin(a) * r)),
+            Building(root, rng, plan, Local(root, new Vector3(Mathf.Cos(a) * r, 0, Mathf.Sin(a) * r)),
                      rng.RandfRange(14f, 26f), rng.RandfRange(10f, 18f), rng.RandfRange(6f, 11f),
                      a, collapsed: rng.Randf() < 0.22f, shed: true);
         }
@@ -210,7 +248,7 @@ public static class SiteKit
         Clutter(root, rng, 80f, 26);
     }
 
-    private static void BuildAirfield(Node3D root, RandomNumberGenerator rng, Site site)
+    private static void BuildAirfield(Node3D root, RandomNumberGenerator rng, Site site, Plan plan)
     {
         float angle = rng.Randf() * Mathf.Tau;
         Runway(root, rng, angle, 620f, 26f);
@@ -221,7 +259,7 @@ public static class SiteKit
         for (int i = 0; i < rng.RandiRange(2, 4); i++)
         {
             Vector3 p = along * (i * 46f - 60f) + across * 44f;
-            Building(root, rng, Local(root, p), 34f, 22f, 12f, angle, collapsed: rng.Randf() < 0.3f, shed: true);
+            Building(root, rng, plan, Local(root, p), 34f, 22f, 12f, angle, collapsed: rng.Randf() < 0.3f, shed: true);
         }
         Tower(root, rng, Local(root, across * 52f + along * 70f), 18f);
         for (int i = 0; i < 3; i++)
@@ -229,17 +267,17 @@ public static class SiteKit
         Clutter(root, rng, 130f, 30);
     }
 
-    private static void BuildFarmstead(Node3D root, RandomNumberGenerator rng, Site site)
+    private static void BuildFarmstead(Node3D root, RandomNumberGenerator rng, Site site, Plan plan)
     {
         float a = rng.Randf() * Mathf.Tau;
-        Building(root, rng, Vector3.Zero, 11f, 8f, 5f, a, collapsed: rng.Randf() < 0.4f);
-        Building(root, rng, Local(root, new Vector3(14, 0, 6)), 16f, 9f, 6.5f, a, collapsed: rng.Randf() < 0.3f, shed: true);
+        Building(root, rng, plan, Vector3.Zero, 11f, 8f, 5f, a, collapsed: rng.Randf() < 0.4f);
+        Building(root, rng, plan, Local(root, new Vector3(14, 0, 6)), 16f, 9f, 6.5f, a, collapsed: rng.Randf() < 0.3f, shed: true);
         Silo(root, rng, Local(root, new Vector3(-9, 0, 11)), rng.RandfRange(9f, 15f));
         Fence(root, rng, 34f, 18);
         Clutter(root, rng, 30f, 10);
     }
 
-    private static void BuildOverlook(Node3D root, RandomNumberGenerator rng, Site site)
+    private static void BuildOverlook(Node3D root, RandomNumberGenerator rng, Site site, Plan plan)
     {
         // Nothing to take. A cairn, a bench, a view, and a survey point that fills in the
         // chart - which under a knowledge-based progression is a real reward.
@@ -260,7 +298,7 @@ public static class SiteKit
             };
             root.AddChild(r);
         }
-        Mast(root, rng, Local(root, new Vector3(3, 0, -3)), 7f);
+        Mast(root, rng, plan, Local(root, new Vector3(3, 0, -3)), 7f);
     }
 
     // -------------------------------------------------------------------- parts
@@ -282,12 +320,23 @@ public static class SiteKit
         root.AddChild(mi);
     }
 
-    private static void Building(Node3D root, RandomNumberGenerator rng, Vector3 at,
+    private static void Building(Node3D root, RandomNumberGenerator rng, Plan plan, Vector3 at,
                                  float w, float d, float h, float yaw, bool collapsed, bool shed = false)
     {
         Material wall = shed
             ? (rng.Randf() < 0.6f ? Materials.Rust : Materials.Metal)
             : (rng.Randf() < 0.5f ? Materials.Concrete : Materials.Timber);
+
+        // What the player left of it, and how far the people here have got it back up.
+        // Taken BEFORE the authored-collapse branch so the ordinal is consumed either way -
+        // a structure's identity must not depend on what state it happens to be in, or the
+        // indices shift the first time something is knocked down.
+        double built = plan.Take(SiteDamage.HouseWorkDays);
+        if (built < 1.0)
+        {
+            UnderConstruction(root, rng, at, w, d, h, yaw, wall, (float)built);
+            return;
+        }
 
         if (collapsed)
         {
@@ -507,8 +556,74 @@ public static class SiteKit
             Materials.Metal, at + Vector3.Up * (height + r * 0.3f));
     }
 
-    private static void WaterTower(Node3D root, RandomNumberGenerator rng, Vector3 at)
+    /// <summary>
+    /// A building the player knocked down, at whatever stage the people here have got it to.
+    ///
+    /// The read from the air is the whole point, and it is a sequence of silhouettes rather
+    /// than a fade: flat slabs, then a footprint of low walls, then walls at their full
+    /// height with scaffolding and no roof, then it is a building again and this method is
+    /// not called. A player who levels a village and comes back two game days later should
+    /// be able to tell at a glance, at 150 m and 60 knots, that something is happening down
+    /// there - and the thing that makes that possible is the model working the oldest ruin
+    /// first, so it is one house standing up among flat ones rather than twelve stumps.
+    /// </summary>
+    private static void UnderConstruction(Node3D root, RandomNumberGenerator rng, Vector3 at,
+                                          float w, float d, float h, float yaw, Material wall,
+                                          float built)
     {
+        // Rubble is always there. It is what was knocked down, and it does not get tidied
+        // away until the building is finished on top of it.
+        int slabs = Mathf.Max(2, (int)(6 * (1f - built)));
+        for (int i = 0; i < slabs; i++)
+        {
+            var slab = Box(rng.RandfRange(1.5f, 4f), 0.25f, rng.RandfRange(1.5f, 4f));
+            Add(root, slab, Materials.Concrete,
+                at + new Vector3(rng.RandfRange(-w, w) * 0.7f, 0.2f, rng.RandfRange(-d, d) * 0.7f),
+                0, new Vector3(rng.RandfRange(-0.6f, 0.6f), rng.Randf() * Mathf.Tau, rng.RandfRange(-0.6f, 0.6f)));
+        }
+
+        if (built <= 0.08f) return;          // still just a heap
+
+        // The walls go up. Height is the progress, which is the one cue that reads from
+        // altitude without needing to see any detail at all.
+        float wh = Mathf.Max(0.6f, h * built);
+        Add(root, Box(w, wh, d), wall, at + Vector3.Up * (wh * 0.5f), yaw);
+
+        if (built <= 0.35f) return;
+
+        // Scaffolding: four corner poles standing proud of the wall. Thin, vertical, and
+        // the thing that says "being worked on" rather than "falling down" - a ruin does
+        // not have poles standing neatly at its corners.
+        float poleH = Mathf.Min(h * 1.08f, wh + 2.2f);
+        for (int i = 0; i < 4; i++)
+        {
+            float sx = (i & 1) == 0 ? -1 : 1, sz = (i & 2) == 0 ? -1 : 1;
+            Vector3 off = new Vector3(sx * (w * 0.5f + 0.5f), 0, sz * (d * 0.5f + 0.5f)).Rotated(Vector3.Up, yaw);
+            Add(root, Box(0.18f, poleH, 0.18f), Materials.Timber,
+                at + off + Vector3.Up * (poleH * 0.5f), yaw);
+        }
+        // One plank walkway across them, at working height.
+        Add(root, Box(w + 1.2f, 0.12f, 0.5f), Materials.Timber,
+            at + Vector3.Up * (poleH * 0.72f) + new Vector3(0, 0, d * 0.5f + 0.5f).Rotated(Vector3.Up, yaw), yaw);
+    }
+
+    private static void WaterTower(Node3D root, RandomNumberGenerator rng, Plan plan, Vector3 at)
+    {
+        double standing = plan.Take(SiteDamage.TallWorkDays);
+        if (standing < 0.99)
+        {
+            // Legs first, tank last: a water tower with no tank on it is unmistakable, and
+            // it is also how one is actually built.
+            float lh = 12f * (float)standing;
+            for (int i = 0; i < 4 && lh > 1f; i++)
+            {
+                float a2 = Mathf.Tau * i / 4f;
+                Add(root, Box(0.3f, lh, 0.3f), Materials.Rust,
+                    at + new Vector3(Mathf.Cos(a2) * 2.6f, lh * 0.5f, Mathf.Sin(a2) * 2.6f), 0);
+            }
+            return;
+        }
+
         float legH = rng.RandfRange(9f, 15f);
         float r = rng.RandfRange(2.4f, 3.6f);
         for (int i = 0; i < 4; i++)
@@ -523,8 +638,25 @@ public static class SiteKit
             Materials.Rust, at + Vector3.Up * (legH + 4.6f));
     }
 
-    private static void Mast(Node3D root, RandomNumberGenerator rng, Vector3 at, float height)
+    private static void Mast(Node3D root, RandomNumberGenerator rng, Plan plan, Vector3 at, float height)
     {
+        // A mast is the most expensive thing on this list to put back up, and the one the
+        // player is most likely to drop on purpose. A downed one is a heap of lattice and a
+        // stump; a part-built one is simply shorter, which is the correct read - they are
+        // rebuilding it section by section from the bottom, because that is the only way a
+        // mast can be built.
+        double standing = plan.Take(SiteDamage.TallWorkDays);
+        if (standing < 1.0)
+        {
+            float stump = height * (float)standing;
+            for (int i = 0; i < 5; i++)
+                Add(root, Box(rng.RandfRange(1.2f, 4.5f), 0.2f, 0.2f), Materials.Rust,
+                    at + new Vector3(rng.RandfRange(-8, 8), 0.15f, rng.RandfRange(-8, 8)),
+                    0, new Vector3(0, rng.Randf() * Mathf.Tau, rng.RandfRange(-0.2f, 0.2f)));
+            if (stump < 3f) return;
+            height = stump;
+        }
+
         // A lattice mast, built as a taper of four legs. Reads as a spindle from 5 km,
         // which is exactly the job.
         int sections = Mathf.Max(3, (int)(height / 8f));

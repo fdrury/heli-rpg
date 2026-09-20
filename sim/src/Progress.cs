@@ -193,6 +193,35 @@ public sealed class Progress
 
     // ------------------------------------------------------------------ sites
 
+    // ------------------------------------------------------- what you knocked down
+
+    private readonly Dictionary<int, SiteDamage> _damage = new();
+
+    /// <summary>
+    /// Structural damage and dead at every place the player has hit.
+    ///
+    /// Separate from <see cref="SiteRecord"/> on purpose: a record is what the player has
+    /// learned about a site and is written on almost every visit, and this is what they did
+    /// TO it, which most sites never have at all. Keeping them apart means the common case
+    /// stays empty and a save does not carry a damage object for a hundred and nineteen
+    /// untouched places.
+    /// </summary>
+    public SiteDamage Damage(int siteId)
+    {
+        if (!_damage.TryGetValue(siteId, out SiteDamage? d)) _damage[siteId] = d = new SiteDamage();
+        return d;
+    }
+
+    /// <summary>Damage without creating a record for a site that has never been touched.</summary>
+    public SiteDamage? DamageOrNull(int siteId)
+        => _damage.TryGetValue(siteId, out SiteDamage? d) ? d : null;
+
+    /// <summary>Every site that has been knocked about, for the save and for the rebuild tick.</summary>
+    public IEnumerable<KeyValuePair<int, SiteDamage>> DamagedSites => _damage;
+
+    /// <summary>Restore one from a save.</summary>
+    public void RestoreDamage(int siteId, SiteDamage d) => _damage[siteId] = d;
+
     public SiteRecord Record(int siteId)
     {
         if (!_sites.TryGetValue(siteId, out SiteRecord? r)) _sites[siteId] = r = new SiteRecord();

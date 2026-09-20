@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Rotorwash.Sim;
 
 namespace Rotorwash;
 
@@ -25,6 +26,20 @@ public sealed partial class SiteStreamer : Node3D
 
     /// <summary>At most this many sites are built per frame.</summary>
     [Export] public int MaxBuildsPerFrame { get; set; } = 1;
+
+    /// <summary>
+    /// How close counts as watching, for the rebuild rule.
+    ///
+    /// Fred's rule and the right one: nobody wants to hover over a village and watch a wall
+    /// grow out of the ground. Set wider than <see cref="BuildRange"/> on purpose - if it
+    /// were narrower there would be a band where the site is streamed in and still ticking,
+    /// and a player sitting in that band would see a building jump a stage every few
+    /// seconds, which is worse than either behaviour on its own.
+    /// </summary>
+    [Export] public float WatchedRange { get; set; } = 4200f;
+
+    /// <summary>Set by Main. Without it nothing is damaged and nothing rebuilds.</summary>
+    public Rotorwash.Sim.Progress? Progress { get; set; }
 
     public Node3D? Target { get; set; }
 
@@ -65,11 +80,12 @@ public sealed partial class SiteStreamer : Node3D
             if (_active.ContainsKey(s.Id)) continue;
             if (s.Position.DistanceTo(p) > ReleaseRange) continue;
 
-            Node3D node = SiteKit.Build(s);
+            Node3D node = SiteKit.Build(s, Progress?.DamageOrNull(s.Id));
             AddChild(node);
             _active[s.Id] = node;
         }
 
+        AdvanceRebuilds(p, delta);
         UpdateCollision(p);
         UpdateCurrentSite(p);
     }
@@ -108,6 +124,53 @@ public sealed partial class SiteStreamer : Node3D
     /// generating collision for every site in a 3 km radius would cost far more than the
     /// aircraft could ever touch.
     /// </summary>
+    /// <summary>
+    /// Let the district get on with putting itself back together, everywhere the player is
+    /// not looking.
+    ///
+    /// Iterates damaged sites rather than all of them: most saves have none at all, and a
+    /// campaign that has knocked a lot about still only has a handful. A site that finishes
+    /// a structure while it is streamed OUT simply looks different when it next streams in,
+    /// which is free; one that finishes while streamed in is rebuilt, and cannot happen
+    /// anyway because a streamed-in site is inside WatchedRange and is not ticking.
+    /// </summary>
+    private void AdvanceRebuilds(Vector2 playerPos, double delta)
+    {
+        if (Progress is null) return;
+        double gameSeconds = delta * SceneMood.TimeScale;
+        if (gameSeconds <= 0) return;
+
+        var rebuilt = new List<int>();
+        foreach ((int siteId, SiteDamage damage) in Progress.DamagedSites)
+        {
+            if (damage.Ruins.Count == 0) continue;
+            Site? site = WorldMap.SiteById(siteId);
+            if (site is null) continue;
+
+            float dist = playerPos.DistanceTo(site.Position);
+            if (dist < WatchedRange) continue;               // you are there; nobody is working
+
+            // A relay is rebuilt by the district, not by the two people who live at the
+            // mast. That is both true and necessary: at a site population of 0-2 a mast
+            // would never go back up at all, and the one the announcer broadcasts from has
+            // to be able to come back.
+            int workers = site.Kind == SiteKind.Relay
+                ? Math.Max(1, WorldMap.PopulationNear(site.Position.X, site.Position.Y) / 8)
+                : damage.Workers(WorldMap.PopulationAt(site));
+
+            if (damage.Advance(gameSeconds, workers).Count > 0) rebuilt.Add(siteId);
+        }
+
+        // Anything that finished while streamed out is dropped so it rebuilds from the
+        // current damage state next time the player comes near.
+        foreach (int id in rebuilt)
+            if (_active.TryGetValue(id, out Node3D? node))
+            {
+                node.QueueFree();
+                _active.Remove(id);
+            }
+    }
+
     private void UpdateCollision(Vector2 p)
     {
         foreach (var kv in _active)

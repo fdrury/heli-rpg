@@ -186,4 +186,70 @@ public static class RebuildTests
         foreach (string p in problems) Console.WriteLine($"  !! {p}");
         return $"{problems.Count} problem(s) with who turns up next";
     }
+
+    /// <summary>
+    /// Damage survives a save, including the ORDER of the rebuild queue.
+    ///
+    /// The order is not incidental: work goes into the oldest ruin first, so a save that
+    /// round-tripped the set but reshuffled it would have the village come back and start a
+    /// different house - which is the kind of thing nobody notices for months and then
+    /// cannot explain.
+    /// </summary>
+    public static string? DamageSurvivesSave()
+    {
+        var p = Progress.NewGame();
+        p.Clock = 100 * Day;
+
+        SiteDamage d = p.Damage(42);
+        d.Level(3, SiteDamage.HouseWorkDays);
+        d.Level(1, SiteDamage.HouseWorkDays);
+        d.Level(7, SiteDamage.TallWorkDays);
+        d.LosePeople(11);
+        DaysAway(d, 2, 20);                       // part-way through the first one
+
+        p.Damage(9).LosePeople(2);                // a site with dead but nothing knocked down
+
+        var save = new SaveData();
+        save.CaptureProgress(p);
+        string json = System.Text.Json.JsonSerializer.Serialize(save);
+        SaveData? back = System.Text.Json.JsonSerializer.Deserialize<SaveData>(json);
+        if (back is null) return "the save did not deserialise";
+        Progress r = back.ApplyProgress();
+
+        SiteDamage? rd = r.DamageOrNull(42);
+        if (rd is null) return "the damaged site came back with no damage at all";
+
+        Console.WriteLine($"  site 42 before: ruins [{string.Join(", ", d.Ruins)}], " +
+                          $"{d.PopulationLost} dead, first {d.RebuildFraction(d.Ruins[0], SiteDamage.HouseWorkDays) * 100:F0}% up");
+        Console.WriteLine($"  site 42 after:  ruins [{string.Join(", ", rd.Ruins)}], " +
+                          $"{rd.PopulationLost} dead, first {rd.RebuildFraction(rd.Ruins[0], SiteDamage.HouseWorkDays) * 100:F0}% up");
+
+        var problems = new List<string>();
+        if (!rd.Ruins.SequenceEqual(d.Ruins))
+            problems.Add($"the rebuild queue came back as [{string.Join(", ", rd.Ruins)}] " +
+                         $"rather than [{string.Join(", ", d.Ruins)}] - the village will " +
+                         "start a different house after a reload");
+        if (rd.PopulationLost != d.PopulationLost)
+            problems.Add($"{d.PopulationLost} dead went in and {rd.PopulationLost} came out");
+
+        double before = d.RebuildFraction(d.Ruins[0], SiteDamage.HouseWorkDays);
+        double after = rd.RebuildFraction(rd.Ruins[0], SiteDamage.HouseWorkDays);
+        if (Math.Abs(before - after) > 1e-6)
+            problems.Add($"part-built progress went from {before:P0} to {after:P0} across the save");
+
+        if (r.DamageOrNull(9)?.PopulationLost != 2)
+            problems.Add("a site with dead but no ruins lost its dead across the save");
+
+        // And an untouched world must not write a hundred and nineteen empty damage records.
+        var clean = new SaveData();
+        clean.CaptureProgress(Progress.NewGame());
+        Console.WriteLine($"  a new game saves {clean.Damage.Count} damage record(s)");
+        if (clean.Damage.Count != 0)
+            problems.Add($"a new game wrote {clean.Damage.Count} damage records for places " +
+                         "nobody has touched");
+
+        if (problems.Count == 0) return null;
+        foreach (string pr in problems) Console.WriteLine($"  !! {pr}");
+        return $"{problems.Count} problem(s) saving what you knocked down";
+    }
 }
