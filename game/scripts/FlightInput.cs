@@ -60,10 +60,54 @@ public sealed class InputProfile
 
     /// <summary>Seconds for the keyboard collective to travel its full range.</summary>
     public float KeyboardCollectiveRate { get; set; } = 0.6f;
-    /// <summary>Seconds for a keyboard cyclic input to reach full deflection.</summary>
-    public float KeyboardCyclicRate { get; set; } = 2.5f;
+    /// <summary>
+    /// Seconds for a keyboard cyclic input to reach full deflection.
+    ///
+    /// This was 2.5 s, with a 4.0 s return, and it is the single reason the game came back
+    /// from its first real playtest as "completely unplayable, can't control the aircraft".
+    ///
+    /// A helicopter needs correcting several times a second. A control that takes two and a
+    /// half seconds to reach deflection and FOUR to come back cannot do that - and because
+    /// the return was slower than the press, corrections ratcheted: tap, tap, tap and you
+    /// are at full deflection with no quick way out of it. Measured with a pilot correcting
+    /// every single frame through the real keyboard path, the aircraft still reached 143
+    /// degrees of bank and hit the ground.
+    ///
+    /// 0.42 s to full and 0.28 s back. Still a spring rather than a switch, so a tap is a
+    /// nudge and not a step input, but the return is now FASTER than the press, which is
+    /// what makes centring decisive and stops inputs accumulating.
+    /// </summary>
+    public float KeyboardCyclicRate { get; set; } = 0.42f;
+
     /// <summary>Seconds for a released keyboard cyclic to spring back to centre.</summary>
-    public float KeyboardCyclicReturn { get; set; } = 4.0f;
+    public float KeyboardCyclicReturn { get; set; } = 0.28f;
+
+    /// <summary>
+    /// The slowest these may be, whatever a saved profile says.
+    ///
+    /// A profile written before the rates were fixed carries the old unflyable numbers, and
+    /// the saved file wins at startup - correctly, a player's own settings must not be
+    /// silently replaced. But nobody chose 2.5 s; it was a default, and leaving it in place
+    /// would mean the fix never reaches anybody who has already run the game once.
+    /// </summary>
+    public const float SlowestCyclicRate = 0.6f;
+    public const float SlowestCyclicReturn = 0.45f;
+
+    /// <summary>
+    /// How much of the cyclic's travel a keyboard can reach.
+    ///
+    /// A stick is proportional: you move it a little and you get a little. A key is not -
+    /// it is fully on or fully off - so holding one used to walk the cyclic all the way to
+    /// 100%, and normal helicopter flight lives in the first ten or twenty percent. Every
+    /// keyboard correction was therefore an enormous one, and the only question was how
+    /// long you held it for.
+    ///
+    /// Mapping the key's full travel onto 40% of the cyclic gives a keyboard player the
+    /// part of the range that is actually used, at a resolution their hardware can express.
+    /// The other 60% is still reachable with trim, which is the control a real pilot would
+    /// use for a sustained displacement anyway.
+    /// </summary>
+    public float KeyboardCyclicAuthority { get; set; } = 0.40f;
 }
 
 /// <summary>
@@ -226,8 +270,9 @@ public sealed partial class FlightInput : Node
         _rawPitch = pitch - _keyCyclicPitch;
         _rawRoll = roll + _keyCyclicRoll;
 
-        c.CyclicPitch = Mathf.Clamp(pitch - _keyCyclicPitch + TrimPitch, -1, 1);
-        c.CyclicRoll = Mathf.Clamp(roll + _keyCyclicRoll + TrimRoll, -1, 1);
+        float keyAuth = Mathf.Clamp(Profile.KeyboardCyclicAuthority, 0.05f, 1f);
+        c.CyclicPitch = Mathf.Clamp(pitch - _keyCyclicPitch * keyAuth + TrimPitch, -1, 1);
+        c.CyclicRoll = Mathf.Clamp(roll + _keyCyclicRoll * keyAuth + TrimRoll, -1, 1);
 
         // --- Pedals ----------------------------------------------------------
         float pedal = Profile.Pedal.Read();
@@ -306,6 +351,19 @@ public sealed partial class FlightInput : Node
             string json = f?.GetAsText() ?? "";
             var loaded = JsonSerializer.Deserialize<InputProfile>(json);
             if (loaded is null) return false;
+
+            // Drag an old profile's unflyable cyclic rates forward. See the comment on
+            // KeyboardCyclicRate: these were defaults rather than choices, and a saved file
+            // full of them is how a fix fails to reach the person who needs it.
+            if (loaded.KeyboardCyclicRate > InputProfile.SlowestCyclicRate)
+            {
+                GD.Print($"[input] saved cyclic rate {loaded.KeyboardCyclicRate:F2}s is from " +
+                         "before the keyboard fix - bringing it forward");
+                loaded.KeyboardCyclicRate = new InputProfile().KeyboardCyclicRate;
+            }
+            if (loaded.KeyboardCyclicReturn > InputProfile.SlowestCyclicReturn)
+                loaded.KeyboardCyclicReturn = new InputProfile().KeyboardCyclicReturn;
+
             Profile = loaded;
             return true;
         }
