@@ -2543,3 +2543,48 @@ receptive to being told where they are. This closes two of the five identified g
 **Reversibility:** high. Remove the two `AddChild` lines in `SceneMood.Apply`, revert
 `HelicopterAudio.Bus` to "Master", and delete the four new files. No other system depends
 on the reverb bus.
+
+### D-081 — Forward gun pod: air-to-ground gunnery and in-flight Rotor Time · 2026-09-20
+
+The vision doc's signature mechanic has two halves: on-foot called shots (done) and
+in-flight strafing runs against ground targets. This completes the second half.
+
+**What it is:** a fixed-forward M60 gun pod, installed as a module (`gunpod`, 45 kg,
+0.08 m² frontal drag). LMB fires while flying — aim by pointing the helicopter's nose.
+During Rotor Time (right mouse button, already available in both modes) the world slows
+to 0.3x, giving time to line up a strafing run. Rounds check every threat emitter within
+800 m using ray-to-point distance; a hit within 15 m reduces `EmitterHealth` by 0.12
+per round (~9 rounds to destroy, at 550 rpm). Destroyed emitters stop tracking, scanning,
+and engaging — the RWR goes quiet, completing D-010's progression from "jammer" to
+"emitter locator" to "emitter destroyer".
+
+**Architecture (sim layer):**
+- **`AirGunnery.cs`** — `GunPodState` (200 rounds, fire rate, range), `EmitterGunnery`
+  (ray-point hit testing, emitter damage application), `GunHitResult` record.
+- **`Threats.cs`** — `ThreatTrack.EmitterHealth` (already existed), `Destroyed` property.
+  `ThreatField.Update` now skips destroyed emitters, resetting them to `Idle`.
+- **`Loadout.cs`** — `gunpod` module added to catalog and distribution pool.
+
+**Architecture (game layer):**
+- **`GunPodController.cs`** — manages cooldown, calls `EmitterGunnery` with helicopter
+  nose direction, returns `GunHitResult` for HUD feedback.
+- **`Main.cs`** — LMB fires gun pod while flying (sidearm on foot); install/remove hooks;
+  save/load for gun rounds and emitter health.
+- **`FlightHud.cs`** — gun crosshair (widens during Rotor Time), ammo bar, hit feedback
+  text (only hits shown — at 550 rpm, showing misses is unreadable).
+
+**Save/load:** `GunRounds` and `EmitterHealth` dictionary (keyed by emitter ID, only
+storing damaged/destroyed entries) added to `SaveData`. Old saves load with full ammo and
+all emitters intact, which is correct.
+
+**Six simlab tests:** `gun_ammo`, `gun_raypoint`, `gun_emitter`, `gun_destroyed`,
+`gun_save`, `gun_module`.
+
+**Why a module, not a default:** D-011's "avionics ARE the skill tree" philosophy. The
+gun pod is found, installed, and has real mass and drag consequences. A player who installs
+it trades 45 kg of payload and 0.08 m² of drag for the ability to fight back from the
+cockpit. The weight shifts CG forward, which changes handling.
+
+**Reversibility:** high. Remove the `gunpod` entry from `Loadout.All`, delete
+`GunPodController.cs`, revert the input/HUD/save additions in `Main.cs` and `FlightHud.cs`.
+No other system depends on gunnery.

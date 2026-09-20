@@ -65,6 +65,12 @@ public sealed class ThreatTrack
 
     /// <summary>True once the player has been painted by this emitter at least once.</summary>
     public bool EverDetected;
+
+    /// <summary>Emitter health, 1.0 = operational, 0 = destroyed by gunfire.</summary>
+    public double EmitterHealth = 1.0;
+
+    /// <summary>True when the emitter has been destroyed and should stop tracking.</summary>
+    public bool Destroyed => EmitterHealth <= 0;
 }
 
 /// <summary>What happened to the aircraft this step.</summary>
@@ -229,6 +235,15 @@ public sealed class ThreatField
 
         foreach (ThreatTrack t in _tracks)
         {
+            // D-081: a destroyed emitter is wreckage — it stops scanning, tracking,
+            // and engaging. The track state freezes at Idle so the RWR stops showing it.
+            if (t.Destroyed)
+            {
+                t.State = TrackState.Idle;
+                t.Confidence = 0;
+                continue;
+            }
+
             ThreatEmitter e = t.Emitter;
             t.TimeInState += dt;
             t.CooldownRemaining = Math.Max(0, t.CooldownRemaining - dt);

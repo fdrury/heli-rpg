@@ -865,8 +865,9 @@ public static class RadioTests
 
         // Adding it must not have moved any other module's drag budget.
         foreach (ModuleDef m in Loadout.All)
-            if (m.Id != "suppressor" && (Math.Abs(m.DragDelta.X) + Math.Abs(m.DragDelta.Y)
-                                       + Math.Abs(m.DragDelta.Z)) > 0.001)
+            if (m.Id is not "suppressor" and not "gunpod"
+                && (Math.Abs(m.DragDelta.X) + Math.Abs(m.DragDelta.Y)
+                   + Math.Abs(m.DragDelta.Z)) > 0.001)
                 return $"module '{m.Id}' has an unexpected drag delta";
         if (Loadout.All.Count != Loadout.Catalog.Count) return "catalogue and list disagree";
 

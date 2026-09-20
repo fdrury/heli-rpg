@@ -57,10 +57,21 @@ public sealed class SaveData
     public int SidearmSpare { get; set; } = 12;
     public float RotorTimeCharge { get; set; }
 
+    // ---- gun pod (D-081) ----
+    public int GunRounds { get; set; } = 200;
+
     // ---- threats ----
     public int ChaffRemaining { get; set; }
     public int FlaresRemaining { get; set; }
     public List<int> DetectedEmitters { get; set; } = new();
+
+    /// <summary>
+    /// Emitter health for emitters damaged or destroyed by gunfire (D-081).
+    /// Keyed by emitter id. Only emitters below 1.0 are stored; a missing entry
+    /// means full health. A save written before this field existed loads with all
+    /// emitters intact, which is correct.
+    /// </summary>
+    public Dictionary<int, double> EmitterHealth { get; set; } = new();
 
     /// <summary>
     /// Regional readiness levels that outlive the sortie. Keyed by region ordinal

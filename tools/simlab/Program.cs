@@ -200,6 +200,12 @@ public static class Program
         Run("sling_hover", SlingTests.HoverCost);
         Run("sling_jettison", SlingTests.Jettison);
         Run("sling_bucket", SlingTests.Bucket);
+        Run("gun_ammo", GunneryTests.AmmoDepletion);
+        Run("gun_raypoint", GunneryTests.RayPointDistance);
+        Run("gun_emitter", GunneryTests.EmitterDamage);
+        Run("gun_destroyed", GunneryTests.DestroyedStopsTracking);
+        Run("gun_save", GunneryTests.SaveRoundTrip);
+        Run("gun_module", GunneryTests.GunPodModule);
         Run("acoustics_open", AcousticsTests.OpenGround);
         Run("acoustics_valley", AcousticsTests.Valley);
         Run("acoustics_water", AcousticsTests.OverWater);

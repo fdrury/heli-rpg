@@ -60,8 +60,9 @@ godot --path game -- --screenshot
 ```
 
 Controls: `W`/`S` or throttle = collective · arrows or stick = cyclic · `A`/`D` or twist =
-pedals · `TAB` kneeboard · `1`-`4` actions · `Z`/`X` chaff/flares · `C` camera ·
-`F2` stability augmentation (requires module) · `R` respawn · `F5` save · `F9` load.
+pedals · `TAB` kneeboard · `1`-`4` actions · `Z`/`X` chaff/flares · `LMB` gun (requires
+module) · `RMB` Rotor Time · `C` camera · `F2` stability augmentation (requires module) ·
+`R` respawn · `F5` save · `F9` load.
 
 Cockpit look: middle mouse + drag or hat/D-pad or numpad 4/6/8/2 · numpad 5 or Home = centre ·
 `L` padlock nearest threat/site · release = spring return to forward.
@@ -157,6 +158,18 @@ in place). Ammo counter, pilot health bar, red vignette damage flash, and shot-f
 text all draw in the existing HUD aesthetic. The combattest exercises the full cycle:
 fly, land, shut down, dismount, spawn NPC, hip fire, aimed torso shot, Rotor Time
 headshot, reload, pilot damage, board.
+
+**Air gunnery** — the vision doc's signature mechanic in flight (D-081). A fixed-forward
+M60 gun pod, installed as a module (45 kg, 0.08 m² drag, 3 parts). Aim by pointing the
+helicopter's nose; LMB fires at ~550 rpm. During Rotor Time the world slows to 0.3x for
+lined-up strafing runs. Each round checks every threat emitter within 800 m using
+ray-to-point distance; hits within 15 m reduce emitter health by 0.12 per round (~9 hits
+to destroy). A destroyed emitter stops tracking, scanning, and engaging — the RWR goes
+quiet. Turns the threat layer from a wall into a target. The gun pod appears in site
+distribution and is installed at workshops like any other module. HUD shows a crosshair
+(widened during RT), ammo bar, and hit/destroyed feedback. Gun rounds and emitter health
+persist through save/load. Six simlab tests: ammo, ray geometry, emitter damage,
+destroyed-stops-tracking, save round-trip, module catalog.
 
 **Hostile site encounters** — combat integrated into the world (D-060). Wrecks, depots
 and airfields in tier 1+ have a seed-based chance of being guarded by scavengers;

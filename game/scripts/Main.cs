@@ -31,6 +31,7 @@ public sealed partial class Main : Node3D
     private PilotController _pilot = null!;
     private RotorTime _rotorTime = null!;
     private Sidearm _sidearm = null!;
+    private GunPodController _gunpod = null!;
     private readonly System.Collections.Generic.List<HostileNpc> _hostileNpcs = new();
     private StormEffects _storm = null!;
     private FogOfWar _fog = new();
@@ -48,6 +49,7 @@ public sealed partial class Main : Node3D
     public GameMode Mode => _mode;
     public RotorTime RotorTimeSystem => _rotorTime;
     public Sidearm Sidearm => _sidearm;
+    public GunPodController GunPod => _gunpod;
     public FogOfWar Fog => _fog;
 
     public override void _Ready()
@@ -110,6 +112,9 @@ public sealed partial class Main : Node3D
         _sidearm = new Sidearm { Name = "Sidearm" };
         AddChild(_sidearm);
 
+        _gunpod = new GunPodController { Name = "GunPod" };
+        AddChild(_gunpod);
+
         _landing = new LandingController { Name = "Landing", HelicopterPath = _heli.GetPath() };
         AddChild(_landing);
 
@@ -163,6 +168,7 @@ public sealed partial class Main : Node3D
         layer.AddChild(_hud);
         _hud.SetRotorTime(_rotorTime);
         _hud.SetSidearm(_sidearm);
+        _hud.SetGunPod(_gunpod);
         _hud.SetCamera(_camera);
 
         _kneeboard = new Kneeboard
@@ -322,6 +328,9 @@ public sealed partial class Main : Node3D
                 case "suppressor":
                     _threats.Fit(Countermeasure.ExhaustSuppressor);
                     break;
+                case "gunpod":
+                    _gunpod.Installed = true;
+                    break;
             }
         };
 
@@ -344,6 +353,9 @@ public sealed partial class Main : Node3D
                     break;
                 case "suppressor":
                     _threats.Unfit(Countermeasure.ExhaustSuppressor);
+                    break;
+                case "gunpod":
+                    _gunpod.Installed = false;
                     break;
             }
         };
@@ -448,11 +460,19 @@ public sealed partial class Main : Node3D
             return;
         }
 
-        // Left click: fire sidearm when on foot.
-        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } && _mode == GameMode.OnFoot)
+        // Left click: fire sidearm on foot, gun pod while flying.
+        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
         {
-            FireSidearm();
-            return;
+            if (_mode == GameMode.OnFoot)
+            {
+                FireSidearm();
+                return;
+            }
+            if (_mode == GameMode.Flying && _gunpod.Installed)
+            {
+                FireGunPod();
+                return;
+            }
         }
 
         if (@event is not InputEventKey { Pressed: true, Echo: false } key) return;
@@ -708,6 +728,13 @@ public sealed partial class Main : Node3D
         _sidearm.Fire(origin, direction, space);
     }
 
+    /// <summary>Fire the gun pod along the helicopter's nose.</summary>
+    private void FireGunPod()
+    {
+        Vector3 noseDirection = -_heli.GlobalTransform.Basis.Z;
+        _gunpod.Fire(_heli.GlobalPosition, noseDirection, _threats);
+    }
+
     // ------------------------------------------------------- mode transitions
 
     /// <summary>Can the pilot get out? Settled, shut down, on the ground.</summary>
@@ -950,10 +977,17 @@ public sealed partial class Main : Node3D
         foreach (var (siteId, (npc, bank)) in _play.AllNpcs)
             data.Npcs.Add(SaveData.CaptureNpc(siteId, npc, bank));
 
-        // Threat detection history
+        // Gun pod
+        data.GunRounds = _gunpod.State.Rounds;
+
+        // Threat detection history and emitter health
         foreach (var track in _threats.Field.Tracks)
+        {
             if (track.EverDetected)
                 data.DetectedEmitters.Add(track.Emitter.Id);
+            if (track.EmitterHealth < 1.0)
+                data.EmitterHealth[track.Emitter.Id] = track.EmitterHealth;
+        }
 
         // Alert: regional readiness that outlives the sortie
         data.CaptureAlert(_threats.Alert);
@@ -1024,12 +1058,20 @@ public sealed partial class Main : Node3D
         _sidearm.State.SpareRounds = data.SidearmSpare;
         _rotorTime.Charge = data.RotorTimeCharge;
 
-        // Threats: restore countermeasure quantities and detection history
+        // Gun pod
+        _gunpod.State.Rounds = data.GunRounds;
+        _gunpod.Installed = _play.Loadout.IsInstalled("gunpod");
+
+        // Threats: restore countermeasure quantities, detection history, and emitter health
         _threats.Field.ChaffRemaining = data.ChaffRemaining;
         _threats.Field.FlaresRemaining = data.FlaresRemaining;
         var detectedSet = new System.Collections.Generic.HashSet<int>(data.DetectedEmitters);
         foreach (var track in _threats.Field.Tracks)
+        {
             track.EverDetected = detectedSet.Contains(track.Emitter.Id);
+            if (data.EmitterHealth.TryGetValue(track.Emitter.Id, out double hp))
+                track.EmitterHealth = hp;
+        }
 
         // Re-sync countermeasure fitted flags from loadout
         ReapplyThreatFittings();
@@ -1070,8 +1112,9 @@ public sealed partial class Main : Node3D
 
         _heli.Sim.InvalidateMass();
 
-        // SAS authority
+        // SAS authority and gun pod
         _heli.SasAuthority = _play.Loadout.IsInstalled("sas") ? 1f : 0f;
+        _gunpod.Installed = _play.Loadout.IsInstalled("gunpod");
     }
 
     /// <summary>Re-sync threat field fitted flags from the current loadout.</summary>

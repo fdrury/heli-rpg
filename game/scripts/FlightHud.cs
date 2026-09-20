@@ -29,6 +29,7 @@ public sealed partial class FlightHud : Control
     private ThreatWorld? _threats;
     private RotorTime? _rotorTime;
     private Sidearm? _sidearm;
+    private GunPodController? _gunpod;
     private Camera3D? _camera;
     private Font _font = null!;
     private double _warnBlink;
@@ -65,6 +66,7 @@ public sealed partial class FlightHud : Control
 
     public void SetRotorTime(RotorTime rt) => _rotorTime = rt;
     public void SetSidearm(Sidearm s) => _sidearm = s;
+    public void SetGunPod(GunPodController g) => _gunpod = g;
     public void SetCamera(Camera3D cam) => _camera = cam;
     public void SetOnFoot(bool onFoot) => _onFoot = onFoot;
 
@@ -124,6 +126,7 @@ public sealed partial class FlightHud : Control
         DrawSitePanel(new Vector2(size.X * 0.5f - 250, size.Y - 300));
         DrawWarnings(new Vector2(size.X * 0.5f, size.Y - 122), t);
         DrawDeltaCard(new Vector2(28, size.Y * 0.62f));
+        DrawGunPod(size);
         DrawFooter(size);
     }
 
@@ -536,7 +539,7 @@ public sealed partial class FlightHud : Control
     private void DrawFooter(Vector2 size)
     {
         string help = "W/S or throttle: collective   arrows or stick: cyclic   A/D: pedals   " +
-                      "C: camera   TAB: kneeboard   1-4: actions   Z/X: chaff/flares   M: ack warnings   F: dismount   R: respawn";
+                      "C: camera   TAB: kneeboard   1-4: actions   Z/X: chaff/flares   LMB: gun   F: dismount   R: respawn";
         DrawString(_font, new Vector2(20, size.Y - 16), help, HorizontalAlignment.Left, -1, 12,
                    Dim * new Color(1, 1, 1, 0.55f));
     }
@@ -812,6 +815,88 @@ public sealed partial class FlightHud : Control
                            HorizontalAlignment.Left, -1, nearCross ? 12 : 10, c);
             }
         }
+    }
+
+    // --------------------------------------------------------- gun pod (D-081)
+
+    /// <summary>
+    /// Gun pod HUD: crosshair, ammo counter, and hit feedback while flying with
+    /// the gun pod installed. During Rotor Time the crosshair expands and the
+    /// ammo readout is more prominent.
+    /// </summary>
+    private void DrawGunPod(Vector2 size)
+    {
+        if (_gunpod is not { Installed: true }) return;
+
+        // Gun crosshair — always visible when the pod is fitted, larger during RT.
+        DrawGunCrosshair(size);
+        DrawGunAmmo(new Vector2(size.X - 180, size.Y - 168));
+        DrawGunHitFeedback(size);
+    }
+
+    private void DrawGunCrosshair(Vector2 size)
+    {
+        Vector2 c = size * 0.5f;
+        bool rt = _rotorTime is { Active: true };
+        Color col = rt ? RtActive : Bright * new Color(1, 1, 1, 0.70f);
+        float len = rt ? 20f : 12f;
+        float gap = rt ? 6f : 8f;
+
+        // Four lines forming a gapped cross — same pattern as the sidearm crosshair
+        // but wider and with a different gap to visually distinguish air mode.
+        DrawLine(c + new Vector2(-len - gap, 0), c + new Vector2(-gap, 0), col, 1.6f, true);
+        DrawLine(c + new Vector2(gap, 0), c + new Vector2(len + gap, 0), col, 1.6f, true);
+        DrawLine(c + new Vector2(0, -len - gap), c + new Vector2(0, -gap), col, 1.6f, true);
+        DrawLine(c + new Vector2(0, gap), c + new Vector2(0, len + gap), col, 1.6f, true);
+
+        // During RT: centre dot and outer ring for "weapon active" emphasis.
+        if (rt)
+        {
+            DrawCircle(c, 2.5f, col);
+            DrawArc(c, len + gap + 4, 0, Mathf.Tau, 32, col * new Color(1, 1, 1, 0.45f), 1.2f);
+        }
+    }
+
+    private void DrawGunAmmo(Vector2 origin)
+    {
+        if (_gunpod is null) return;
+        var s = _gunpod.State;
+
+        DrawRect(new Rect2(origin, new Vector2(156, 42)), Panel);
+        Label(origin + new Vector2(10, 16), "GUN", Dim, 11);
+
+        // Ammo bar: simple fill showing remaining rounds.
+        float frac = (float)s.Rounds / s.MaxRounds;
+        Color c = frac < 0.15f ? Danger : frac < 0.30f ? Warn : Bright;
+        Bar(origin + new Vector2(50, 10), 96, frac, c);
+        Label(origin + new Vector2(50, 32), $"{s.Rounds}", c, 12);
+    }
+
+    private void DrawGunHitFeedback(Vector2 size)
+    {
+        if (_gunpod is null) return;
+        float t = _gunpod.TimeSinceLastShot;
+        if (t > 1.5f) return;
+
+        var hit = _gunpod.LastHit;
+        if (hit is null) return;
+
+        float alpha = Mathf.Clamp(1f - t / 1.5f, 0, 1);
+        // Show slightly above centre — same position as sidearm feedback but offset
+        // up to avoid overlapping with the attitude indicator.
+        Vector2 pos = new(size.X * 0.5f, size.Y * 0.32f);
+
+        if (hit.Value.Kind is GunHitKind.EmitterHit or GunHitKind.EmitterDestroyed)
+        {
+            Color c = hit.Value.Kind == GunHitKind.EmitterDestroyed ? Danger : Warn;
+            c.A *= alpha;
+            string text = hit.Value.Description.ToUpperInvariant();
+            var sz = _font.GetStringSize(text, HorizontalAlignment.Left, -1, 16);
+            DrawString(_font, pos - new Vector2(sz.X / 2, 0), text,
+                       HorizontalAlignment.Left, -1, 16, c);
+        }
+        // Misses are not shown — at 550 rpm, showing "MISS" for every round that
+        // doesn't hit would be unreadable. The hits are the signal.
     }
 
     // --------------------------------------------------------------- helpers

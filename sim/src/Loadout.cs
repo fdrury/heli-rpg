@@ -134,6 +134,14 @@ public sealed class Loadout
         new("radio",        "Cockpit radio",
             "A receiver and a tape deck. Runs off the avionics bus.",
             9,  new Vec3(1.9, -0.35, -0.30),  Vec3.Zero,           0,     1),
+
+        // D-081: fixed forward M60 gun pod. The vision doc's signature mechanic in flight:
+        // aim by pointing the helicopter's nose, fire during Rotor Time. Turns a threat
+        // emitter from a wall into a target (D-010). 45 kg is a real M60 in a stub mount
+        // plus 200 rounds of 7.62 belted ammunition. The drag is the pod fairing.
+        new("gunpod",       "Gun pod",
+            "Fixed forward M60. Aim with the nose.",
+            45, new Vec3(1.2, 0.6, 0.15),     new Vec3(0.08, 0, 0), 0,    3),
     };
 
     public static readonly IReadOnlyDictionary<string, ModuleDef> Catalog;
@@ -161,6 +169,7 @@ public sealed class Loadout
             "sas", "sas", "rwr", "rwr",
             "chaff", "chaff", "flares", "flares",
             "suppressor", "tank", "hook", "hoist",
+            "gunpod",
         };
         return pool[rng.Next(pool.Length)];
     }

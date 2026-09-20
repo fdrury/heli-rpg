@@ -123,10 +123,10 @@ public static class LoadoutTests
         if (newDrag.X <= baseDrag.X)
             return "suppressor drag delta did not increase forward drag";
 
-        // Other modules should have zero drag delta
+        // Other modules should have zero drag delta (except the gun pod fairing)
         foreach (var m in Loadout.All)
         {
-            if (m.Id == "suppressor") continue;
+            if (m.Id is "suppressor" or "gunpod") continue;
             double mag = Math.Abs(m.DragDelta.X) + Math.Abs(m.DragDelta.Y) + Math.Abs(m.DragDelta.Z);
             if (mag > 0.001)
                 return $"module '{m.Id}' has unexpected non-zero drag delta {m.DragDelta}";
