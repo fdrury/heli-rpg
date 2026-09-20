@@ -122,8 +122,10 @@ public sealed partial class CockpitRadio : Node3D
     private AudioStreamPlayer3D? _player;
     private AudioStreamGeneratorPlayback? _playback;
     private float[] _pcm = new float[8192];
+    private float[] _voiceBuf = new float[4096];
     private Vector2[] _out = new Vector2[4096];
     private double _smoothedGain;
+    private bool _onDj;
 
     private double _skidHeight = 2.0;
     private double _lastHeight;
@@ -334,10 +336,11 @@ public sealed partial class CockpitRadio : Node3D
         // knowing that either thing exists.
         if (_dj is not null)
         {
-            bool onHim = haveStation && station.Url.Length == 0 && _set.Playing;
-            if (!onHim) _dj.Silence();
+            _onDj = haveStation && station.Url.Length == 0 && _set.Playing;
+            if (!_onDj) _dj.Silence();
             else _dj.Update(delta, BuildDjWorld(), signal * _mix.Gain);
         }
+        else _onDj = false;
 
         PushAudio(delta);
         _readout?.QueueRedraw();
@@ -371,6 +374,20 @@ public sealed partial class CockpitRadio : Node3D
 
         int got = _set.WantsStream ? _stream.Read(_pcm, frames) : 0;
         for (int i = got * 2; i < frames * 2; i++) _pcm[i] = 0;
+
+        // Voice from the announcer. Rendered into the same buffer the stream feeds,
+        // so it goes through the same volume knob and duck path. Mono, spread to both
+        // channels — a man on a radio is centred, not stereo.
+        if (_onDj && _dj is not null && _dj.HasVoice)
+        {
+            if (_voiceBuf.Length < frames) _voiceBuf = new float[frames];
+            _dj.RenderVoice(_voiceBuf.AsSpan(0, frames), frames);
+            for (int i = 0; i < frames; i++)
+            {
+                _pcm[i * 2] += _voiceBuf[i];
+                _pcm[i * 2 + 1] += _voiceBuf[i];
+            }
+        }
 
         double blockSeconds = frames / (double)SampleRate;
         double agc = got > 0 ? _agc.Update(_pcm.AsSpan(0, got * 2), blockSeconds) : _agc.Gain;
@@ -505,7 +522,7 @@ public sealed partial class CockpitRadio : Node3D
             if (UplandService.Station is RadioStation local && local.Id == k.Id)
             {
                 _tuned.Add(local);
-                _dj ??= new DjBroadcast(siteId);
+                _dj ??= new DjBroadcast(siteId, _quiet ? 0 : SampleRate);
                 continue;
             }
 

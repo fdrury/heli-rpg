@@ -95,7 +95,10 @@ on flat sheltered ground.
 
 **Audio** — synthesised live from the flight model. No samples. Verified spectrally: the
 blade slap sits at the blade-pass frequency the physics predicts and is loudest in a
-loaded turn.
+loaded turn. The announcer's voice is a formant-based murmur through a radio band-pass
+(D-078): nobody understands the words, but the rhythm and timbre read as a man on the
+radio. Carrier hiss between sentences. Four synth engines total: rotor, weather, warnings,
+voice.
 
 **Threat** — five classes, each owning an altitude band, with real terrain masking: a ray
 walked from every emitter to the aircraft through the actual height field. A SAM cannot see
@@ -313,10 +316,13 @@ lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, a
    against live weather, alert state and the player's own deeds, and `--djreport` measures
    the whole path. He is Hollis Kerr, on Old Tor; 157 breaks in eighteen hours, 5.8% of
    the airtime, and he does not mention the salvage run nobody watched.
-6. **He has no voice.** His lines arrive as timed captions paced by `RadioDj.ReadSeconds` -
-   the duration the audio would have taken - because there is no TTS and no recorded VO.
-   Everything else about him is live. This is the biggest remaining gap in the feature and
-   it is confined to `DjBroadcast` and `RadioReadout`.
+6. ~~**He has no voice.**~~ **DONE** (D-078). `VoiceSynth` generates a formant-based murmur —
+   a glottal pulse train at ~105 Hz through three resonant filters with syllable-rate
+   amplitude modulation, band-passed to 300–3400 Hz for radio character. Nobody understands
+   the words; the captions still carry meaning; through the radio channel the rhythm and
+   timbre read as a man talking. Carrier hiss fills gaps between sentences. The voice goes
+   through the same volume knob and warning duck as the music stations. Four simlab tests
+   check waveform, carrier hiss, voice-above-hiss ratio, and duration accuracy.
 7. **The drowned wreck is dry.** `--worldreport` warns that `DrowningWreck` sits 11.9 m
    above the waterline, and story beat 8 wants an aircraft half in the water. The region
    itself is now genuinely wet (38.9% standing water after D-077), so the ground is no

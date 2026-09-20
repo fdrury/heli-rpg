@@ -2400,3 +2400,33 @@ them restores the old world exactly. Anything that hard-codes a world extent has
 them — `ContentHalfExtent`, `IslandHalfExtent`, `BasinCentre` and the report threshold are the
 four found so far, and the pattern to expect is a constant that was sized against the old
 13 km envelope and says nothing about which envelope it meant.
+
+---
+
+### D-078 — Announcer voice: formant synthesis, not TTS · 2026-09-20
+
+**Decision.** Give Hollis Kerr a synthesised voice rather than waiting for TTS or recorded VO.
+`VoiceSynth` in `sim/src/` generates a formant-based murmur: a glottal pulse train at ~105 Hz
+(low male, fifties) through three resonant filters whose frequencies wander, with syllable-rate
+amplitude modulation derived from the text's word count and a 300–3400 Hz radio band-pass.
+Nobody will understand the words — the captions still carry the meaning — but through a radio
+channel the rhythm, pitch and timbre read as a man talking. Carrier hiss fills the gaps between
+sentences, so tuning to the Upland Service always sounds like a live station.
+
+**Why murmur, not real TTS.** (1) No external dependency — no model file, no library, no
+runtime cost in the D-006 sense. (2) Matches the project's "synthesised from state, not
+sampled" philosophy that RotorSynth, WeatherSynth and WarningSynth already follow. (3) Pure
+.NET, engine-free, testable offline — four new simlab tests check waveform quality, carrier
+hiss, voice-above-hiss ratio, and duration accuracy. (4) The radio band-pass already strips
+most of what makes words intelligible; what remains is timing and timbre, which this provides.
+(5) A real TTS voice that sometimes gets the words slightly wrong would break the "facts, not
+instructions" contract more damagingly than a murmur that is obviously not trying to be words.
+
+**What changed.** `VoiceSynth` (sim/src/, ~230 lines, no Godot dependency). `DjBroadcast`
+gained a `VoiceSynth` instance and a `RenderVoice` method; it calls `Speak(text, duration)`
+when a segment starts and `Stop()` when it ends. `CockpitRadio.PushAudio` renders voice PCM
+into the same buffer the radio stream feeds, so the voice goes through the volume knob and
+warning duck without knowing either exists.
+
+**Reversibility:** high. Remove `VoiceSynth`, revert the three-line changes in
+`DjBroadcast` and `CockpitRadio`, and captions alone remain — which is what was there before.

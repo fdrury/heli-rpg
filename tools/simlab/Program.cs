@@ -80,6 +80,10 @@ public static class Program
         Run("bladepass", AudioTests.BladePass);
         Run("audiostate", AudioTests.RespondsToState);
         Run("weatheraudio", AudioTests.WeatherAudio);
+        Run("voicewave", VoiceTests.Waveform);
+        Run("voicehiss", VoiceTests.CarrierHiss);
+        Run("voicelevel", VoiceTests.VoiceAboveHiss);
+        Run("voiceduration", VoiceTests.Duration);
         Run("solar", WeatherTests.Solar);
         Run("weather", WeatherTests.Conditions);
         Run("windeffect", WeatherTests.WindEffect);

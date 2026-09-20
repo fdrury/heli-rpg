@@ -16,13 +16,12 @@ namespace Rotorwash;
 /// built system that is not wired in costs maintenance and returns nothing. This is the
 /// wire.</para>
 ///
-/// <para><b>What it does not do.</b> It does not speak. There is no text-to-speech here and
-/// no recorded voice, so his lines arrive as timed captions paced by
-/// <see cref="RadioDj.ReadSeconds"/> - the same duration the audio would have taken. That is
-/// a real limitation and not a placeholder for one: the pacing, the gaps where the records
-/// are, the reception gating and everything the announcer decides to say are all live, and
-/// the only missing piece is a voice. Swapping captions for audio later changes this file
-/// and nothing else.</para>
+/// <para><b>He speaks.</b> <see cref="VoiceSynth"/> generates a formant-based murmur
+/// at the reading pace <see cref="RadioDj.ReadSeconds"/> already calculates. Nobody will
+/// understand the words — the captions carry the meaning — but through a 300–3400 Hz radio
+/// band-pass the rhythm, pitch and timbre read as a man talking on the radio. Carrier hiss
+/// fills the gaps between sentences, so tuning to the Upland Service always sounds like a
+/// station is there.</para>
 /// </summary>
 public static class UplandService
 {
@@ -128,6 +127,7 @@ public sealed class DjBroadcast
 {
     private readonly DjHost _host;
     private readonly Queue<DjSegment> _pending = new();
+    private readonly VoiceSynth? _voice;
 
     private double _sinceBoundary;
     private double _captionLeft;
@@ -152,7 +152,17 @@ public sealed class DjBroadcast
     /// </summary>
     public const double ReadableQuality = 0.15;
 
-    public DjBroadcast(int seed) => _host = new DjHost(seed);
+    /// <param name="seed">Site id of the transmitter.</param>
+    /// <param name="sampleRate">Audio sample rate, or 0 to disable voice synthesis (headless).</param>
+    public DjBroadcast(int seed, int sampleRate = 0)
+    {
+        _host = new DjHost(seed);
+        if (sampleRate > 0)
+        {
+            _voice = new VoiceSynth(sampleRate, seed);
+            _voice.OnAir = true;
+        }
+    }
 
     /// <summary>What he is saying this instant, or null when a record is on.</summary>
     public string? Caption => _current?.Text;
@@ -183,6 +193,10 @@ public sealed class DjBroadcast
             {
                 _current = _pending.Count > 0 ? _pending.Dequeue() : null;
                 _captionLeft = _current?.Seconds ?? 0;
+                if (_current is not null)
+                    _voice?.Speak(_current.Value.Text, _current.Value.Seconds);
+                else
+                    _voice?.Stop();
             }
             return;
         }
@@ -201,6 +215,7 @@ public sealed class DjBroadcast
 
         _current = _pending.Dequeue();
         _captionLeft = _current.Value.Seconds;
+        _voice?.Speak(_current.Value.Text, _current.Value.Seconds);
     }
 
     /// <summary>Switched off, or tuned away. He carries on without you; you just stop hearing it.</summary>
@@ -209,5 +224,17 @@ public sealed class DjBroadcast
         _pending.Clear();
         _current = null;
         _captionLeft = 0;
+        _voice?.Stop();
     }
+
+    /// <summary>
+    /// Render <paramref name="count"/> mono voice samples into <paramref name="buffer"/>.
+    /// Outputs carrier hiss when on air but between sentences, voice when speaking,
+    /// silence when off. Called by <see cref="CockpitRadio"/> in PushAudio.
+    /// </summary>
+    public void RenderVoice(Span<float> buffer, int count)
+        => _voice?.Render(buffer, count);
+
+    /// <summary>True when the voice synth has something to output (voice or carrier hiss).</summary>
+    public bool HasVoice => _voice is not null;
 }
