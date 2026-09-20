@@ -49,7 +49,6 @@ public static class GovernorTests
         public double SteadyNr;       // mean over the last two seconds
         public double Recovery;       // s from the pull to back within 0.3% of SteadyNr
         public double PeakTorque;
-        public double EndAltitude;
         public bool Flyable;          // still upright, still in one piece, rotor still turning
     }
 
@@ -134,7 +133,6 @@ public static class GovernorTests
         foreach (var (t, nr) in trace)
             if (t > r.TimeToMin && nr >= r.SteadyNr - 0.005) { r.Recovery = t; break; }
 
-        r.EndAltitude = heli.State.Altitude;
         r.Flyable = NrFraction(heli) > 0.80
                     && Math.Abs(heli.State.Orientation.Roll) < 0.6
                     && Math.Abs(heli.State.Orientation.Pitch) < 0.6
@@ -560,7 +558,6 @@ public static class GovernorTests
         public double HoverTorqueFrac;
         public double HoverCollective;
         public double ClimbRateFpm;
-        public double ClimbLever;
         public double ClimbTorque;
         public string StoppedBy;
         public bool CanHover;
@@ -572,7 +569,7 @@ public static class GovernorTests
     /// </summary>
     static DayResult MeasureDay(double isaDev, double altitude)
     {
-        var r = new DayResult();
+        var r = new DayResult { StoppedBy = "-" };
         var heli = MakeHeli(isaDev, groundElevation: altitude - 500);
         heli.PlaceInFlightTrimmed(altitude, 0);
 
@@ -616,7 +613,6 @@ public static class GovernorTests
             heli.Step(Dt);
             if (i > ramp - (int)(6 / Dt)) { vs += -heli.State.Velocity.Z; vsN++; }
         }
-        r.ClimbLever = lever;
         r.ClimbTorque = heli.Telemetry.TorquePercent / 100.0;
         r.ClimbRateFpm = vs / Math.Max(vsN, 1) * 196.85;
         return r;
@@ -653,7 +649,7 @@ public static class GovernorTests
             Console.WriteLine($"  {days[i].label,-28} {r.DensityAltitude,13:F0} {r.PowerAvailableKw,10:F0} " +
                               $"{r.HoverTorqueFrac * 100,13:F0}% {r.HoverCollective,13:F3} " +
                               $"{r.ClimbRateFpm,15:F0} fpm at {r.ClimbTorque * 100:F0}% torque, " +
-                              $"stopped by {r.StoppedBy ?? "-"}" +
+                              $"stopped by {r.StoppedBy}" +
                               $"{(r.CanHover ? "" : "   <-- cannot hold the hover")}");
         }
         Console.WriteLine();

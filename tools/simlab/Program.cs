@@ -151,6 +151,7 @@ public static class Program
         Run("save_loadout", SaveTests.LoadoutRoundTrip);
         Run("save_npc", SaveTests.NpcRoundTrip);
         Run("save_fog", SaveTests.FogRoundTrip);
+        Run("save_alert", SaveTests.AlertRoundTrip);
         Run("save_full", SaveTests.FullRoundTrip);
         Run("salvage_hours", SalvageTests.FlightHours);
         Run("salvage_cargo", SalvageTests.CargoWeighs);
@@ -169,9 +170,24 @@ public static class Program
         Run("radio_reception", RadioTests.Reception);
         Run("radio_plays", RadioTests.KeepsPlaying);
         Run("radio_volume", RadioTests.VolumeStaysSet);
-        Run("radio_playlist", RadioTests.Playlist);
+        Run("radio_band", RadioTests.Band);
+        Run("radio_level", RadioTests.Levelling);
         Run("radio_ducking", RadioTests.Ducking);
         Run("radio_equipment", RadioTests.AsEquipment);
+        Run("dj_volume", RadioDjTests.Volume);
+        Run("dj_norepeat", RadioDjTests.EnoughToNotRepeat);
+        Run("dj_seen", RadioDjTests.OnlySpeaksOfWhatWasSeen);
+        Run("dj_alertband", RadioDjTests.MatchesTheAlertBand);
+        Run("dj_world", RadioDjTests.ReactsToTheWorld);
+        Run("dj_guard", RadioDjTests.PremiseAndAdviceGuard);
+        Run("dj_schedule", RadioDjTests.Scheduling);
+        Run("dj_site", RadioDjTests.BroadcastSite);
+        Run("dj_transcript", RadioDjTests.Transcript);
+        Run("sling_pendulum", SlingTests.Pendulum);
+        Run("sling_resonance", SlingTests.Resonance);
+        Run("sling_hover", SlingTests.HoverCost);
+        Run("sling_jettison", SlingTests.Jettison);
+        Run("sling_bucket", SlingTests.Bucket);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 

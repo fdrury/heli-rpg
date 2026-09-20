@@ -1,0 +1,48 @@
+# ROTORWASH — the band
+#
+# Every line here is a broadcaster the cockpit radio can pick up. One line per station:
+#
+#   name | url | gain_db
+#
+# name     what the panel calls it. Optional; the host name is used if it is blank.
+# url      a direct Icecast/Shoutcast MP3 stream. NOT a .pls or .m3u playlist, and not
+#          a station's web page — the actual audio URL. Most stations publish one.
+# gain_db  level trim. Almost never needed: the receiver has automatic gain control and
+#          pulls every station to the same loudness. Use it only for something so far
+#          out that the AGC's ±limits cannot reach it.
+#
+# A line that is just a bare URL works too. Blank lines and # comments are ignored.
+# Anything that is not http:// or https:// is skipped.
+#
+# ---------------------------------------------------------------------------------
+# HOW THE PLAYER HEARS THIS
+#
+# Stations are not ambient. Each logged relay mast in the world carries ONE of the
+# broadcasters below, picked deterministically from the site id — so the same hill always
+# carries the same thing. To hear anything the player must:
+#
+#   1. find a radio set (searching a wreck, settlement, farmstead, depot or airfield),
+#   2. fit it at a workshop (one part),
+#   3. climb a relay mast and "Tune the mast", which logs the frequency.
+#
+# Then it is on B to switch on, V / N to change station, - and = for volume.
+# Reception depends on where you are: distance, height, and the weather.
+#
+# ---------------------------------------------------------------------------------
+# TWO THINGS TO KNOW, and they are in docs/wiki/attribution.md too:
+#
+#   * Playing somebody else's stream is fine on your own machine and is NOT shippable.
+#     A build handed to anybody else is retransmitting their broadcast.
+#   * Real stations carry adverts and DJ chatter, and they will arrive at the worst
+#     possible moment. The only mitigation is the one below: pick listener-supported,
+#     advert-free stations.
+#
+# The defaults are SomaFM, which is listener-supported, runs no adverts, and publishes
+# its direct MP3 stream URLs. Replace them with whatever you want.
+
+Indie Pop Rocks      | https://ice1.somafm.com/indiepop-128-mp3
+Left Coast 70s       | https://ice1.somafm.com/seventies-128-mp3
+Metal Detector       | https://ice1.somafm.com/metal-128-mp3
+Boot Liquor          | https://ice1.somafm.com/bootliquor-128-mp3
+Underground 80s      | https://ice1.somafm.com/u80s-128-mp3
+DEF CON Radio        | https://ice1.somafm.com/defcon-128-mp3

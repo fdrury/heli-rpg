@@ -595,7 +595,7 @@ public sealed partial class Main : Node3D
             SpawnHostileNpc(pos, yaw);
         }
 
-        _play.Notice?.Invoke("HOSTILE SITE");
+        _play.Announce("HOSTILE SITE");
         _play.Progress.Journal($"Hostiles at {site.Name}. {count} of them.");
     }
 
@@ -622,7 +622,7 @@ public sealed partial class Main : Node3D
 
         rec.Cleared = true;
         _play.Progress.Journal($"Cleared {site.Name}. Nobody left standing.");
-        _play.Notice?.Invoke($"{site.Name} cleared");
+        _play.Announce($"{site.Name} cleared");
         GD.Print($"[encounter] {site.Name} cleared");
     }
 
@@ -897,6 +897,9 @@ public sealed partial class Main : Node3D
             if (track.EverDetected)
                 data.DetectedEmitters.Add(track.Emitter.Id);
 
+        // Alert: regional readiness that outlives the sortie
+        data.CaptureAlert(_threats.Alert);
+
         // Fog of war
         data.FogGrid = _fog.ToBytes();
 
@@ -972,6 +975,9 @@ public sealed partial class Main : Node3D
 
         // Re-sync countermeasure fitted flags from loadout
         ReapplyThreatFittings();
+
+        // Alert: restore regional readiness
+        data.ApplyAlert(_threats.Alert);
 
         // Fog of war
         if (data.FogGrid is not null)

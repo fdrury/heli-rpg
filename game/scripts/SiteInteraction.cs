@@ -61,10 +61,18 @@ public sealed partial class SiteInteraction : Node
 
     public event Action<string>? Notice;
 
+    /// <summary>
+    /// Raise <see cref="Notice"/> from outside this class.
+    ///
+    /// C# only lets a type raise its own events, so the encounter code in Main could not
+    /// call `Notice?.Invoke(...)` and would not compile. One method rather than making the
+    /// event a plain delegate field, because a field can also be silently reassigned by any
+    /// caller and lose every existing subscriber.
+    /// </summary>
+    public void Announce(string message) => Notice?.Invoke(message);
+
     // --- NPC registry: persists across visits so memory accumulates ---
     private readonly Dictionary<int, (NpcMind npc, DialogueBank bank)> _npcs = new();
-    private int _mattieSiteId = -1;
-
     // --- contract boards: cached per settlement, refreshed on clock cycle ---
     private readonly Dictionary<int, (List<Contract> board, int cycle)> _boards = new();
     private const double BoardRefreshInterval = 7200; // 2 game-hours between board refreshes
@@ -77,17 +85,6 @@ public sealed partial class SiteInteraction : Node
         _rng.Seed = 5150;
 
         Progress.Journalled += line => GD.Print($"[journal] {line}");
-
-        // Mattie is at the first settlement in the Basin — the tutorial region.
-        foreach (var site in WorldMap.Sites)
-        {
-            if (site.Kind == SiteKind.Settlement && site.Region == RegionKind.Basin)
-            {
-                _mattieSiteId = site.Id;
-                GD.Print($"[dialogue] Mattie lives at {site.Name} (id {site.Id})");
-                break;
-            }
-        }
     }
 
     public override void _Process(double delta)
@@ -277,17 +274,9 @@ public sealed partial class SiteInteraction : Node
 
     private void AddSalvage(Site site, SiteRecord rec)
     {
+        var salvageKind = (SalvageSiteKind)(int)site.Kind;
         if (rec.SalvageRemaining < 0)
-        {
-            _rng.Seed = (ulong)(site.Id * 15485863 + 11);
-            rec.SalvageRemaining = site.Kind switch
-            {
-                SiteKind.Depot => _rng.RandiRange(4, 9),
-                SiteKind.Airfield => _rng.RandiRange(3, 8),
-                SiteKind.Wreck => _rng.RandiRange(1, 4),
-                _ => _rng.RandiRange(0, 3),
-            };
-        }
+            rec.SalvageRemaining = Salvage.SearchesAt(salvageKind, site.Id);
 
         if (rec.SalvageRemaining <= 0)
         {
@@ -303,18 +292,44 @@ public sealed partial class SiteInteraction : Node
                 BeginBusy("Searching", 14, () =>
                 {
                     rec.SalvageRemaining--;
-                    _rng.Seed = (ulong)(site.Id * 31 + rec.SalvageRemaining * 977);
+                    // The search index counts down, so the first search is the highest index.
+                    var find = Salvage.Search(salvageKind, site.Tier, site.Id, rec.SalvageRemaining);
 
-                    double scrap = _rng.RandfRange(2, 11);
-                    Progress.Add(Stock.Scrap, Math.Round(scrap));
-                    string found = $"{scrap:F0} scrap";
+                    string found = "";
+                    if (find.Scrap > 0)
+                    {
+                        Progress.Add(Stock.Scrap, find.Scrap);
+                        found = $"{find.Scrap:F0} scrap";
+                    }
+                    if (find.FuelCans > 0)
+                    {
+                        Progress.Add(Stock.Fuel, find.FuelCans);
+                        found += (found.Length > 0 ? ", " : "") + $"{find.FuelCans} full can{(find.FuelCans > 1 ? "s" : "")}";
+                    }
+                    if (find.Medical > 0)
+                    {
+                        Progress.Add(Stock.Medical, find.Medical);
+                        found += (found.Length > 0 ? ", " : "") + "a medical kit";
+                    }
+                    if (find.Food > 0)
+                    {
+                        Progress.Add(Stock.Food, find.Food);
+                        found += (found.Length > 0 ? ", " : "") + $"{find.Food} ration{(find.Food > 1 ? "s" : "")}";
+                    }
+                    if (find.Ammunition > 0)
+                    {
+                        Progress.Add(Stock.Ammunition, find.Ammunition);
+                        found += (found.Length > 0 ? ", " : "") + $"{find.Ammunition} rounds";
+                    }
+                    if (find.Part is SalvagePart part)
+                    {
+                        Progress.Cargo.Take(part);
+                        found += (found.Length > 0 ? ", " : "") + part.ToString();
+                    }
 
-                    if (_rng.Randf() < 0.30f) { Progress.Add(Stock.Parts, 1); found += ", a serviceable part"; }
-                    if (_rng.Randf() < 0.18f) { Progress.Add(Stock.Fuel, 1); found += ", a full can"; }
-                    if (_rng.Randf() < 0.12f) { Progress.Add(Stock.Medical, 1); found += ", a medical kit"; }
+                    if (found.Length == 0) found = "nothing";
 
                     // Module discovery: certain sites yield a specific module (D-011).
-                    // The module is determined by the site seed and drops on first search.
                     string? modId = Loadout.ModuleAtSite(site.Id);
                     if (modId is not null && Loadout.Find(modId))
                     {
@@ -323,6 +338,16 @@ public sealed partial class SiteInteraction : Node
                         Progress.Learn(new Knowledge(KnowledgeKind.Schematic,
                             $"module.{modId}", mod.Name, mod.Description));
                         Progress.Journal($"Found hardware: {mod.Name}. It can be installed at a workshop.");
+                    }
+
+                    // Story sites grant knowledge on first search (hook 4).
+                    var storySite = StoryPlaces.For(site.Id);
+                    if (storySite?.GrantsOnSearch is string grantId && !Progress.Knows(grantId))
+                    {
+                        Progress.Learn(new Knowledge(KnowledgeKind.Rumour, grantId,
+                            $"Found at {site.Name}", storySite.Reads ?? "Something worth knowing."));
+                        Progress.Journal($"Found something at {site.Name}.");
+                        Notice?.Invoke("The search moves");
                     }
 
                     Progress.Journal($"Searched {site.Name}: {found}.");
@@ -683,16 +708,25 @@ public sealed partial class SiteInteraction : Node
         NpcMind npc;
         DialogueBank bank;
 
-        if (site.Id == _mattieSiteId)
+        // Named story characters get their authored voice — 430 lines between nine people.
+        var storySite = StoryPlaces.For(site.Id);
+        if (storySite?.NpcId is string npcId)
         {
-            npc = DialogueCorpus.Mattie();
-            bank = DialogueCorpus.MattieLines();
+            var named = DialogueCorpus.Named(npcId);
+            if (named is not null)
+            {
+                (npc, bank) = named.Value;
+                _npcs[site.Id] = (npc, bank);
+                return (npc, bank);
+            }
         }
-        else
-        {
-            npc = DialogueCorpus.Settler(site.Id, site.Name);
-            bank = DialogueCorpus.SettlerLines();
-        }
+
+        // Generic settlers, contextualised to where they live so an Ashfield fuel cache
+        // does not sound like a Basin farmstead.
+        var region = (DialogueCorpus.RegionTag)(int)site.Region;
+        var kind = (SiteKindTag)(int)site.Kind;
+        npc = DialogueCorpus.Settler(site.Id, site.Name, region, kind);
+        bank = DialogueCorpus.SettlerLines(region, kind);
 
         _npcs[site.Id] = (npc, bank);
         return (npc, bank);

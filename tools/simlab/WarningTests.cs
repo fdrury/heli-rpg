@@ -770,7 +770,7 @@ public static class WarningTests
         heli.Engine.Fail();
         Controls flown = heli.Input;
 
-        double engineAt = -1, hornAt = -1, overspeedAt = -1, chimes = 0;
+        double engineAt = -1, hornAt = -1, overspeedAt = -1, chimes = 0, peakNr = 0;
         var block = new float[512];
         string firstLine = "", topAtHorn = "";
         WarningId topIdAtHorn = WarningId.PowerLimit;
@@ -791,6 +791,7 @@ public static class WarningTests
             chimes += cws.Raised.Count;
             synth.Render(block, 8, 8.0 / Rate);
 
+            peakNr = Math.Max(peakNr, heli.Telemetry.RotorRpmPercent);
             if (engineAt < 0 && cws[WarningId.EngineOut].Active == WarningSeverity.Warning)
                 engineAt = t;
             if (overspeedAt < 0 && cws[WarningId.RotorRpmHigh].Active >= WarningSeverity.Caution)
@@ -812,7 +813,7 @@ public static class WarningTests
 
         Console.WriteLine();
         Console.WriteLine($"  ENGINE FAILED at +{engineAt:F2} s, rotor overspeed at " +
-                          $"+{overspeedAt:F2} s, low-rotor horn at +{hornAt:F2} s");
+                          $"+{overspeedAt:F2} s, low-rotor horn at +{hornAt:F2} s, peak Nr {peakNr:F1}%");
         Console.WriteLine($"  top line throughout: \"{firstLine}\"");
         Console.WriteLine($"  when the horn sounded, the top line was \"{topAtHorn}\"");
         Console.WriteLine($"  engine-out raises: {cws[WarningId.EngineOut].RaiseCount} " +
@@ -821,8 +822,17 @@ public static class WarningTests
 
         if (engineAt < 0) failure ??= "the engine failed and nothing said so";
         if (engineAt > 1.0) failure ??= $"engine-out warning took {engineAt:F2} s";
-        if (overspeedAt < 0)
-            failure ??= "the rotor ran away in the autorotation and nothing said so";
+        // Gated on the rotor having ACTUALLY run away, because which way it goes here is
+        // not a property of the warning system and is not stable. With the controls frozen
+        // the aircraft departs, and the departure is chaotic: on an otherwise unmodified
+        // build, one kilogram of fuel out of five hundred moves the rotor at six seconds
+        // between 99.8% and 110.8%. Asserting the overspeed caption unconditionally was
+        // asserting which side of that coin the run landed on, and the first change to the
+        // governor's dynamics - which does not touch a failed engine at all - flipped it.
+        // What this test is for is the panel: whichever way the rotor goes, it has to say
+        // so, and the horn check below is the other half of that.
+        if (peakNr >= 105.0 && overspeedAt < 0)
+            failure ??= $"the rotor ran away to {peakNr:F0}% in the autorotation and nothing said so";
         if (hornAt < 0) failure ??= "the rotor decayed and the low-rotor horn never sounded";
         if (hornAt <= engineAt) failure ??= "the horn beat the engine-out warning to it";
         // Priority, in the one moment it matters: with the engine gone, the rotor below

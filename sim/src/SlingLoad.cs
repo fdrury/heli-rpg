@@ -134,14 +134,35 @@ public class SlingLoad : IExternalLoad
     public Vec3 HookPosition { get; set; } = new(0.1, 0, 0.4);
 
     /// <summary>
-    /// Cable strain carrying the load's own static weight. 0.002 is a centimetre of stretch
-    /// on a five-metre strop - softer than 12 mm wire rope, about right for a nylon one, and
-    /// far enough from rigid that the integrator never sees the stiff end of it.
+    /// Cable strain carrying the load's own static weight. 0.01 is five centimetres of
+    /// stretch on a five-metre strop, which is a polyester round sling - nobody hangs a load
+    /// straight off bare wire rope, and the soft link is there in real life for the same
+    /// reason it is useful here.
+    ///
+    /// <para>It sets the axial mode at sqrt(g / (L * strain)) = 14 rad/s, ten times faster
+    /// than the swing and slow enough that the airframe's 2/rev shake does not arrive at the
+    /// load as tension. Stiffer is not more accurate: at 0.002 the hook's own 2/rev motion
+    /// (about 16 mm, from 1.3 m of arm under a teetering head) exceeds the cable's static
+    /// stretch, and the cable goes slack twice a revolution in a steady hover.</para>
     /// </summary>
-    public double CableStrain { get; set; } = 0.002;
+    public double CableStrain { get; set; } = 0.01;
 
     /// <summary>Damping on the cable's axial mode, as a fraction of critical.</summary>
-    public double CableDampingRatio { get; set; } = 0.30;
+    public double CableDampingRatio { get; set; } = 0.15;
+
+    /// <summary>
+    /// Smoothing on the hook velocity the cable DAMPER sees, s. The spring is not smoothed.
+    ///
+    /// A two-bladed teetering head shakes the airframe hard at 2/rev - about 11 Hz here, and
+    /// tens of degrees per second of body rate. The hook hangs 1.3 m below the centre of
+    /// gravity, so that shake is a metre per second of hook velocity, and an undamped-by-
+    /// nothing viscous term transcribes all of it straight into cable tension: measured 17.7
+    /// kN of ripple on a 4.9 kN load, hovering steadily. A strop and a fitting and half a
+    /// tonne of inertia do not do that. Eighty milliseconds of smoothing leaves the cable's
+    /// own axial mode (31 rad/s) fully damped and stops it acting as a strain gauge for the
+    /// rotor.
+    /// </summary>
+    public double DamperSmoothing { get; set; } = 0.08;
 
     /// <summary>
     /// Tension the cable parts at, N. 60 kN is roughly four times the static weight of the
@@ -170,13 +191,23 @@ public class SlingLoad : IExternalLoad
     public Vec3 PositionWorld { get; private set; }
     public Vec3 VelocityWorld { get; private set; }
 
-    /// <summary>Cable tension, N. Zero when slack.</summary>
+    /// <summary>
+    /// Cable tension as a load cell would report it, N. Zero when slack.
+    ///
+    /// Lightly damped, for the reason the power telemetry is averaged over a revolution: the
+    /// instantaneous number carries the rotor's 2/rev and is a phase reading rather than a
+    /// measurement. <see cref="CableTensionInstant"/> is the raw one, and it is what decides
+    /// whether the cable parts, because cables part on peaks.
+    /// </summary>
     public double CableTension { get; private set; }
+
+    /// <summary>Tension this instant, N, 2/rev ripple and all.</summary>
+    public double CableTensionInstant { get; private set; }
 
     /// <summary>What a hook load gauge would read, kg.</summary>
     public double HookLoadKg => CableTension / Atmosphere.Gravity;
 
-    public bool CableSlack => Attached && CableTension <= 0.0;
+    public bool CableSlack => Attached && CableTensionInstant <= 0.0;
 
     /// <summary>Angle of the cable from vertical, degrees. This is the number a pilot chases.</summary>
     public double SwingAngleDeg
@@ -201,6 +232,7 @@ public class SlingLoad : IExternalLoad
 
     private Vec3 _offset = new(0, 0, 5.0);
     private Vec3 _vel;
+    private Vec3 _hookVelSmoothed;
 
     // ------------------------------------------------------------------ release
 
@@ -241,9 +273,10 @@ public class SlingLoad : IExternalLoad
         // equilibrium on the first step rather than starting with a snatch.
         _offset = new Vec3(0, 0, CableLength * (1.0 + CableStrain));
         _vel = hookVelWorld;
+        _hookVelSmoothed = hookVelWorld;
         PositionWorld = hookPosWorld + _offset;
         VelocityWorld = _vel;
-        CableTension = Mass * Atmosphere.Gravity;
+        CableTension = CableTensionInstant = Mass * Atmosphere.Gravity;
         OnGround = false;
     }
 
@@ -307,6 +340,9 @@ public class SlingLoad : IExternalLoad
 
     private Vec3 Advance(IEnvironment env, Vec3 hookPos, Vec3 hookVel, double dt)
     {
+        double kf = 1.0 - Math.Exp(-dt / Math.Max(DamperSmoothing, 1e-6));
+        _hookVelSmoothed += (hookVel - _hookVelSmoothed) * kf;
+
         int sub = Math.Max(1, (int)Math.Ceiling(dt / Math.Max(MaxSubStep, 1e-6)));
         double step = dt / sub;
         Vec3 impulse = Vec3.Zero;
@@ -326,7 +362,7 @@ public class SlingLoad : IExternalLoad
         Vec3 f = new(0, 0, m * Atmosphere.Gravity);
 
         // --- Cable ------------------------------------------------------------
-        CableTension = 0;
+        CableTensionInstant = 0;
         if (Attached)
         {
             double len = _offset.Length;
@@ -341,7 +377,7 @@ public class SlingLoad : IExternalLoad
                     // problem for the integrator, it stretches the same cable further.
                     double k = m * Atmosphere.Gravity / Math.Max(CableLength * CableStrain, 1e-6);
                     double c = 2.0 * CableDampingRatio * Math.Sqrt(k * m);
-                    double rate = Vec3.Dot(_vel - hookVel, u);
+                    double rate = Vec3.Dot(_vel - _hookVelSmoothed, u);
                     double tension = k * stretch + c * rate;
 
                     // A cable cannot push, and a damper on a slackening cable must not pull
@@ -356,7 +392,7 @@ public class SlingLoad : IExternalLoad
                         }
                         else
                         {
-                            CableTension = tension;
+                            CableTensionInstant = tension;
                             f += u * -tension;
                             onAircraft = u * tension;
                         }
@@ -407,6 +443,7 @@ public class SlingLoad : IExternalLoad
             PositionWorld += _vel * dt;
         }
         VelocityWorld = _vel;
+        CableTension += (CableTensionInstant - CableTension) * (1.0 - Math.Exp(-dt / 0.15));
 
         if (!PositionWorld.IsFinite || !_vel.IsFinite)
             throw new InvalidOperationException(

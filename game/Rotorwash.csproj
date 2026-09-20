@@ -9,4 +9,16 @@
   <ItemGroup>
     <ProjectReference Include="../sim/Rotorwash.Sim.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!--
+      NLayer: a pure-managed MP3 decoder, MIT-licensed, ~80 KB.
+
+      The cockpit radio (D-058) streams a live Icecast station, and Godot cannot decode
+      MP3 incrementally - AudioStreamMP3 wants a complete buffer and there is no streaming
+      API. NLayer decodes from a Stream, which is exactly the shape needed, and being pure
+      managed it needs no native binary and no shelling out to ffmpeg. See
+      game/scripts/RadioStream.cs and docs/wiki/attribution.md.
+    -->
+    <PackageReference Include="NLayer" Version="1.16.0" />
+  </ItemGroup>
 </Project>

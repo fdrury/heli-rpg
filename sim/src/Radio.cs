@@ -65,6 +65,20 @@ public readonly record struct RadioStation(
     string Id, string Name, string SiteName, string Url,
     double X, double Y, double MastHeightM, double PowerKm, double GainDb)
 {
+    /// <summary>
+    /// A station with no stream behind it: a transmitter in the world whose audio comes
+    /// from somewhere other than the internet.
+    ///
+    /// Kept as a distinct shape because it is a real case rather than a compatibility
+    /// shim - <c>RadioDj</c> builds one for the Upland Service, which is a man with a
+    /// microphone rather than an Icecast server. The reception model does not care where
+    /// the audio comes from; only <see cref="CockpitRadio"/> does, and an empty
+    /// <see cref="Url"/> is how it is told not to open a socket.
+    /// </summary>
+    public RadioStation(string id, string name, double x, double y,
+                        double mastHeightM, double powerKm)
+        : this(id, name, "", "", x, y, mastHeightM, powerKm, 0) { }
+
     /// <summary>For the panel: who is transmitting, and from where.</summary>
     public string Display => SiteName.Length > 0 ? $"{SiteName} — {Name}" : Name;
 }
@@ -326,9 +340,10 @@ public sealed class RadioSet
 ///
 /// So the level is measured rather than assumed: a slow RMS follower drives a gain that
 /// pulls whatever arrives towards <see cref="TargetDbfs"/>, bounded so it cannot boost a
-/// silent stream into a roar of noise. <see cref="Seconds"/> is long on purpose - a fast
-/// AGC breathes on every quiet passage, which is the sound of cheap compression rather
-/// than of a receiver.
+/// silent stream into a roar of noise. <see cref="ReleaseSeconds"/> is long on purpose - a
+/// fast AGC breathes on every quiet passage, which is the sound of cheap compression
+/// rather than of a receiver - while <see cref="AttackSeconds"/> is short, because being
+/// slow to turn something DOWN is the failure that matters here.
 /// </summary>
 public sealed class RadioAgc
 {
@@ -341,8 +356,24 @@ public sealed class RadioAgc
     /// <summary>The most it will hold back a loud one, dB.</summary>
     public const double MaxCutDb = -12.0;
 
-    /// <summary>Time constant of the level follower. Slow, so it does not breathe.</summary>
-    public const double Seconds = 2.5;
+    /// <summary>
+    /// Time constant for LETTING A STATION GET LOUDER: the level falling, and the gain
+    /// coming up. Slow, so a quiet passage in a record is not chased.
+    /// </summary>
+    public const double ReleaseSeconds = 2.5;
+
+    /// <summary>
+    /// Time constant for HOLDING A STATION BACK: the level rising, and the gain coming
+    /// down. Much faster, and asymmetric on purpose.
+    ///
+    /// A symmetric 2.5 s AGC was measured leaving a hot station 1.9 dB above target five
+    /// seconds after tuning it, which at full volume put the music 1.0 dB OVER the rotor -
+    /// the one thing the mix budget says must never happen. Every limiter and every
+    /// receiver AGC ever built is asymmetric for exactly this reason: being slow to turn
+    /// something down is the failure that matters, and being slow to turn it up is the one
+    /// that sounds good.
+    /// </summary>
+    public const double AttackSeconds = 0.50;
 
     /// <summary>Below this the input is silence, not a quiet passage. Do not chase it.</summary>
     public const double FloorDbfs = -60.0;
@@ -359,6 +390,9 @@ public sealed class RadioAgc
 
     public void Reset() { Gain = 1.0; _meanSquare = -1; InputDbfs = TargetDbfs; }
 
+    private static double Coefficient(double seconds, double blockSeconds)
+        => 1.0 - Math.Exp(-blockSeconds / seconds);
+
     /// <summary>
     /// Feed the AGC a block of raw decoded samples and get back the gain to apply to it.
     ///
@@ -373,8 +407,11 @@ public sealed class RadioAgc
         for (int i = 0; i < block.Length; i++) sum += (double)block[i] * block[i];
         double ms = sum / block.Length;
 
-        _meanSquare = _meanSquare < 0 ? ms
-                    : _meanSquare + (ms - _meanSquare) * (1.0 - Math.Exp(-blockSeconds / Seconds));
+        bool first = _meanSquare < 0;
+        if (first) _meanSquare = ms;
+        else _meanSquare += (ms - _meanSquare)
+                          * Coefficient(ms > _meanSquare ? AttackSeconds : ReleaseSeconds,
+                                        blockSeconds);
 
         double rms = Math.Sqrt(Math.Max(_meanSquare, 1e-12));
         InputDbfs = 20.0 * Math.Log10(Math.Max(rms, 1e-6));
@@ -385,7 +422,14 @@ public sealed class RadioAgc
             : Math.Clamp(TargetDbfs - InputDbfs, MaxCutDb, MaxBoostDb);
 
         double want = Math.Pow(10.0, wantDb / 20.0);
-        Gain += (want - Gain) * (1.0 - Math.Exp(-blockSeconds / Seconds));
+
+        // The first block of a newly tuned station is set outright rather than ramped to.
+        // There is nothing to click against - no audio has been heard yet - and ramping
+        // instead means the first second or two of a loud station arrives at the wrong
+        // level, which is precisely the moment the player is listening hardest.
+        if (first) Gain = want;
+        else Gain += (want - Gain)
+                   * Coefficient(want < Gain ? AttackSeconds : ReleaseSeconds, blockSeconds);
         return Gain;
     }
 }
@@ -529,6 +573,17 @@ public sealed class RadioMix
 /// </summary>
 public static class Radio
 {
+    /// <summary>
+    /// How long a track is assumed to last when the source does not say.
+    ///
+    /// A live stream has no track boundaries to read - that is the whole difference between
+    /// streaming a station and playing a file - so anything that needs to know when one
+    /// song ends and the next begins has to assume. Three and a half minutes is the middle
+    /// of the range for the kind of music this is, and it exists so the announcer has
+    /// somewhere plausible to speak: between tracks, not over them.
+    /// </summary>
+    public const double AssumedTrackSeconds = 210.0;
+
     /// <summary>The refit module id. Must match the entry in <see cref="Loadout.All"/>.</summary>
     public const string ModuleId = "radio";
 

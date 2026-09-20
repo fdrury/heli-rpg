@@ -48,6 +48,20 @@ public sealed class MainRotor
     // TEMPORARY diagnostic switch (ROTORWASH_FULLBETA=1) - remove before shipping.
     internal static readonly bool DebugFullBeta =
         System.Environment.GetEnvironmentVariable("ROTORWASH_FULLBETA") == "1";
+    // TEMPORARY trace (ROTORWASH_TRACE=<path>) - remove before shipping.
+    internal static readonly string? DebugTrace =
+        System.Environment.GetEnvironmentVariable("ROTORWASH_TRACE");
+    private static System.IO.StreamWriter? _tw;
+    private static double _tt;
+    internal static void Trace(double dt, Vec3 om, double cycR, RotorOutput o, double[] beta)
+    {
+        if (DebugTrace is null || dt < 0.006) return;   // 120 Hz bridge steps only
+        _tw ??= new System.IO.StreamWriter(DebugTrace) { AutoFlush = false };
+        _tt += dt;
+        _tw.WriteLine($"{_tt:F4},{om.X:F5},{om.Y:F5},{om.Z:F5},{cycR:F5},{o.Thrust:F1},{o.Moment.X:F1},{o.Moment.Y:F1},{o.Coning:F5},{o.FlapBack:F5},{o.FlapSide:F5},{beta[0]:F5},{beta[beta.Length-1]:F5}");
+        if (_tt % 1.0 < dt) _tw.Flush();
+    }
+
     internal static readonly double DebugConing =
         double.TryParse(System.Environment.GetEnvironmentVariable("ROTORWASH_CONING"), out var _dc) ? _dc : double.NaN;
 
@@ -478,6 +492,7 @@ public sealed class MainRotor
             _radialTorque[i] = 0;
         }
 
+        Trace(dt, omegaBody, cyclicRight, outp, Beta);
         return outp;
     }
 }

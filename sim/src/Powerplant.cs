@@ -92,9 +92,9 @@ public sealed class EngineConfig
     public double GovernorLag { get; init; } = 0.10;
 
     /// <summary>
-    /// Fuel valve response with a sick one, s. Large enough that the integral term ends up
-    /// chasing its own phase lag, which is what makes a tired governor hunt rather than
-    /// simply being slow.
+    /// Fuel valve response with a sick one, s. This is the "slow" half of a tired
+    /// governor - it is why the rotor takes twice as long to come back - and
+    /// <see cref="GovernorStiction"/> is the half that makes it hunt.
     /// </summary>
     public double DegradedGovernorLag { get; init; } = 1.30;
 
@@ -115,6 +115,29 @@ public sealed class EngineConfig
 
     /// <summary>Below this governor authority the fuel control is not holding Nr at all.</summary>
     public double GovernorFailAuthority { get; init; } = 0.12;
+
+    /// <summary>
+    /// Rotor speed at which the overspeed governor begins cutting fuel, as a fraction of
+    /// nominal; <see cref="OverspeedCutFraction"/> is where it has cut all of it.
+    ///
+    /// A separate unit from the droop governor, on purpose, because it is a separate unit
+    /// on the real engine: a flyweight head on the power turbine whose only job is to shut
+    /// the fuel off before the rotor comes apart. It survives the thing that kills the
+    /// droop governor, and it is the reason losing the governor is a hard day rather than
+    /// a destroyed aircraft.
+    ///
+    /// It earns its place with a measurement. With the governor out and the throttle where
+    /// the game currently pins it - <c>FlightInput</c> hands the sim a constant 1.0,
+    /// because no aircraft in this game has ever needed a throttle - a hover runs the rotor
+    /// to 116.8% and takes a percent of blade life every five seconds. Cutting at 1.12
+    /// puts the ceiling below the speed at which <c>DamageState</c> starts eating the
+    /// rotor, so the pilot who loses the governor has a machine that is hard to fly rather
+    /// than one that is destroying itself while he reads the caption.
+    /// </summary>
+    public double OverspeedLimitFraction { get; init; } = 1.06;
+
+    /// <summary>Rotor speed at which the overspeed governor has shut the fuel off entirely.</summary>
+    public double OverspeedCutFraction { get; init; } = 1.12;
 
     /// <summary>Specific fuel consumption, kg per joule of shaft work.</summary>
     public double Sfc { get; init; } = 8.6e-8;     // ~0.31 kg/kW-h
@@ -335,7 +358,6 @@ public sealed class Powerplant
     private double _startTimer;
     private double _anticipated;      // lagged load torque, N.m
     private double _valve;            // fuel valve position, in torque units
-    private double _lastTorqueFrac;
     private double _droopTorque;
     private bool _totPrimed;
     private double _startDamage;
@@ -408,7 +430,7 @@ public sealed class Powerplant
     public void Reset()
     {
         State = EngineState.Off; N1 = 0; _governorIntegral = 0; _startTimer = 0;
-        _anticipated = 0; _valve = 0; _lastTorqueFrac = 0; _droopTorque = 0; _primed = false;
+        _anticipated = 0; _valve = 0; _droopTorque = 0; _primed = false;
         _startDamage = 0; TotC = 15.0; _totPrimed = false; _valveStuck = false;
         StarterEngaged = false; FuelValveOpen = false; Lit = false; _autoFuel = false;
         Governing = true; GovernorAuthority = 1.0;
@@ -570,13 +592,12 @@ public sealed class Powerplant
 
             double anticipationLag = Lerp(cfg.AnticipationLag, cfg.DegradedAnticipationLag, 1.0 - q);
             double valveLag = Lerp(cfg.GovernorLag, cfg.DegradedGovernorLag, 1.0 - q);
-            // The gains barely move with condition; the lags do. That is deliberate and it
-            // is what makes a tired governor hunt rather than merely sag: a fuel control
-            // that still pushes as hard as it used to, through a valve that now takes a
-            // second and a quarter to get there, is a loop with the same gain and far less
-            // phase margin. Dropping the gain along with the valve speed - which the first
-            // pass did - produces a governor that is soft and perfectly steady, which is
-            // not a failure anybody has ever had.
+            // The gains barely move with condition; the lags and the stiction do. A worn
+            // fuel control still pushes about as hard as it used to - what it has lost is
+            // the ability to get there quickly and smoothly - and dropping the gain along
+            // with the valve speed, which the first pass did, just produces a governor
+            // that is soft and perfectly steady. That is not a failure anybody has ever
+            // had.
             double gainP = cfg.GovernorP * (0.85 + 0.15 * q);
             double gainI = cfg.GovernorI * (0.30 + 0.70 * q);
 
@@ -604,6 +625,14 @@ public sealed class Powerplant
             }
             torqueCommand = _valve;
         }
+
+        // --- Overspeed governor ----------------------------------------------
+        // Ahead of the ceiling and the spool, because it is upstream of both: it is a
+        // valve in the fuel line, and it does not care who opened the one before it.
+        double nrFrac = rotorOmega / Math.Max(nominalOmega, 1e-6);
+        double overspeed = (nrFrac - cfg.OverspeedLimitFraction)
+                           / Math.Max(cfg.OverspeedCutFraction - cfg.OverspeedLimitFraction, 1e-6);
+        if (overspeed > 0) torqueCommand *= Math.Clamp(1.0 - overspeed, 0.0, 1.0);
 
         double torqueCeilingPower = powerAvailable / Math.Max(rotorOmega, 1.0);
         double ceiling = Math.Min(torqueCeilingPower, torqueLimit);
@@ -634,7 +663,6 @@ public sealed class Powerplant
         o.ShaftTorque = torque;
         o.PowerDelivered = torque * rotorOmega;
         o.TorquePercent = torque / Math.Max(torqueLimit, 1e-6);
-        _lastTorqueFrac = o.TorquePercent;
         _droopTorque += (o.TorquePercent - _droopTorque) * Rate(dt, 0.8);
         o.FuelFlow = cfg.Sfc * Math.Max(o.PowerDelivered, powerAvailable * 0.05);
         o.N1 = N1;

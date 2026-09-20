@@ -46,42 +46,71 @@ here anyway, and credited anyway, because the work deserves it.
 | Rock030 | [ambientcg.com/view?id=Rock030](https://ambientcg.com/view?id=Rock030) | CC0 1.0 | `game/assets/terrain/rock_{col,nrm,rgh}.jpg` | `terrain.gdshader` — steep faces |
 | Gravel023 | [ambientcg.com/view?id=Gravel023](https://ambientcg.com/view?id=Gravel023) | CC0 1.0 | `game/assets/terrain/gravel_{col,nrm,rgh}.jpg` | `terrain.gdshader` — high bare ground |
 
-## Music
+## Libraries
 
-**Nothing yet.** The radio system is built and the folder is empty; this table fills in as
-tracks go in.
+| Library | Version | Licence | Redistributed? | Used by |
+|---|---|---|---|---|
+| [NLayer](https://github.com/naudio/NLayer) | 1.16.0 | **MIT** | Yes — ~80 KB DLL beside the game assembly | `game/scripts/RadioStream.cs` — decodes the cockpit radio's MP3 stream |
 
-Music reaches the game through the cockpit radio (D-058) — `sim/src/Radio.cs` and
-`game/scripts/CockpitRadio.cs`. The playlist comes from the folder layout; this register
-and `game/assets/music/tracks.manifest` carry the licences.
+NLayer is a pure-managed MP3 decoder. It is here because Godot cannot decode MP3
+incrementally: `AudioStreamMP3` wants a complete buffer and there is no streaming API, so
+a live radio station cannot be played without an external decoder. NLayer decodes from a
+`Stream`, which is exactly the shape a socket has, and being pure managed it needs no
+native binary and no shelling out to ffmpeg.
 
-| Track | Artist | Licence | Source | Tape (folder) | Credit required? |
-|---|---|---|---|---|---|
-| *(none yet)* | | | | | |
+MIT obliges us to ship the licence text with any binary distribution. If a build is ever
+handed to anybody, `LICENSE` from the NLayer repository goes beside the executable.
 
-**How music gets added, in full:**
+## Music — and the thing to know about it
 
-1. Put the tracks in `game/assets/music/<tape name>/` — one folder per cassette. Loose
-   files directly in `game/assets/music/` become one more cassette. `.ogg` is preferred;
-   `.mp3` and `.wav` also play.
-2. Add one line per track to `game/assets/music/tracks.manifest`:
-   `path | title | artist | licence | source | gain_db | seconds`
-3. Add one row per track to the table above.
+**No music ships with this game, and none ever has.** The cockpit radio (D-058) tunes a
+**live internet radio station** — see `sim/src/Radio.cs`, `game/scripts/RadioStream.cs`
+and `game/assets/radio/stations.txt`. Nothing is baked in, nothing is stored, nothing is
+redistributed with the build.
 
-Steps 2 and 3 are the licensing; step 1 is all the game needs to make a noise. The radio
-plays anything it finds and prints a warning at every start naming each track that has no
-licence line, so an undeclared file is loud rather than silent.
+**That is not the same as being in the clear, and this is the row that matters:**
 
-**What is acceptable.** CC0, CC BY, CC BY-SA, and other free licences are all fine. CC
-BY-NC is *not* — it forecloses ever selling the game, which is a decision nobody should
-make by accident while dragging a folder around. Anything marked "free for
-non-commercial", "free with credit for personal projects", or with no licence statement at
-all is not free and does not go in.
+> ### ⚠ Streaming a third-party station is fine for a private prototype and is NOT shippable.
+>
+> A build that connects to somebody's Icecast server and plays their broadcast to a
+> player is **retransmitting** it. For Fred, alone, on his own machine, that is
+> indistinguishable from opening the station in a browser and nobody cares. The moment a
+> build goes to anybody else — a friend, an itch.io page, a Discord — it is a licensing
+> question with a real answer, and the answer is not "we did not think about it".
+>
+> The original brief said to track anything that would matter if the game were ever
+> shared. This is squarely that category, which is why it is in a box.
+>
+> **What shipping would actually require**, roughly in order of effort:
+> 1. Licence music properly (CC BY / CC BY-SA tracks, or a library licence), bundle it,
+>    and list every track in the table below; or
+> 2. Get written permission from a station to retransmit; or
+> 3. Ship with an empty `stations.txt` and let each player enter their own URL, which
+>    moves the act from the developer to the listener. This is the cheapest option and it
+>    is one line of config.
 
-**What is owed.** CC BY and CC BY-SA require credit in the work. That is what the
-**Credits owed** section below is for. CC BY-SA additionally requires that derivatives of
-*that track* be shared alike — the game as a whole is not a derivative of a track it plays
-alongside, but a remix or an edit of one would be, so do not edit a BY-SA track.
+**The other thing, and it is not solved either:** real stations carry **adverts and DJ
+chatter**, and they will arrive at the worst possible moment — a voice reading a phone
+number over a forced landing. Nothing engineers around this. The only mitigation is the
+station list: the defaults are **SomaFM**, which is listener-supported, runs no adverts,
+and publishes direct MP3 stream URLs.
+
+| Station | Operator | How it is funded | URL in `stations.txt` |
+|---|---|---|---|
+| Indie Pop Rocks | SomaFM | Listener-supported, no adverts | `ice1.somafm.com/indiepop-128-mp3` |
+| Left Coast 70s | SomaFM | Listener-supported, no adverts | `ice1.somafm.com/seventies-128-mp3` |
+| Metal Detector | SomaFM | Listener-supported, no adverts | `ice1.somafm.com/metal-128-mp3` |
+| Boot Liquor | SomaFM | Listener-supported, no adverts | `ice1.somafm.com/bootliquor-128-mp3` |
+| Underground 80s | SomaFM | Listener-supported, no adverts | `ice1.somafm.com/u80s-128-mp3` |
+| DEF CON Radio | SomaFM | Listener-supported, no adverts | `ice1.somafm.com/defcon-128-mp3` |
+
+These are defaults in a config file, not assets. Edit `game/assets/radio/stations.txt` (or
+drop a `radio_stations.txt` in the Godot user directory, which wins) to change the band.
+
+**If music is ever bundled instead**, every track gets a row here — title, artist, licence,
+source — and the credit text goes in **Credits owed** below. CC0, CC BY and CC BY-SA are
+all acceptable. CC BY-NC is **not**: it forecloses ever selling the game, which is not a
+decision to make by accident while dragging a folder around.
 
 ## Fonts
 
@@ -98,7 +127,8 @@ reason this table is empty rather than out of date.
 
 ## Audio
 
-**Nothing yet, apart from whatever goes in the Music table above.**
+**Nothing bundled.** The only audio that is not generated by this project is the radio
+stream, which is covered above.
 
 Every sound the aircraft and the weather make is synthesised at runtime from simulation
 state — `sim/src/RotorSynth.cs`, `WeatherSynth.cs`, `WarningSynth.cs`. There are no
@@ -107,8 +137,8 @@ blade-pass frequency the sim computes, the turbine tone tracks the gas generator
 warning tones are generated from constants in the source. Verified spectrally against the
 physics: `dotnet run --project tools/simlab -- audio` writes `builds/audio/sortie.wav`.
 
-The one exception, when it arrives, is the music: it is the only audio in the project that
-is somebody else's work.
+The one exception is the radio: it is the only audio in the project that is somebody
+else's work, and it is the only part that is not shippable as it stands.
 
 ## Local language model (if it ships)
 
@@ -145,8 +175,12 @@ Engine
   Godot Engine 4.7.2, MIT — godotengine.org
   Open Sans, Apache 2.0
 
+MP3 decoding
+  NLayer, MIT — github.com/naudio/NLayer
+
 Music
-  (nothing yet)
+  Streamed live; nothing bundled. Stations are configured by the player.
+  Default stations courtesy of SomaFM (somafm.com), listener-supported.
 ```
 
 ---
@@ -155,8 +189,9 @@ Music
 
 Tracked here so that a gap is visible rather than forgotten.
 
-- Rock music for the cockpit radio — **the system is built and waiting**; see the Music
-  section above for exactly what to do with a folder of tracks.
+- Licensed music for the cockpit radio, **if this is ever shared with anybody**. The radio
+  works now by streaming a live station, which is the right answer for a prototype and the
+  wrong one for a build that leaves this machine. See the boxed note in the Music section.
 - Helicopter airframe model (looking for CC0/CC-BY, Huey-like). Currently built from
   primitives in `AirframeBuilder.cs`.
 - Vegetation and props, if the procedural ones ever stop being enough.

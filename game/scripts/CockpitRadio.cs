@@ -6,43 +6,56 @@ using Rotorwash.Sim;
 namespace Rotorwash;
 
 /// <summary>
-/// The radio somebody left in the aircraft.
+/// The radio somebody left in the aircraft, tuned to a station somebody is still
+/// broadcasting.
 ///
-/// D-058 put the music in diegetically rather than as a score, and this is the node that
-/// makes that a machine instead of a metaphor. Everything about it is a system that
-/// already existed:
+/// D-058 put the music in diegetically rather than as a score. Fred's follow-up made the
+/// source a live internet radio stream rather than files in the repository, and that is
+/// the better object for this world by a distance: a cassette is somebody's old mixtape,
+/// but a carrier still coming off a hill, with a person on the end of it, is the single
+/// most hopeful thing in a post-collapse setting. It also means there is no music to
+/// licence, ship, or lose.
+///
+/// Everything about it is a system that already existed:
 ///
 /// <list type="bullet">
 /// <item><b>It is a refit module.</b> <c>radio</c> in <see cref="Loadout"/>, nine kilos in
 /// a bay on the kneeboard, one part to fit at a workshop, found by searching a site. No
-/// radio installed, no music - the node runs anyway and stays silent, which is also what
+/// set installed, no music - the node runs anyway and stays silent, which is also what
 /// happens on a fresh save.</item>
 /// <item><b>It runs off the avionics stack.</b> Not a private health number: literally
 /// <c>Component.Avionics</c>, so a hit that takes the gyro takes the music, and the
 /// avionics part that fixes one fixes the other.</item>
-/// <item><b>Tapes and frequencies are salvage and knowledge.</b> A cassette is found by
-/// searching, and recorded in <see cref="Progress"/> like any other find, so it rides the
-/// existing save. A station is a mast the player already tuned - the "Tune the mast"
-/// action has been writing <c>freq.&lt;id&gt;</c> into the log since before there was
-/// anything to hear on it.</item>
+/// <item><b>Stations are the relay masts the player already tunes.</b> The "Tune the
+/// mast" action in <c>SiteInteraction</c> has been writing <c>freq.&lt;siteId&gt;</c>
+/// into the knowledge log - with the flavour text "Carrier present. Nobody answering, but
+/// it is on." - since long before there was anything to hear on it. This is what makes
+/// that line true, and not one character of that file had to change.</item>
 /// </list>
 ///
 /// <b>Self-contained, like <see cref="WarningPanel"/>.</b> Seven processes share this
-/// checkout, so this node finds the aircraft, the play systems and its own music by
-/// walking the tree and the filesystem rather than being wired into the scene assembly.
-/// The whole of its installation is one line in <see cref="SceneMood.Apply"/>, next to the
-/// weather audio, which is the other non-aircraft voice in the game.
+/// checkout, so this node finds the aircraft, the play systems and its stations by walking
+/// the tree and the filesystem rather than being wired into the scene assembly. The whole
+/// of its installation is one line in <see cref="SceneMood.Apply"/>, next to the weather
+/// audio, which is the other non-aircraft voice in the game.
 ///
 /// <b>Where the sound comes from.</b> An <c>AudioStreamPlayer3D</c> sitting on the
-/// aircraft, not a non-positional player, because the set is a physical object in the
-/// cockpit: shut down, climb out and walk away, and the music is behind you. That is free
-/// world ambience of exactly the kind the audio benchmark says the game has none of, and
-/// it costs one node.
+/// aircraft, fed by an <c>AudioStreamGenerator</c> exactly the way
+/// <see cref="HelicopterAudio"/> and <see cref="WeatherAudio"/> feed theirs - the PCM
+/// comes from <see cref="RadioStream"/> instead of from an oscillator. Positional, not
+/// ambient, because the set is a physical object in the cockpit: shut down, climb out and
+/// walk away, and the music is behind you.
 ///
-/// <b>The mix.</b> <see cref="RadioMix"/> ducks it under the caution and warning tones.
-/// The numbers, and how they were measured, are in that class and in
+/// <b>The mix.</b> <see cref="RadioAgc"/> levels whatever station is tuned to a known
+/// loudness, and <see cref="RadioMix"/> ducks it under the caution and warning tones. The
+/// numbers, and how they were measured, are in those classes and in
 /// <c>tools/simlab/RadioTests.cs</c>; the short version is that the radio at full volume
 /// is held just under the rotor, and a warning drops it 15 dB so the horn is 22 dB clear.
+///
+/// <b>Not shippable as it stands, and that is written down on purpose.</b> A build that
+/// plays somebody else's Icecast station is retransmitting their broadcast. For one person
+/// on one machine that is nothing; the moment it goes to anybody else it is a licensing
+/// question. See <c>docs/wiki/attribution.md</c>.
 /// </summary>
 public sealed partial class CockpitRadio : Node3D
 {
@@ -51,11 +64,11 @@ public sealed partial class CockpitRadio : Node3D
     /// <summary>On/off. The only thing in the game that switches the radio off.</summary>
     public const Key PowerKey = Key.B;
 
-    /// <summary>Next track on a tape; next station on the band.</summary>
+    /// <summary>Next station along the band.</summary>
     public const Key NextKey = Key.N;
 
-    /// <summary>Swap between the tape deck and the receiver.</summary>
-    public const Key SourceKey = Key.V;
+    /// <summary>Previous station along the band.</summary>
+    public const Key PreviousKey = Key.V;
 
     /// <summary>Volume down and up: the - and = keys, unshifted.</summary>
     public const Key VolumeDownKey = Key.Minus;
@@ -67,50 +80,44 @@ public sealed partial class CockpitRadio : Node3D
     // ------------------------------------------------------------------ paths
 
     /// <summary>
-    /// Where the music lives, in the order searched.
+    /// The station list, in the order searched. The first one that exists wins.
     ///
-    /// <c>user://music</c> first because it is the one that works in an exported build and
-    /// needs no editor; <c>res://assets/music</c> second because that is where a file
-    /// dropped into the repo during development lands. Both are globalised and read with
-    /// plain file I/O rather than <c>ResourceLoader</c>, which means a track that was never
-    /// imported by the editor still plays - and "drop a folder in and it works" is the
-    /// whole requirement.
+    /// <c>user://</c> first so a player can edit the band without touching the game files,
+    /// and so an exported build has somewhere writable to look;
+    /// <c>res://assets/radio/stations.txt</c> is the one that ships with the repository.
     /// </summary>
-    private static readonly string[] MusicRoots = { "user://music", "res://assets/music" };
+    private static readonly string[] StationLists =
+        { "user://radio_stations.txt", "res://assets/radio/stations.txt" };
 
-    /// <summary>Licence table, read from the music root. Absent is fine; see the parser.</summary>
-    private const string ManifestName = "tracks.manifest";
-
-    /// <summary>Volume, on/off and what was selected. A setting, so it lives beside them.</summary>
+    /// <summary>Volume, on/off and what was tuned. A setting, so it lives beside them.</summary>
     private const string SettingsPath = "user://radio.cfg";
+
+    // ------------------------------------------------------------------ audio
+
+    private const int SampleRate = RadioStream.MixRate;
 
     // ------------------------------------------------------------------ state
 
     private readonly RadioSet _set = new();
     private readonly RadioMix _mix = new();
+    private readonly RadioAgc _agc = new();
     private readonly CautionWarningSystem _cws = new();
+    private readonly RadioStream _stream = new();
 
-    private RadioLibrary _library = RadioLibrary.Silent();
+    private readonly List<RadioStreamDef> _broadcasters = new();
     private readonly List<RadioStation> _tuned = new();
     private readonly Dictionary<int, int> _salvageSeen = new();
 
-    private string _root = "";
     private AudioStreamPlayer3D? _player;
-    private int _streamed = -1;         // track index currently loaded into the player
+    private AudioStreamGeneratorPlayback? _playback;
+    private float[] _pcm = new float[8192];
+    private Vector2[] _out = new Vector2[4096];
     private double _smoothedGain;
+
     private double _skidHeight = 2.0;
     private double _lastHeight;
     private bool _rotorUpToSpeed;
     private int _knownCount = -1;
-
-    /// <summary>
-    /// Seconds the station has been on the air, counted in REAL time.
-    ///
-    /// Not <see cref="SceneMood.Clock"/>, which runs at 30x so a sortie covers a day. A
-    /// station driven by the compressed clock would change track every seven seconds of
-    /// listening, which is not a radio station, it is a fault.
-    /// </summary>
-    private double _stationClock = 3600.0;
 
     private HelicopterController? _heli;
     private LandingController? _landing;
@@ -137,14 +144,17 @@ public sealed partial class CockpitRadio : Node3D
                     break;
             }
 
-        LoadLibrary();
+        LoadStations();
         LoadSettings();
 
+        // Headless runs get no radio at all. They fly the aircraft to places a pilot would
+        // not go, and none of them should be opening a socket to the internet to do it.
         if (_quiet) return;
 
         _player = new AudioStreamPlayer3D
         {
             Name = "Radio",
+            Stream = new AudioStreamGenerator { MixRate = SampleRate, BufferLength = 0.30f },
             UnitSize = 7f,
             MaxDistance = 140f,
             // Zero, not Godot's default +3. The whole mix budget in RadioMix is quoted at
@@ -153,23 +163,25 @@ public sealed partial class CockpitRadio : Node3D
             // be. The rotor keeps its +3; it is allowed to be the loudest thing.
             MaxDb = 0f,
             AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.InverseDistance,
-            VolumeDb = -80f,
+            VolumeDb = 0f,
             MaxPolyphony = 1,
         };
         AddChild(_player);
+        _player.Play();
+        _playback = _player.GetStreamPlayback() as AudioStreamGeneratorPlayback;
 
         _readout = new RadioReadout(this);
         var layer = new CanvasLayer { Name = "RadioReadout", Layer = 2 };
         layer.AddChild(_readout);
         CallDeferred(Node.MethodName.AddChild, layer);
 
-        GD.Print($"[radio] {_library.Tracks.Count} track(s) on {_library.Tapes.Count} tape(s)" +
-                 (_root.Length > 0 ? $" from {_root}" : " - no music folder found"));
-        if (_library.Undeclared.Count > 0)
-            GD.PushWarning($"[radio] {_library.Undeclared.Count} track(s) have no licence in " +
-                           $"{ManifestName}; add them there and in docs/wiki/attribution.md " +
-                           $"before this game is shared. First: {_library.Undeclared[0]}");
+        GD.Print($"[radio] {_broadcasters.Count} station(s) configured" +
+                 (_broadcasters.Count == 0
+                     ? " - the band is empty; see assets/radio/stations.txt"
+                     : $": {_broadcasters[0].Name}…"));
     }
+
+    public override void _ExitTree() => _stream.Dispose();
 
     private static IEnumerable<string> AllArgs()
     {
@@ -177,78 +189,17 @@ public sealed partial class CockpitRadio : Node3D
         foreach (string a in OS.GetCmdlineUserArgs()) yield return a;
     }
 
-    // ----------------------------------------------------------- the music folder
-
-    /// <summary>
-    /// Find the music and build the library.
-    ///
-    /// Folder is tape: every subdirectory of the root is a cassette and its audio files
-    /// are its tracks. Files loose in the root are one more tape. The manifest, if there
-    /// is one, supplies the title, artist, licence, source and level trim; anything it
-    /// does not mention still plays and is reported as undeclared.
-    /// </summary>
-    private void LoadLibrary()
+    /// <summary>Read the station list. A missing or empty file is silence, not an error.</summary>
+    private void LoadStations()
     {
-        foreach (string root in MusicRoots)
+        foreach (string path in StationLists)
         {
-            if (!DirAccess.DirExistsAbsolute(root)) continue;
-            var files = new List<string>();
-            Walk(root, "", files, 0);
-            if (files.Count == 0 && !FileAccess.FileExists($"{root}/{ManifestName}")) continue;
-
-            string? manifest = FileAccess.FileExists($"{root}/{ManifestName}")
-                ? FileAccess.GetFileAsString($"{root}/{ManifestName}") : null;
-
-            _root = root;
-            _library = RadioLibrary.Build(files, manifest);
-            if (!_library.Empty) return;
+            if (!FileAccess.FileExists(path)) continue;
+            List<RadioStreamDef> parsed = Radio.ParseStations(FileAccess.GetFileAsString(path));
+            if (parsed.Count == 0) continue;
+            _broadcasters.AddRange(parsed);
+            return;
         }
-
-        if (_root.Length == 0) _library = RadioLibrary.Silent();
-    }
-
-    private static void Walk(string root, string prefix, List<string> into, int depth)
-    {
-        using DirAccess? dir = DirAccess.Open(prefix.Length == 0 ? root : $"{root}/{prefix}");
-        if (dir is null) return;
-
-        dir.ListDirBegin();
-        for (string name = dir.GetNext(); name.Length > 0; name = dir.GetNext())
-        {
-            if (name.StartsWith(".")) continue;
-            string rel = prefix.Length == 0 ? name : $"{prefix}/{name}";
-            // Two levels is a folder of tapes and the tracks in them. Deeper than that is
-            // somebody's music library, and importing an arbitrary tree is not the job.
-            if (dir.CurrentIsDir()) { if (depth < 1) Walk(root, rel, into, depth + 1); }
-            else into.Add(rel);
-        }
-        dir.ListDirEnd();
-    }
-
-    /// <summary>
-    /// Turn a track into something the engine can play.
-    ///
-    /// Loaded from the file rather than through <c>ResourceLoader</c>, which is what lets
-    /// an un-imported file work. Returns null on anything unreadable, and the caller
-    /// treats that the same way it treats a missing tape: silence, and a line in the log.
-    /// </summary>
-    private AudioStream? LoadStream(in RadioTrack track)
-    {
-        string abs = ProjectSettings.GlobalizePath($"{_root}/{track.Path}");
-        try
-        {
-            if (abs.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase))
-                return AudioStreamOggVorbis.LoadFromFile(abs);
-            if (abs.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
-                return AudioStreamMP3.LoadFromFile(abs);
-            if (abs.EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
-                return AudioStreamWav.LoadFromFile(abs);
-        }
-        catch (Exception ex)
-        {
-            GD.PushWarning($"[radio] cannot play {track.Path}: {ex.Message}");
-        }
-        return null;
     }
 
     // --------------------------------------------------------------- settings
@@ -257,14 +208,9 @@ public sealed partial class CockpitRadio : Node3D
     {
         var cfg = new ConfigFile();
         if (cfg.Load(SettingsPath) != Error.Ok) return;
-
-        _set.Restore(
-            (bool)cfg.GetValue("radio", "power", false),
-            (double)cfg.GetValue("radio", "volume", 0.55),
-            (RadioSourceKind)(int)cfg.GetValue("radio", "source", 0),
-            (int)cfg.GetValue("radio", "tape", -1),
-            (int)cfg.GetValue("radio", "station", -1),
-            -1, 0);
+        _set.Restore((bool)cfg.GetValue("radio", "power", false),
+                     (double)cfg.GetValue("radio", "volume", 0.55),
+                     (int)cfg.GetValue("radio", "station", -1));
     }
 
     private void SaveSettings()
@@ -272,8 +218,6 @@ public sealed partial class CockpitRadio : Node3D
         var cfg = new ConfigFile();
         cfg.SetValue("radio", "power", _set.PowerOn);
         cfg.SetValue("radio", "volume", _set.Volume);
-        cfg.SetValue("radio", "source", (int)_set.Source);
-        cfg.SetValue("radio", "tape", _set.TapeIndex);
         cfg.SetValue("radio", "station", _set.StationIndex);
         cfg.Save(SettingsPath);
     }
@@ -300,7 +244,6 @@ public sealed partial class CockpitRadio : Node3D
             if (skid > 0.2) _skidHeight = skid;
         }
 
-        _stationClock += delta;
         ReadKeys();
         PollForFinds(delta);
         RefreshStations();
@@ -333,69 +276,101 @@ public sealed partial class CockpitRadio : Node3D
         for (int i = 0; i < _cws.Raised.Count; i++)
             if (_cws.Raised[i].Severity >= WarningSeverity.Caution) _mix.TriggerCaution();
 
-        _mix.Update(delta, _cws.LowRotorHorn || _cws.WarningTone,
-                    _dialogue?.IsOpen ?? false);
+        _mix.Update(delta, _cws.LowRotorHorn || _cws.WarningTone, _dialogue?.IsOpen ?? false);
+
+        // --- reception ---------------------------------------------------------
+        double signal = 0;
+        RadioStation station = default;
+        bool haveStation = _set.StationIndex >= 0 && _set.StationIndex < _tuned.Count;
+        if (haveStation)
+        {
+            station = _tuned[_set.StationIndex];
+            Vector3 here = _heli.GlobalPosition;
+            double d = new Vector2((float)station.X, (float)station.Y)
+                       .DistanceTo(new Vector2(here.X, here.Z));
+            Weather.Conditions wx = SceneMood.Now;
+            signal = Radio.Quality(d, Math.Max(t.HeightAgl - _skidHeight, 0), station,
+                                   wx.Precipitation, wx.StormIntensity);
+        }
 
         DamageState dmg = _heli.Sim.Damage;
         bool fitted = _play?.Loadout.IsInstalled(Radio.ModuleId) ?? false;
 
-        double signal = 1.0;
-        if (_set.Source == RadioSourceKind.Station && _set.StationIndex >= 0
-            && _set.StationIndex < _tuned.Count)
-        {
-            RadioStation s = _tuned[_set.StationIndex];
-            Vector3 here = _heli.GlobalPosition;
-            double d = new Vector2((float)s.X, (float)s.Y).DistanceTo(new Vector2(here.X, here.Z));
-            Weather.Conditions wx = SceneMood.Now;
-            signal = Radio.Quality(d, Math.Max(t.HeightAgl - _skidHeight, 0), s,
-                                   wx.Precipitation, wx.StormIntensity);
-        }
-
-        _set.Update(delta, _library,
+        _set.Update(delta, _tuned.Count,
                     new RadioConditions(fitted, dmg.Health(Component.Avionics),
-                                        dmg.VibrationIps, signal),
-                    _stationClock);
+                                        dmg.VibrationIps, signal, _stream.Link));
+
+        // --- the socket --------------------------------------------------------
+        // Opened only when the set actually wants a carrier: switched on, fitted,
+        // serviceable, tuned, and in range. Flying out of range hangs up, which is both
+        // the polite thing to do to somebody else's server and what makes flying back over
+        // the ridge sound like tuning in rather than like nothing happened.
+        if (_set.WantsStream && haveStation && station.Url.Length > 0)
+        {
+            _stream.Tune(station.Url);
+            _stream.Poll(delta);
+        }
+        else if (_stream.Url.Length > 0)
+        {
+            _stream.Stop();
+            _agc.Reset();
+        }
 
         PushAudio(delta);
         _readout?.QueueRedraw();
     }
 
     /// <summary>
-    /// Keep the engine's player in step with what the set says it is doing.
+    /// Drain the decoder into the generator, at the level the mix says.
     ///
-    /// The gain is smoothed with a 25 ms one-pole. A dropout is a sudden thing and should
-    /// sound like one, but a hard zero on a waveform is a click, and a click is the one
-    /// artefact the player would hear every single time.
+    /// Three gains, in order, and they are separate on purpose:
+    /// <list type="number">
+    /// <item><see cref="RadioAgc"/> - measured from the audio itself, so an unknown station
+    /// arrives at a known loudness and the horn's margin is a fact rather than a hope.</item>
+    /// <item><see cref="Radio.PlayerGain"/> - the volume knob and the reception trim. The
+    /// knob is the player's and nothing else writes it.</item>
+    /// <item><see cref="RadioMix.Gain"/> - the duck.</item>
+    /// </list>
+    /// The product is ramped across the block rather than stepped at its edge, because a
+    /// dropout is a sudden thing but a discontinuity in a waveform is a click, and a click
+    /// is the one artefact the player would hear every single time.
     /// </summary>
     private void PushAudio(double delta)
     {
-        if (_player is null) return;
+        if (_playback is null) return;
+        int frames = _playback.GetFramesAvailable();
+        if (frames <= 0) return;
 
-        if (_set.Track != _streamed || (_set.TrackChanged && _set.Track >= 0))
-        {
-            _streamed = _set.Track;
-            AudioStream? stream = _set.Track >= 0 && _set.Track < _library.Tracks.Count
-                ? LoadStream(_library.Tracks[_set.Track]) : null;
-            _player.Stream = stream!;
-            if (stream is not null) _player.Play((float)_set.Position);
-            else _player.Stop();
-        }
-        else if (_set.Playing && _player.Stream is not null && !_player.Playing)
-        {
-            // The file ran out before the model thought it would - a real duration that
-            // beat the assumed one. Let the model roll on to the next track.
-            _player.Play(0f);
-        }
+        if (_pcm.Length < frames * 2) _pcm = new float[frames * 2];
+        // Exactly sized: PushBuffer takes the whole array, so a larger one would push the
+        // tail of the previous block as well.
+        if (_out.Length != frames) _out = new Vector2[frames];
+
+        int got = _set.WantsStream ? _stream.Read(_pcm, frames) : 0;
+        for (int i = got * 2; i < frames * 2; i++) _pcm[i] = 0;
+
+        double blockSeconds = frames / (double)SampleRate;
+        double agc = got > 0 ? _agc.Update(_pcm.AsSpan(0, got * 2), blockSeconds) : _agc.Gain;
 
         double want = _set.Playing
-            ? Radio.PlayerGain(_set.Volume,
-                               _set.Track >= 0 ? _library.Tracks[_set.Track].GainDb : 0,
-                               _set.Fidelity) * _mix.Gain
+            ? agc * Radio.PlayerGain(_set.Volume, GainDbOfTuned(), _set.Fidelity) * _mix.Gain
             : 0.0;
 
-        _smoothedGain += (want - _smoothedGain) * (1.0 - Math.Exp(-delta / 0.025));
-        _player.VolumeDb = _smoothedGain <= 1e-4 ? -80f : Mathf.LinearToDb((float)_smoothedGain);
+        double from = _smoothedGain;
+        double to = from + (want - from) * (1.0 - Math.Exp(-blockSeconds / 0.030));
+        _smoothedGain = to;
+
+        for (int i = 0; i < frames; i++)
+        {
+            float g = (float)(from + (to - from) * (i / (double)frames));
+            _out[i] = new Vector2(_pcm[i * 2] * g, _pcm[i * 2 + 1] * g);
+        }
+        _playback.PushBuffer(_out);
     }
+
+    private double GainDbOfTuned()
+        => _set.StationIndex >= 0 && _set.StationIndex < _tuned.Count
+           ? _tuned[_set.StationIndex].GainDb : 0;
 
     // ------------------------------------------------------------------- input
 
@@ -416,20 +391,11 @@ public sealed partial class CockpitRadio : Node3D
         if (Pressed(PowerKey))
         {
             _set.TogglePower();
-            if (_set.PowerOn) EnsureSomethingSelected();
+            if (_set.PowerOn && _set.StationIndex < 0 && _tuned.Count > 0) _set.Tune(0);
             changed = true;
         }
-        if (Pressed(SourceKey))
-        {
-            if (_set.Source == RadioSourceKind.Tape)
-            {
-                if (_tuned.Count > 0) _set.SelectStation(Math.Max(_set.StationIndex, 0));
-            }
-            else _set.SelectTape(_set.TapeIndex >= 0 ? _set.TapeIndex
-                                                     : (_library.Tapes.Count > 0 ? 0 : -1));
-            changed = true;
-        }
-        if (Pressed(NextKey)) { _set.Next(_library, _tuned.Count); changed = true; }
+        if (Pressed(NextKey)) { _set.Next(_tuned.Count); changed = true; }
+        if (Pressed(PreviousKey)) { _set.Previous(_tuned.Count); changed = true; }
         if (Pressed(VolumeUpKey)) { _set.NudgeVolume(VolumeStep); changed = true; }
         if (Pressed(VolumeDownKey)) { _set.NudgeVolume(-VolumeStep); changed = true; }
 
@@ -440,18 +406,10 @@ public sealed partial class CockpitRadio : Node3D
         }
     }
 
-    private void EnsureSomethingSelected()
-    {
-        if (_set.Source == RadioSourceKind.Tape && _set.TapeIndex < 0 && _library.Tapes.Count > 0)
-            _set.SelectTape(0);
-        if (_set.Source == RadioSourceKind.Station && _set.StationIndex < 0 && _tuned.Count > 0)
-            _set.SelectStation(0);
-    }
-
     // -------------------------------------------------------- finding the gear
 
     /// <summary>
-    /// Watch the search log for radio hardware.
+    /// Watch the search log for a radio set.
     ///
     /// Polling <see cref="Progress"/> rather than hooking the search action, because the
     /// search lives in <c>SiteInteraction</c> and this process does not own that file -
@@ -475,52 +433,38 @@ public sealed partial class CockpitRadio : Node3D
             _salvageSeen[id] = left;
             if (left >= was) continue;               // nothing was searched here
 
+            if (_play.Loadout.Has(Radio.ModuleId)) continue;
+
             Site? site = WorldMap.SiteById(id);
             if (site is null) continue;
-            var kind = (SalvageSiteKind)(int)site.Kind;
+            if (!Radio.SetAtSite(id, (SalvageSiteKind)(int)site.Kind)) continue;
+            if (!_play.Loadout.Find(Radio.ModuleId)) continue;
 
-            if (Radio.SetAtSite(id, kind) && !_play.Loadout.Has(Radio.ModuleId)
-                && _play.Loadout.Find(Radio.ModuleId))
-            {
-                ModuleDef def = Loadout.Catalog[Radio.ModuleId];
-                progress.Learn(new Knowledge(KnowledgeKind.Schematic, $"module.{Radio.ModuleId}",
-                                             def.Name, def.Description));
-                progress.Journal($"Found a radio set at {site.Name}. It still has a tape in it.");
-                _readout?.Poke($"Found: {def.Name}");
-            }
-
-            int tape = Radio.TapeAtSite(id, _library.Tapes.Count);
-            if (tape >= 0)
-            {
-                string tid = Radio.TapeKnowledgeId(tape);
-                if (!progress.Knows(tid))
-                {
-                    string name = _library.Tapes[tape].Name;
-                    progress.Learn(new Knowledge(KnowledgeKind.Schematic, tid,
-                                                 $"Tape: {name}",
-                                                 $"{_library.Tapes[tape].Tracks.Count} tracks. " +
-                                                 $"Somebody's, once."));
-                    progress.Journal($"Found a cassette at {site.Name}: {name}.");
-                    _readout?.Poke($"Found a tape: {name}");
-                }
-            }
+            ModuleDef def = Loadout.Catalog[Radio.ModuleId];
+            progress.Learn(new Knowledge(KnowledgeKind.Schematic, $"module.{Radio.ModuleId}",
+                                         def.Name, def.Description));
+            progress.Journal($"Found a radio set at {site.Name}. Somebody kept it working.");
+            _readout?.Poke($"Found: {def.Name}");
         }
     }
 
     /// <summary>
     /// Rebuild the band from the frequencies the player has logged.
     ///
-    /// The relay mast action has been writing <c>freq.&lt;siteId&gt;</c> into the knowledge
-    /// log since long before there was a radio to hear it on, and the flavour text it
-    /// writes is "Carrier present. Nobody answering, but it is on." This is what makes
-    /// that true.
+    /// One logged mast is one station, bound to a broadcaster deterministically by site id
+    /// so the same hill always carries the same thing. Nothing here invents a frequency:
+    /// if the player has not climbed a relay and swept the band, the radio has nothing on
+    /// it, which is the correct answer under D-005.
     /// </summary>
     private void RefreshStations()
     {
         if (_play is null) return;
         IReadOnlyCollection<Knowledge> known = _play.Progress.Known;
-        if (known.Count == _knownCount) return;     // nothing new logged
+        if (known.Count == _knownCount) return;
         _knownCount = known.Count;
+
+        string? wasTuned = _set.StationIndex >= 0 && _set.StationIndex < _tuned.Count
+            ? _tuned[_set.StationIndex].Id : null;
 
         _tuned.Clear();
         foreach (Knowledge k in known)
@@ -530,16 +474,22 @@ public sealed partial class CockpitRadio : Node3D
             if (!int.TryParse(k.Id[5..], out int siteId)) continue;
             Site? site = WorldMap.SiteById(siteId);
             if (site is null) continue;
-            _tuned.Add(Radio.StationAt(siteId, site.Name, site.Position.X, site.Position.Y));
+            _tuned.Add(Radio.BindStation(siteId, site.Name, site.Position.X, site.Position.Y,
+                                         _broadcasters));
         }
         _tuned.Sort((a, b) => string.CompareOrdinal(a.Id, b.Id));
 
-        if (_set.StationIndex >= _tuned.Count) _set.SelectStation(_tuned.Count > 0 ? 0 : -1);
+        // Keep the player on the station they were on, wherever it landed in the new list.
+        int at = -1;
+        if (wasTuned is not null)
+            for (int i = 0; i < _tuned.Count; i++) if (_tuned[i].Id == wasTuned) { at = i; break; }
+        if (at >= 0) { if (at != _set.StationIndex) _set.Tune(at); }
+        else if (_set.StationIndex >= _tuned.Count) _set.Tune(_tuned.Count > 0 ? 0 : -1);
     }
 
     // ------------------------------------------------------------- for the panel
 
-    internal string Line() => Radio.Readout(_set, _library, _tuned);
+    internal string Line() => Radio.Readout(_set, _tuned);
 
     internal bool Installed => _play?.Loadout.IsInstalled(Radio.ModuleId) ?? false;
 
@@ -547,8 +497,12 @@ public sealed partial class CockpitRadio : Node3D
 
     internal bool Ducked => _mix.Gain < 0.7;
 
+    internal int StationCount => _tuned.Count;
+
+    internal int StationIndex => _set.StationIndex;
+
     internal string Bindings =>
-        $"[{PowerKey}] on/off   [{NextKey}] next   [{SourceKey}] tape/band   - = volume";
+        $"[{PowerKey}] on/off   [{PreviousKey}]/[{NextKey}] station   - = volume";
 
     private static T? FindFirst<T>(Node from) where T : Node
     {
@@ -577,7 +531,7 @@ public sealed partial class RadioReadout : Control
     private Font _font = null!;
     private double _age = ShowSeconds + FadeSeconds;
     private string _flash = "";
-    private double _flashAge;
+    private double _flashAge = 99;
 
     public RadioReadout(CockpitRadio radio) => _radio = radio;
 
@@ -608,7 +562,6 @@ public sealed partial class RadioReadout : Control
 
         float alpha = _age < ShowSeconds ? 1f
                     : Math.Max(0f, 1f - (float)(_age - ShowSeconds) / FadeSeconds);
-        if (alpha <= 0.01f && _flash.Length == 0) return;
 
         Vector2 size = GetViewportRect().Size;
         float x = 22, y = size.Y - 40;
@@ -617,20 +570,18 @@ public sealed partial class RadioReadout : Control
         {
             float fa = Math.Max(0f, 1f - (float)_flashAge / 6f);
             DrawString(_font, new Vector2(x, y - 46), _flash,
-                       HorizontalAlignment.Left, -1, 17,
-                       new Color(1.00f, 0.86f, 0.42f, fa));
+                       HorizontalAlignment.Left, -1, 17, new Color(1.00f, 0.86f, 0.42f, fa));
         }
 
         if (alpha <= 0.01f) return;
 
-        // A dot that is lit when the set is playing and dim when it is not, then the line
-        // itself. Shape before colour, same as the warning panel: the dot is the state and
-        // the text is the detail.
-        var body = new Color(0.86f, 0.90f, 0.92f, alpha);
+        // A dot that is lit when the set is playing and dim when it is ducked, then the
+        // line itself. Shape before colour, same as the warning panel: the dot is the
+        // state and the text is the detail.
         DrawCircle(new Vector2(x + 5, y - 5), 4.5f,
                    new Color(0.35f, 0.85f, 0.45f, alpha * (_radio.Ducked ? 0.30f : 1.0f)));
         DrawString(_font, new Vector2(x + 18, y), _radio.Line(),
-                   HorizontalAlignment.Left, -1, 16, body);
+                   HorizontalAlignment.Left, -1, 16, new Color(0.86f, 0.90f, 0.92f, alpha));
 
         // Volume, as a row of ticks rather than a number: it is a knob, not a gauge.
         int lit = (int)Math.Round(_radio.Volume * 8);
@@ -638,8 +589,14 @@ public sealed partial class RadioReadout : Control
             DrawRect(new Rect2(x + 18 + i * 7, y + 8, 4, 5),
                      new Color(0.86f, 0.90f, 0.92f, alpha * (i < lit ? 0.9f : 0.18f)));
 
+        if (_radio.StationCount > 1)
+            DrawString(_font, new Vector2(x + 82, y + 13),
+                       $"{_radio.StationIndex + 1}/{_radio.StationCount}",
+                       HorizontalAlignment.Left, -1, 12,
+                       new Color(0.70f, 0.76f, 0.80f, alpha * 0.8f));
+
         if (_age < 3.0)
-            DrawString(_font, new Vector2(x + 90, y + 13), _radio.Bindings,
+            DrawString(_font, new Vector2(x + 130, y + 13), _radio.Bindings,
                        HorizontalAlignment.Left, -1, 12,
                        new Color(0.70f, 0.76f, 0.80f, alpha * 0.75f));
     }
