@@ -271,6 +271,11 @@ public static class Program
         Run("bp_ceiling", BladePairTests.CeilingCost);
         Run("bp_save", BladePairTests.SaveRoundTrip);
         Run("bp_finale", BladePairTests.Finale);
+        Run("dark_fog", DarkTests.FogContamination);
+        Run("dark_fog_save", DarkTests.FogSaveRoundTrip);
+        Run("dark_fog_null", DarkTests.FogNullRestore);
+        Run("dark_save", DarkTests.ProgressSaveRoundTrip);
+        Run("dark_compat", DarkTests.OldSaveCompat);
         Run("audio", AudioRender.Render);
         Run("perf", Scenarios.Performance);
 

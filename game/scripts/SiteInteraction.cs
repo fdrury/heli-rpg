@@ -173,6 +173,14 @@ public sealed partial class SiteInteraction : Node
         _actions.Clear();
         if (Parked is null || !Settled) return;
         Site site = Parked;
+
+        // D-096: ash-contaminated sites offer nothing. The fog does not lift.
+        if (Progress.IsSiteContaminated(site.Id))
+        {
+            _actions.Add(new SiteAction("Ash", "Nothing here any more.", () => false, false));
+            return;
+        }
+
         SiteRecord rec = Progress.Record(site.Id);
 
         switch (site.Kind)

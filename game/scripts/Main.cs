@@ -802,6 +802,60 @@ public sealed partial class Main : Node3D
         _play.Progress.RecordDeed(DjDeedKind.Buzzed, site.Name, 0, witnesses);
     }
 
+    // -------------------------------------- post-ending ash expansion (D-096)
+
+    private bool _darkChecked;
+
+    /// <summary>
+    /// Story.md §6.3: when the search completes, the ash moves. Two Act II sites
+    /// go dark (permanently fogged, unlanded), and the citadel guns go silent.
+    /// One-time, gated on SearchThread.Complete and Progress.PlaceGoneDark.
+    /// </summary>
+    private void CheckPlaceGoneDark()
+    {
+        if (_darkChecked) return;
+        if (_play?.Progress is null) return;
+
+        Progress prog = _play.Progress;
+        if (!prog.Search.Complete) return;
+        if (prog.PlaceGoneDark) { _darkChecked = true; return; }
+
+        prog.PlaceGoneDark = true;
+        _darkChecked = true;
+
+        // Destroy citadel gun emitters — the crew left.
+        foreach (var track in _threats.Field.Tracks)
+            if (track.Emitter.Name.StartsWith("Scald gun pit"))
+                track.EmitterHealth = 0;
+
+        // Find the two tier 1-2 sites nearest to The Scald (origin at 0,0).
+        var candidates = new System.Collections.Generic.List<(Site Site, float Dist)>();
+        foreach (Site s in WorldMap.Sites)
+        {
+            if (s.Tier < 1 || s.Tier > 2) continue;
+            candidates.Add((s, s.Position.Length()));
+        }
+        candidates.Sort((a, b) => a.Dist.CompareTo(b.Dist));
+
+        // Contaminate fog around the two nearest sites.
+        int darkened = 0;
+        for (int i = 0; i < candidates.Count && darkened < 2; i++)
+        {
+            Site site = candidates[i].Site;
+            prog.AddContaminatedSite(site.Id);
+            // NED: north = -godot Y, east = +godot X.
+            _fog.ContaminateCircle(-site.Position.Y, site.Position.X,
+                site.Radius + 300f);
+            darkened++;
+            GD.Print($"[dark] ash covers {site.Name} ({site.Kind}, tier {site.Tier}) " +
+                     $"at {candidates[i].Dist:F0} m from centre");
+        }
+
+        prog.Journal("The ash has moved. Two places gone dark on the chart.");
+        GD.Print("[dark] story.md §6.3: one place goes dark — citadel guns silent, " +
+                 "contamination band expanded");
+    }
+
     /// <summary>Remove all hostile NPCs from the scene. Called when boarding.</summary>
     private void DespawnEncounter()
     {
@@ -1003,6 +1057,9 @@ public sealed partial class Main : Node3D
         // Fog of war: reveal the map as the aircraft flies.
         Vector3 p = _heli.GlobalPosition;
         _fog.Reveal(-p.Z, p.X);   // Godot X=east, -Z=north
+
+        // D-096: post-ending ash expansion (story.md §6.3).
+        CheckPlaceGoneDark();
 
         // D-082: navigation targets for the compass strip — active contract destinations.
         UpdateNavTargets();
@@ -1362,6 +1419,7 @@ public sealed partial class Main : Node3D
 
         // Fog of war
         data.FogGrid = _fog.ToBytes();
+        data.ContaminatedGrid = _fog.ContaminatedToBytes();
 
         return data;
     }
@@ -1453,6 +1511,7 @@ public sealed partial class Main : Node3D
         // Fog of war
         if (data.FogGrid is not null)
             _fog.FromBytes(data.FogGrid);
+        _fog.ContaminatedFromBytes(data.ContaminatedGrid);
 
         // D-090: passenger mass and copilot callouts
         SyncPassenger();

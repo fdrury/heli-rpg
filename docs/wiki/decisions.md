@@ -3308,3 +3308,76 @@ by simlab test `NoInstructions` against a forbidden-phrase blocklist.
 capture/apply lines, remove `CheckDirectedCalls()` from `SiteInteraction`, remove
 the test. A save written with this field loads without it (empty list is the default);
 a save written without it loads with none fired (correct).
+
+---
+
+### D-096 — One place goes dark (story.md §6.3)
+
+**Date:** 2026-09-20
+
+**Context:** The three post-ending world deltas from §6 make the ending stick. §6.1
+(rotor reset) and §6.2 (net comes up) are already implemented. §6.3 is the last
+one: after the search completes, the ash moves. Two Act II sites go dark and the
+citadel guns go silent. The effect is bittersweet — you bought yourself another
+decade of flying this country, but the country is still ending.
+
+**What changes:**
+
+When `SearchThread.Complete` becomes true and `Progress.PlaceGoneDark` is false,
+a one-time trigger fires:
+
+1. **Citadel guns destroyed.** All three "Scald gun pit" emitters have their
+   `EmitterHealth` set to 0. They stop scanning and engaging, and the RWR no longer
+   shows them. The SAMs, MANPADS, search radars, and aerostat are untouched — the
+   approach is easier, not safe.
+
+2. **Two Act II sites contaminated.** The code finds all tier 1-2 sites, sorts by
+   distance to The Scald (world origin), and takes the two nearest. Their fog cells
+   are marked contaminated in a circle of `site.Radius + 300 m`. These cells show as
+   ash-grey on the kneeboard map and do not clear even if the player has flown over
+   them.
+
+3. **Site blocking.** Contaminated sites show an "ASH" tag on the HUD panel instead
+   of "HOSTILE" and offer a single unavailable action: "Ash — Nothing here any more."
+   The player can still land on the terrain but cannot refuel, talk, salvage, or refit.
+
+4. **Journal entry.** "The ash has moved. Two places gone dark on the chart."
+
+**Architecture (sim layer):**
+- **`FogOfWar.cs`** — Parallel `bool[] _contaminated` array (same 128×128 grid).
+  `ContaminateCircle(north, east, radius)` marks cells. `IsContaminated(cx, cy)`
+  queries them. Serialised as a packed byte array (`ContaminatedToBytes` /
+  `ContaminatedFromBytes`), null for no contamination.
+- **`Progress.cs`** — `PlaceGoneDark` bool (one-time flag), `ContaminatedSites`
+  HashSet<int> (site IDs for blocking), with `IsSiteContaminated(siteId)` query.
+- **`SaveData.cs`** — `PlaceGoneDark`, `ContaminatedGrid` (byte[]), and
+  `ContaminatedSites` (List<int>). All default to false/null/empty for saves
+  written before this field existed.
+
+**Architecture (game layer):**
+- **`Main.cs`** — `CheckPlaceGoneDark()` called from `_PhysicsProcess`. When the
+  trigger fires it destroys citadel guns, contaminates fog, records site IDs, and
+  writes the journal line.
+- **`Kneeboard.cs`** — `UpdateFogTexture()` renders contaminated cells as
+  `ashColor (0.10, 0.08, 0.06, 0.90)` — darker and warmer than normal fog. The
+  texture is re-rendered when `ContaminatedCount` changes.
+- **`FlightHud.cs`** — Site panel shows "ASH" tag for contaminated sites.
+- **`SiteInteraction.cs`** — `RebuildActions()` short-circuits for contaminated
+  sites with a single disabled action.
+
+**Save/load:** `PlaceGoneDark`, `ContaminatedGrid`, and `ContaminatedSites` are
+captured and applied alongside other Progress fields. Fog contamination is saved
+and restored as a packed byte array. Old saves load with no contamination (correct).
+
+**Tests:** Five simlab tests:
+- `dark_fog`: ContaminateCircle marks cells and counts correctly.
+- `dark_fog_save`: contaminated grid survives pack/unpack round-trip.
+- `dark_fog_null`: null bytes clears contamination (old save compat).
+- `dark_save`: PlaceGoneDark + ContaminatedSites round-trip through SaveData JSON.
+- `dark_compat`: old saves load with no contamination.
+
+**Reversibility:** high. Remove `CheckPlaceGoneDark` from Main, remove the
+contamination fields from FogOfWar/Progress/SaveData, revert the three-line changes
+in Kneeboard/FlightHud/SiteInteraction, remove the test. A save written with these
+fields loads without them (false/null/empty defaults); a save written without them
+loads correctly.

@@ -152,6 +152,25 @@ public sealed class SaveData
     /// </summary>
     public List<int> DirectedCallsFired { get; set; } = new();
 
+    /// <summary>
+    /// True when the post-ending contamination has fired (story.md §6.3).
+    /// A save written before this field existed loads as false, which is correct.
+    /// </summary>
+    public bool PlaceGoneDark { get; set; }
+
+    /// <summary>
+    /// Contaminated fog cells (story.md §6.3). Packed bits, same format as FogGrid.
+    /// Null means no contamination. A save written before this field loads as
+    /// no contamination, which is correct.
+    /// </summary>
+    public byte[]? ContaminatedGrid { get; set; }
+
+    /// <summary>
+    /// Site IDs covered by ash expansion (story.md §6.3). Empty means no
+    /// contamination. A save written before this field loads as empty.
+    /// </summary>
+    public List<int> ContaminatedSites { get; set; } = new();
+
     // ================================================================ JSON
 
     private static readonly JsonSerializerOptions Opts = new()
@@ -224,6 +243,10 @@ public sealed class SaveData
         SearchStage = p.Search.Stage;
         PassengerAboard = p.PassengerAboard;
         SlingLoadId = p.SlingLoadId;
+        PlaceGoneDark = p.PlaceGoneDark;
+
+        ContaminatedSites.Clear();
+        ContaminatedSites.AddRange(p.ContaminatedSites);
 
         DirectedCallsFired.Clear();
         DirectedCallsFired.AddRange(p.DirectedCalls.Save());
@@ -298,6 +321,9 @@ public sealed class SaveData
         p.Search.Stage = SearchStage;
         p.PassengerAboard = PassengerAboard;
         p.SlingLoadId = SlingLoadId;
+        p.PlaceGoneDark = PlaceGoneDark;
+        if (ContaminatedSites.Count > 0)
+            p.RestoreContaminatedSites(ContaminatedSites);
         p.DirectedCalls.Restore(DirectedCallsFired.Count > 0 ? DirectedCallsFired.ToArray() : null);
 
         for (int i = 0; i < Math.Min(LegClosedAt.Count, 4); i++)

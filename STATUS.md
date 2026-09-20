@@ -467,6 +467,12 @@ Story build order item 8: "Everything else, region by region, in tier order."
    (story.md §4.3, carrier type 2). Each region reports local conditions — weather,
    terrain, atmosphere — in the voice of someone who noticed you tuned their mast. The
    world speaks to you in flight, region by region. Five simlab tests.
+7. ~~**One place goes dark**~~ **DONE** (D-096). Post-ending ash expansion (story.md
+   §6.3). When the search completes: citadel guns go silent (three Scald gun pits
+   destroyed), the two nearest tier 1-2 sites are covered by ash (permanently fogged
+   on the kneeboard map, actions blocked with "ASH" tag), journal records the change.
+   FogOfWar gains a contamination layer (parallel bool array, separate serialisation).
+   Five simlab tests. All three §6 post-ending deltas are now implemented.
 
 ## Open questions for Fred
 

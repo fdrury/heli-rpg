@@ -78,6 +78,32 @@ public sealed class Progress
     public string? SlingLoadId { get; set; }
 
     /// <summary>
+    /// True when the post-ending contamination has fired (story.md §6.3).
+    /// The Scald's ash has moved, two Act II sites go dark, the citadel
+    /// guns are gone. A one-time event gated on SearchThread.Complete.
+    /// </summary>
+    public bool PlaceGoneDark { get; set; }
+
+    private readonly HashSet<int> _contaminatedSites = new();
+
+    /// <summary>
+    /// Site IDs covered by the ash expansion (story.md §6.3).
+    /// These sites cannot be landed at or interacted with.
+    /// </summary>
+    public IReadOnlyCollection<int> ContaminatedSites => _contaminatedSites;
+
+    public bool IsSiteContaminated(int siteId) => _contaminatedSites.Contains(siteId);
+
+    public void AddContaminatedSite(int siteId) => _contaminatedSites.Add(siteId);
+
+    /// <summary>Restore contaminated sites from save. Save/load only.</summary>
+    public void RestoreContaminatedSites(IEnumerable<int> siteIds)
+    {
+        _contaminatedSites.Clear();
+        foreach (int id in siteIds) _contaminatedSites.Add(id);
+    }
+
+    /// <summary>
     /// Salvaged components aboard but not fitted: the heavy, awkward, valuable things.
     ///
     /// Lives here rather than beside the aircraft because it is part of the character

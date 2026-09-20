@@ -365,22 +365,39 @@ public sealed partial class Kneeboard : Control
     private static Color Lerp(Color a, Color b, float t) =>
         new(a.R + (b.R - a.R) * t, a.G + (b.G - a.G) * t, a.B + (b.B - a.B) * t);
 
+    private int _lastContaminatedCount;
+
     private void UpdateFogTexture()
     {
         if (_fog is null) return;
-        if (_fog.RevealedCount == _lastRevealedCount && _fogTex is not null) return;
+        if (_fog.RevealedCount == _lastRevealedCount
+            && _fog.ContaminatedCount == _lastContaminatedCount
+            && _fogTex is not null)
+            return;
 
         _lastRevealedCount = _fog.RevealedCount;
+        _lastContaminatedCount = _fog.ContaminatedCount;
 
         int fogRes = FogOfWar.GridSize;   // 128
         _fogImage ??= Image.CreateEmpty(fogRes, fogRes, false, Image.Format.Rgba8);
 
         var fogColor = new Color(0.03f, 0.04f, 0.03f, 0.92f);
+        // D-096: ash contamination — darker, warmer grey than normal fog.
+        // The difference is subtle on purpose: "the country is still ending"
+        // reads as a slow change to what was there, not a new overlay.
+        var ashColor = new Color(0.10f, 0.08f, 0.06f, 0.90f);
         var clear = new Color(0, 0, 0, 0);
 
         for (int y = 0; y < fogRes; y++)
             for (int x = 0; x < fogRes; x++)
-                _fogImage.SetPixel(x, y, _fog.IsRevealed(x, y) ? clear : fogColor);
+            {
+                if (_fog.IsContaminated(x, y))
+                    _fogImage.SetPixel(x, y, ashColor);
+                else if (_fog.IsRevealed(x, y))
+                    _fogImage.SetPixel(x, y, clear);
+                else
+                    _fogImage.SetPixel(x, y, fogColor);
+            }
 
         if (_fogTex is null)
             _fogTex = ImageTexture.CreateFromImage(_fogImage);
