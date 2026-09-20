@@ -93,6 +93,9 @@ public struct TalkContext
     /// <summary>What is bolted to the aircraft. Visible to anyone standing next to it.</summary>
     public readonly List<string> VisibleFittings = new();
 
+    /// <summary>Module ids currently installed on the aircraft, for <c>Requirement.Fitted</c>.</summary>
+    public readonly HashSet<string> FittedIds = new();
+
     /// <summary>
     /// Every knowledge id in <c>Progress.AllKnown</c>. This is the whole of the story
     /// layer's interface to dialogue (story.md 4.5, 7.3): a baked line can require that
@@ -116,6 +119,9 @@ public readonly record struct Requirement(string Key, double Min, double Max)
     /// <summary>Key prefix for "the player has NOT learned this yet".</summary>
     public const string UnknownPrefix = "unknown:";
 
+    /// <summary>Key prefix for "this module is currently installed on the aircraft".</summary>
+    public const string FittedPrefix = "fitted:";
+
     public bool Holds(in TalkContext c)
     {
         // The record struct is (string, double, double), so there is no room for a second
@@ -126,6 +132,8 @@ public readonly record struct Requirement(string Key, double Min, double Max)
             return c.KnownIds is not null && c.KnownIds.Contains(Key[KnowsPrefix.Length..]);
         if (Key.StartsWith(UnknownPrefix, StringComparison.Ordinal))
             return c.KnownIds is null || !c.KnownIds.Contains(Key[UnknownPrefix.Length..]);
+        if (Key.StartsWith(FittedPrefix, StringComparison.Ordinal))
+            return c.FittedIds is not null && c.FittedIds.Contains(Key[FittedPrefix.Length..]);
         return Numeric(c);
     }
 
@@ -157,6 +165,9 @@ public readonly record struct Requirement(string Key, double Min, double Max)
 
     /// <summary>This line may only be said while the player has NOT yet learned <paramref name="id"/>.</summary>
     public static Requirement Unknown(string id) => new(UnknownPrefix + id, 0, 0);
+
+    /// <summary>This line may only be said when module <paramref name="id"/> is installed on the aircraft.</summary>
+    public static Requirement Fitted(string id) => new(FittedPrefix + id, 0, 0);
 }
 
 /// <summary>

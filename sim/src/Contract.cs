@@ -13,6 +13,8 @@ public enum ContractKind
     Relay,
     /// <summary>Clear hostile scavengers from a site so it can be used.</summary>
     Clear,
+    /// <summary>Fly to a site and hoist a load off it. Requires hoist module installed.</summary>
+    Lift,
 }
 
 /// <summary>
@@ -113,6 +115,12 @@ public sealed class Contract
 
             ContractKind.Clear =>
                 progress.Record(TargetSiteId).Cleared,
+
+            // Lift: the player flies to the island and hoists the load. Visiting the
+            // target is the completion signal — the hoist module was checked when the
+            // contract was offered, and the mechanical act of hoisting is not simulated.
+            ContractKind.Lift =>
+                progress.HasVisited(TargetSiteId),
 
             _ => false,
         };
@@ -503,6 +511,84 @@ public static class ContractBoard
             used.Add(site.Id);
             return;
         }
+    }
+
+    // ----------------------------------------------------------------- story contracts
+    //
+    // Story-specific contracts from named NPCs. These are not random board entries —
+    // they are trades that advance the narrative. The game layer passes the NPC id for
+    // the settlement and this method decides whether to offer one.
+
+    /// <summary>Knowledge id for Bel's wreck position trade.</summary>
+    public const string BelWreckPositionId = "bel.wreck_position";
+
+    /// <summary>
+    /// A story-specific contract from the NPC at this settlement, or null if none is
+    /// available. Called alongside <see cref="Generate"/> by the game layer.
+    ///
+    /// Bel Tiernan's generator lift: she wants a generator hoisted off an island. The
+    /// player needs the hoist module installed. On completion, she reveals the position
+    /// of the drowned wreck — the ferry that is SIERRA-FOUR-THREE.
+    /// </summary>
+    public static Contract? StoryContract(
+        string? npcId,
+        int sourceSiteId,
+        string sourceName,
+        double sourceX, double sourceY,
+        IReadOnlyList<SiteStub> sites,
+        Progress progress,
+        Loadout loadout,
+        double clock)
+    {
+        if (npcId != "npc.bel") return null;
+
+        // Already granted — the trade is done.
+        if (progress.Knows(BelWreckPositionId)) return null;
+
+        // Requires the hoist module installed on the aircraft.
+        if (!loadout.IsInstalled("hoist")) return null;
+
+        // Pick the nearest non-source site as "the island". Prefer fuel caches and
+        // farmsteads (isolated sites), then anything. Deterministic: the same site
+        // every time, because it is the same island.
+        SiteStub? island = null;
+        double bestDist = double.MaxValue;
+        foreach (var s in sites)
+        {
+            if (s.Id == sourceSiteId) continue;
+            double dx = s.X - sourceX;
+            double dy = s.Y - sourceY;
+            double dist = Math.Sqrt(dx * dx + dy * dy);
+            if (dist > 5000) continue; // within reasonable range
+
+            // Prefer isolated site kinds for an island
+            double priority = s.Kind is SiteKindTag.FuelCache or SiteKindTag.Farmstead
+                ? dist : dist + 10000;
+            if (priority < bestDist) { bestDist = priority; island = s; }
+        }
+
+        if (island is null) return null;
+
+        return new Contract
+        {
+            Id = $"story.bel.lift.{sourceSiteId}",
+            Kind = ContractKind.Lift,
+            Title = $"Lift generator from {island.Name}",
+            Brief = "There is a generator on an island two kilometres out. Three years it "
+                  + "has sat there. We can get a boat to it and we cannot get it into a "
+                  + "boat. You have a hoist. After the island, we talk about the wreck.",
+            SourceSiteId = sourceSiteId,
+            TargetSiteId = island.Id,
+            TargetName = island.Name,
+            RewardKind = Stock.Scrap,
+            RewardAmount = 0, // the reward is knowledge, not scrap
+            StandingReward = 0.3, // substantial — this is her big ask
+            RewardKnowledgeId = BelWreckPositionId,
+            RewardKnowledgeLabel = "Wreck position — The Drowning",
+            RewardKnowledgeDetail = "Bel Tiernan's people know which wreck is SIERRA-FOUR-THREE. "
+                + "Lowest ground in the wetland, half in the water, tail boom showing.",
+            PostedAt = clock,
+        };
     }
 
     // ---- brief text ----

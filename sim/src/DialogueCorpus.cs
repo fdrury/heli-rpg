@@ -113,11 +113,14 @@ public static class DialogueCorpus
         public const string Magazine = "search.magazine";   // where the blades are
         public const string Window   = "search.window";     // ninety minutes, every eighth night
 
+        /// <summary>Bel's trade: she told you where the wreck is.</summary>
+        public const string WreckPosition = ContractBoard.BelWreckPositionId;
+
         /// <summary>Every id above, for tests and for building a "knows everything" context.</summary>
         public static readonly string[] All =
         {
             Callsign, Band, Rota, Manifest, Field, Wreck, Cairn, Roster, Water, Wray,
-            Magazine, Window,
+            Magazine, Window, WreckPosition,
         };
     }
 
@@ -879,10 +882,18 @@ public static class DialogueCorpus
             LT("bel.thread.hoist",
               "You have a hoist on it now. Then we can talk about the island, and after the island we can "
               + "talk about what my people will and will not take you to.",
-              ThreadGreeting, 5, Requirement.Knows(Knows.Wreck), Requirement.Meetings(2, 99)),
+              ThreadGreeting, 5, Requirement.Fitted("hoist"),
+              Requirement.Unknown(Knows.WreckPosition), Requirement.Meetings(2, 99)),
+            LT("bel.thread.traded",
+              "The lowest ground in the wet. You will see the tail boom. My uncle was the load master and "
+              + "he would not have let that cabin door stand open. Somebody walked out of it.",
+              Thread, 8, Requirement.Knows(Knows.WreckPosition), Requirement.Unknown(Knows.Wreck)),
+            LT("bel.thread.traded.found",
+              "So you have been inside it. Good. Now you know why we call it a grave and why it is not one.",
+              Thread, 8, Requirement.Knows(Knows.WreckPosition), Requirement.Knows(Knows.Wreck)),
             LT("bel.thread.bye",
               "Straight out over the reeds. And when you are over the deep bit, do not look down. Everybody looks down.",
-              ThreadParting, 5, Requirement.Knows(Knows.Wreck)),
+              ThreadParting, 5, Requirement.Knows(Knows.WreckPosition)),
         });
         return b;
     }

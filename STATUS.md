@@ -1,6 +1,6 @@
 # ROTORWASH — status
 
-*Last updated: 2026-09-21*
+*Last updated: 2026-09-20*
 
 A single-player post-apocalyptic RPG about the last helicopter pilot in the world.
 Godot 4.7.2 (.NET). `docs/wiki/00-vision.md` is what it is; `docs/wiki/decisions.md` is
@@ -137,6 +137,11 @@ upland terrain-masking chart freely, Halvard Ferren trades the emitter-location 
 rewards follow the salvage path (bag, then install at a workshop); knowledge rewards call
 `Progress.Learn`. Both are idempotent and persist through save/load. One simlab test verifies
 reward attachment, condition gating, catalog references, and idempotency.
+**Knowledge-gated dialogue now works** (D-092): `BuildTalkContext` populates `KnownIds` from
+`Progress.AllKnown` and `FittedIds` from `Loadout.Installed`, so every `Requirement.Knows()`,
+`Unknown()`, and the new `Fitted()` prefix correctly gate dialogue on what the player knows
+and what is bolted to the aircraft. Previously these fields were unpopulated and all
+knowledge-gated dialogue silently failed to fire.
 
 **Passengers** — Sera Wray in the right seat (D-090, story.md §7.6). `Passenger` is a
 record in sim/ holding identity, mass and seat position; `CopilotCallouts` generates
@@ -410,8 +415,12 @@ Story build order item 8: "Everything else, region by region, in tier order."
    SlingLoads.BladePair() factory, Progress.SlingLoadId persistence, SyncSlingLoad() in
    game layer, DialogueRewardKind.SlingLoad for story triggers. Finale feasibility
    measured: closes with 265 kg fuel margin at worst ceiling (0.58), ISA+10, full load.
-3. **Bel's trade completion** — wreck position knowledge granted after the generator lift
-   contract. Requires the hoist module and a contract completion hook.
+3. ~~**Bel's trade completion**~~ **DONE** (D-092). `ContractKind.Lift` for hoist-based
+   contracts, `ContractBoard.StoryContract()` injects the generator lift at Bel's settlement
+   when the hoist is installed, `Requirement.Fitted()` gates dialogue on installed modules,
+   and `BuildTalkContext` now populates knowledge and fitting ids — fixing a bug where all
+   `Knows()`/`Unknown()` dialogue gates were inert. Completing the generator lift grants
+   wreck position knowledge (`bel.wreck_position`). Six new simlab tests.
 4. **Act III NPC dialogue depth** — Wray, Juno, Sparrow thread lines need reward tags
    once the engine features they depend on exist (passengers, sling load, medical trade).
 

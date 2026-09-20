@@ -544,6 +544,14 @@ public sealed partial class SiteInteraction : Node
             var board = ContractBoard.Generate(
                 site.Id, site.Name, site.Position.X, site.Position.Y,
                 stubs, Progress, Progress.Clock, cycle, Alert);
+
+            // Story-specific contracts from named NPCs (D-092).
+            string? npcId = StoryPlaces.For(site.Id)?.NpcId;
+            var story = ContractBoard.StoryContract(
+                npcId, site.Id, site.Name, site.Position.X, site.Position.Y,
+                stubs, Progress, Loadout, Progress.Clock);
+            if (story is not null) board.Add(story);
+
             _boards[site.Id] = (board, cycle);
             cached = (board, cycle);
         }
@@ -798,7 +806,7 @@ public sealed partial class SiteInteraction : Node
         var worst = sim.Damage.Worst();
         double fuelFrac = sim.Fuel / Math.Max(sim.Airframe.FuelCapacity, 1);
 
-        return new TalkContext
+        var ctx = new TalkContext
         {
             Now = Progress.Clock,
             SiteId = site.Id.ToString(),
@@ -819,6 +827,20 @@ public sealed partial class SiteInteraction : Node
             ArrivedAtNight = SceneMood.SunNow.IsNight,
             Standing = npc.Standing,
         };
+
+        // Knowledge ids — unlocks every Knows()/Unknown() gate in the corpus (story.md §7.3).
+        foreach (var k in Progress.AllKnown.Keys)
+            ctx.KnownIds.Add(k);
+
+        // Installed modules — lets dialogue gate on what is bolted to the aircraft.
+        foreach (string id in Loadout.Installed)
+        {
+            ctx.FittedIds.Add(id);
+            if (Loadout.Catalog.TryGetValue(id, out var def))
+                ctx.VisibleFittings.Add(def.Name);
+        }
+
+        return ctx;
     }
 
     /// <summary>

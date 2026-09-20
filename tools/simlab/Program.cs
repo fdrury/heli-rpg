@@ -158,6 +158,12 @@ public static class Program
         Run("contract_recover_hostile", ContractTests.RecoverHostile);
         Run("contract_clear_roundtrip", ContractTests.ClearRoundTrip);
         Run("contract_integration", ContractTests.ProgressIntegration);
+        Run("bel_lift", BelTradeTests.LiftCompletion);
+        Run("bel_story_gate", BelTradeTests.StoryContractGating);
+        Run("bel_hoist_dialogue", BelTradeTests.HoistDialogueGating);
+        Run("bel_post_trade", BelTradeTests.PostTradeDialogue);
+        Run("bel_lift_roundtrip", BelTradeTests.LiftRoundTrip);
+        Run("fitted_requirement", BelTradeTests.FittedRequirement);
         Run("save_progress", SaveTests.ProgressRoundTrip);
         Run("save_damage", SaveTests.DamageRoundTrip);
         Run("save_loadout", SaveTests.LoadoutRoundTrip);

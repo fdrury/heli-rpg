@@ -3027,3 +3027,90 @@ interface.
 `SaveData.SlingLoadId`, the capture/apply lines, `DialogueRewardKind.SlingLoad`, the
 `DeliverReward` case, `SlingLoadAttached` event, `SyncSlingLoad()` in Main.cs, and
 `BladePairTests.cs`. The existing sling physics and tests are untouched.
+
+---
+
+### D-092 — Bel's trade completion: knowledge-gated dialogue and the generator lift · 2026-09-20
+
+**Decision:** Build Bel Tiernan's generator lift contract and fix the bug that made all
+knowledge-gated dialogue inert. story.md §2 and §3: Bel wants a generator hoisted off an
+island; in return she tells the player where the drowned wreck is.
+
+**What was built:**
+
+  * **`BuildTalkContext` bug fix** (story.md §7.3). `TalkContext.KnownIds` and
+    `VisibleFittings` were declared but never populated in `BuildTalkContext`, so every
+    `Requirement.Knows()` and `Unknown()` gate silently returned false/true respectively.
+    All thread dialogue from D-089 (Nell's RWR trade, Osie's chart, Ferren's emitter
+    chart) was affected. Now `KnownIds` is populated from `Progress.AllKnown.Keys` and
+    a new `FittedIds` set is populated from `Loadout.Installed`.
+
+  * **`Requirement.Fitted()` prefix** — a new requirement type that tests whether a module
+    is currently installed on the aircraft. `"fitted:hoist"` checks `TalkContext.FittedIds`
+    for `"hoist"`. This is distinct from `Knows("module.hoist")`, which tests whether the
+    player has ever *found* the hoist (bag or installed).
+
+  * **`ContractKind.Lift`** — a new contract kind for hoist-based jobs. Completion condition
+    is `HasVisited(TargetSiteId)`, identical to Survey. The hoist requirement is enforced at
+    offer time, not completion time, because the mechanical act of hoisting is not simulated.
+
+  * **`ContractBoard.StoryContract()`** — a new static method called alongside `Generate()`
+    that checks for story-specific contracts at the current settlement. At Bel's settlement,
+    when the hoist is installed and wreck position is unknown, it offers a Lift contract to
+    the nearest nearby site. On completion, `PayOut()` grants `bel.wreck_position` knowledge
+    with detail text describing the drowned wreck.
+
+  * **Bel's dialogue update:**
+    - `bel.thread.hoist` now requires `Fitted("hoist")` + `Unknown(WreckPosition)` + 2+
+      meetings. Previously required `Knows(Wreck)` which contradicted the trade's purpose.
+    - New line `bel.thread.traded`: fires after the contract completes (player knows wreck
+      position but hasn't searched it yet). Bel describes where the wreck is.
+    - New line `bel.thread.traded.found`: fires when the player has both wreck position AND
+      has searched the wreck. Higher specificity (weight 8, 2 reqs) than `bel.thread.raft`
+      (weight 7, 2 reqs).
+    - `bel.thread.bye` now gates on `WreckPosition` instead of `Wreck`.
+
+  * **`Knows.WreckPosition`** constant added to `DialogueCorpus.Knows`, referencing
+    `ContractBoard.BelWreckPositionId` (`"bel.wreck_position"`). Added to `Knows.All` so
+    the "knows everything" test context includes it.
+
+  * Six new simlab tests in `BelTradeTests.cs`: Lift completion, story contract gating,
+    hoist dialogue gating, post-trade dialogue progression, Lift save/load round-trip,
+    and `fitted:` requirement mechanics.
+
+**The trade flow:**
+1. Player finds and installs hoist module at a workshop.
+2. Visits Bel with 2+ meetings → `bel.thread.hoist` fires: "You have a hoist on it now.
+   Then we can talk about the island..."
+3. Contract board shows "Lift generator from [island]" with Bel's brief text.
+4. Player accepts, flies to the island, the contract completes.
+5. `PayOut()` grants `bel.wreck_position` knowledge: the player now knows which wreck in
+   The Drowning is SIERRA-FOUR-THREE.
+6. `bel.thread.traded` fires next visit: "The lowest ground in the wet. You will see the
+   tail boom."
+7. Player flies to the wreck and searches it → `search.wreck` fires (beat 8).
+
+**What was NOT built:**
+- Standing reward from contract completion. `StandingReward` is set (0.3) but the game layer
+  does not apply standing from contract payouts — this is a pre-existing gap across all
+  contract types, not specific to this trade. The standing field is saved; applying it
+  requires mapping completed contracts back to their issuing NPC.
+- Generator sling load. The generator is not physically modelled — the player visits the
+  island and the contract completes. This matches the Survey contract design: the player
+  did the job, the evidence is the site record.
+
+**Why not a SlingLoad:** story.md §7.5 says "the load is a MassItem at the hook position,
+420 kg" for the blade pair, which is the one sling load that matters for the finale. The
+generator is a side trade, not a flight challenge. Modelling it as a physical load would
+require carrying it back (new contract completion logic, cable physics for a different mass),
+but the narrative payoff is the wreck position, not the flight. Simple is right.
+
+**Why fix BuildTalkContext here:** the bug silently prevented every knowledge-gated dialogue
+line in the corpus from firing. Bel's trade depends on knowledge gates; fixing them was a
+prerequisite, not a separate task. The fix unlocks all D-089 reward trades and the entire
+thread progression for all nine story NPCs.
+
+**Reversibility:** high. Remove `ContractKind.Lift`, `StoryContract()`, the
+`bel.thread.traded`/`traded.found` lines, `Knows.WreckPosition`, `BelTradeTests.cs`, and
+the Program.cs registrations. The `BuildTalkContext` fix and `Fitted()` prefix should be
+kept — they fix a real bug and are used by all NPCs, not just Bel.
