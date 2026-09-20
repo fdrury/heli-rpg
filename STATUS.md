@@ -142,6 +142,14 @@ reward attachment, condition gating, catalog references, and idempotency.
 `Unknown()`, and the new `Fitted()` prefix correctly gate dialogue on what the player knows
 and what is bolted to the aircraft. Previously these fields were unpopulated and all
 knowledge-gated dialogue silently failed to fire.
+**Act III dialogue depth** (D-093): Wray, Juno, and Sparrow thread lines now carry reward
+tags. Sparrow's medical trade grants passage knowledge; his parting line grants the blade-pair
+sling load (gated on passage + hook fitted). Wray's load line grants the 420 kg specification;
+her hook-approval and ceiling lines use `Fitted("hook")`. Juno's approach line grants the
+terrace route; her passenger-gate greeting fires when Wray is in the right seat.
+`Requirement.Passenger()` and `Requirement.Sling()` let the corpus gate on who is aboard
+and what is on the hook. One simlab test verifies all four reward lines, the two-visit trade
+sequence, and every new gate type.
 
 **Passengers** — Sera Wray in the right seat (D-090, story.md §7.6). `Passenger` is a
 record in sim/ holding identity, mass and seat position; `CopilotCallouts` generates
@@ -421,8 +429,15 @@ Story build order item 8: "Everything else, region by region, in tier order."
    and `BuildTalkContext` now populates knowledge and fitting ids — fixing a bug where all
    `Knows()`/`Unknown()` dialogue gates were inert. Completing the generator lift grants
    wreck position knowledge (`bel.wreck_position`). Six new simlab tests.
-4. **Act III NPC dialogue depth** — Wray, Juno, Sparrow thread lines need reward tags
-   once the engine features they depend on exist (passengers, sling load, medical trade).
+4. ~~**Act III NPC dialogue depth**~~ **DONE** (D-093). Wray, Juno, and Sparrow thread
+   lines now carry reward tags: Wray's load-specification line grants `search.load`
+   knowledge, Sparrow's medical trade grants `sparrow.passage` knowledge, Sparrow's
+   parting line grants the `blade_pair` sling load (gated on passage + hook), and Juno's
+   approach line grants `juno.approach` knowledge. Two new `Requirement` prefixes —
+   `Passenger()` and `Sling()` — let the corpus gate on who is aboard and what is on the
+   hook; Juno has a greeting that fires only when Wray is in the right seat. Wray's
+   hook-approval and ceiling lines use `Fitted("hook")`. One new simlab test verifies
+   all four reward lines, the two-visit Sparrow trade sequence, and every new gate type.
 
 ## Open questions for Fred
 

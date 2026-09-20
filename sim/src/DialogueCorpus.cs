@@ -113,6 +113,15 @@ public static class DialogueCorpus
         public const string Magazine = "search.magazine";   // where the blades are
         public const string Window   = "search.window";     // ninety minutes, every eighth night
 
+        /// <summary>Wray's load specification: 420 kg, hook required, LRT off (D-093).</summary>
+        public const string Load     = "search.load";       // what the finale costs
+
+        /// <summary>Sparrow granted passage to the magazine for medical stock (D-093).</summary>
+        public const string Passage  = "sparrow.passage";   // the ash-country door
+
+        /// <summary>Juno's approach route past the tether field (D-093).</summary>
+        public const string Approach = "juno.approach";      // under the terrace, below the bag
+
         /// <summary>Bel's trade: she told you where the wreck is.</summary>
         public const string WreckPosition = ContractBoard.BelWreckPositionId;
 
@@ -120,7 +129,7 @@ public static class DialogueCorpus
         public static readonly string[] All =
         {
             Callsign, Band, Rota, Manifest, Field, Wreck, Cairn, Roster, Water, Wray,
-            Magazine, Window, WreckPosition,
+            Magazine, Window, Load, Passage, Approach, WreckPosition,
         };
     }
 
@@ -1397,10 +1406,21 @@ public static class DialogueCorpus
               "A hardened magazine, in the ash, under the second aerostat. I wrote the inventory. Two matched "
               + "pairs, in grease, in racks. I have known exactly where they are for six years and had no way on earth to reach them.",
               Thread, 6, Requirement.Knows(Knows.Magazine)),
-            LT("wray.thread.load",
+            LR("wray.thread.load",
               "Four hundred and twenty kilograms with the grips and the tie bars. You will want the hook "
               + "fitted and the long-range tank off, and you will not like the second part.",
-              Thread, 6, Requirement.Knows(Knows.Magazine)),
+              Thread, 6,
+              new DialogueReward(DialogueRewardKind.Knowledge, Knows.Load,
+                  KnowledgeKind.Rumour, "Load specification — blade pair",
+                  "420 kg with grips and tie bars. Cargo hook required. Long-range tank removed to make the weight."),
+              Requirement.Knows(Knows.Magazine)),
+            LT("wray.thread.hook",
+              "The hook is on. Good. You did not ask me and that tells me you have already done the arithmetic.",
+              Thread, 7, Requirement.Knows(Knows.Magazine), Requirement.Fitted("hook")),
+            LT("wray.thread.ceiling",
+              "Two hundred and forty hours on that head since anybody tracked it. I do not say it will not "
+              + "hold a hover at that ceiling. I say you will not enjoy the hover it holds.",
+              Thread, 6, Requirement.Knows(Knows.Window)),
             LT("wray.thread.stay",
               "Two days. I will give you two days and then I come back to the pump. Do not spend the two days "
               + "trying to change that. We will both get tired and the answer will be the same.",
@@ -1583,10 +1603,23 @@ public static class DialogueCorpus
               "Every eighth night, from the moment the bag comes off the mast. Ninety minutes, and the last "
               + "ten of those are them putting it back up early because somebody is cold.",
               Thread, 6, Requirement.Knows(Knows.Window)),
+            LR("juno.thread.approach",
+              "The gully runs south-east to the spine. Stay below the terrace and you are below the bag. "
+              + "When it is down, you have the full ninety and nobody on the ground is looking up because "
+              + "everybody on the ground is on the drum.",
+              Thread, 6,
+              new DialogueReward(DialogueRewardKind.Knowledge, Knows.Approach,
+                  KnowledgeKind.Rumour, "Approach — under the terrace",
+                  "South-east gully to the spine. Stay below the terrace, below the aerostat. During the window the crew is on the drum."),
+              Requirement.Knows(Knows.Window)),
             LT("juno.thread.lift",
               "When you go, you come back over the tether field. Low. I will be on the drum and I will be "
               + "the one not holding a torch. That is the whole of the arrangement and I will not say it twice.",
               Thread, 6, Requirement.Knows(Knows.Window), Requirement.Standing(-0.2, 1)),
+            LT("juno.thread.passenger",
+              "The woman from the cut is in the right seat. I can see her from here. I did not need to "
+              + "know that and now I do.",
+              ThreadGreeting, 7, Requirement.Knows(Knows.Window), Requirement.Passenger("wray")),
             LT("juno.thread.wray",
               "The woman at the cut. Everybody knows who she is and nobody bothers her, which in this city is "
               + "the highest honour going.",
@@ -1747,15 +1780,25 @@ public static class DialogueCorpus
               "The eighth night. You know about the eighth night. Then you have talked to the tether crew, "
               + "and you should know that the tether crew talk as well.",
               Thread, 5, Requirement.Knows(Knows.Window)),
-            LT("sparrow.thread.window.paid",
+            LR("sparrow.thread.window.paid",
               "Tin on the drum. Then I walk you in as far as the revetment and no further, and what happens at the door is yours.",
-              Thread, 7, Requirement.Knows(Knows.Window), Requirement.Medical(true)),
+              Thread, 7,
+              new DialogueReward(DialogueRewardKind.Knowledge, Knows.Passage,
+                  KnowledgeKind.Rumour, "Passage — The Scald magazine",
+                  "Sparrow's crew will walk you to the revetment. What happens at the door is yours."),
+              Requirement.Knows(Knows.Window), Requirement.Medical(true)),
             LT("sparrow.thread.window.unpaid",
               "You want the door in the ash and you have come with nothing. That is not a negotiation. That is a visit.",
               Thread, 6, Requirement.Knows(Knows.Magazine), Requirement.Medical(false)),
-            LT("sparrow.thread.bye",
+            LT("sparrow.thread.door",
+              "The door is mechanical. Push, quarter turn, pull. It was not built to keep people out. "
+              + "It was built to keep the weather off what is inside.",
+              Thread, 6, Requirement.Knows(Knows.Passage)),
+            LR("sparrow.thread.bye",
               "Revetment, racks, grease. Take the two you came for and leave the rest where they are, because somebody after you will want them.",
-              ThreadParting, 5, Requirement.Knows(Knows.Magazine)),
+              ThreadParting, 5,
+              new DialogueReward(DialogueRewardKind.SlingLoad, "blade_pair"),
+              Requirement.Knows(Knows.Passage), Requirement.Fitted("hook")),
         });
         return b;
     }

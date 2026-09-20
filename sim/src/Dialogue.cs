@@ -107,6 +107,12 @@ public struct TalkContext
     /// </summary>
     public readonly HashSet<string> KnownIds = new();
 
+    /// <summary>Who is in the right seat, or null. For <c>Requirement.Passenger</c> (D-093).</summary>
+    public string? PassengerId;
+
+    /// <summary>What is on the hook, or null. For <c>Requirement.Sling</c> (D-093).</summary>
+    public string? SlingLoadId;
+
     public TalkContext() { }
 }
 
@@ -122,6 +128,12 @@ public readonly record struct Requirement(string Key, double Min, double Max)
     /// <summary>Key prefix for "this module is currently installed on the aircraft".</summary>
     public const string FittedPrefix = "fitted:";
 
+    /// <summary>Key prefix for "this person is aboard" (D-093). See TalkContext.PassengerId.</summary>
+    public const string PassengerPrefix = "passenger:";
+
+    /// <summary>Key prefix for "this load is on the hook" (D-093). See TalkContext.SlingLoadId.</summary>
+    public const string SlingPrefix = "sling:";
+
     public bool Holds(in TalkContext c)
     {
         // The record struct is (string, double, double), so there is no room for a second
@@ -134,6 +146,10 @@ public readonly record struct Requirement(string Key, double Min, double Max)
             return c.KnownIds is null || !c.KnownIds.Contains(Key[UnknownPrefix.Length..]);
         if (Key.StartsWith(FittedPrefix, StringComparison.Ordinal))
             return c.FittedIds is not null && c.FittedIds.Contains(Key[FittedPrefix.Length..]);
+        if (Key.StartsWith(PassengerPrefix, StringComparison.Ordinal))
+            return c.PassengerId is not null && c.PassengerId == Key[PassengerPrefix.Length..];
+        if (Key.StartsWith(SlingPrefix, StringComparison.Ordinal))
+            return c.SlingLoadId is not null && c.SlingLoadId == Key[SlingPrefix.Length..];
         return Numeric(c);
     }
 
@@ -168,6 +184,12 @@ public readonly record struct Requirement(string Key, double Min, double Max)
 
     /// <summary>This line may only be said when module <paramref name="id"/> is installed on the aircraft.</summary>
     public static Requirement Fitted(string id) => new(FittedPrefix + id, 0, 0);
+
+    /// <summary>This line may only be said when <paramref name="id"/> is aboard (D-093).</summary>
+    public static Requirement Passenger(string id) => new(PassengerPrefix + id, 0, 0);
+
+    /// <summary>This line may only be said when load <paramref name="id"/> is on the hook (D-093).</summary>
+    public static Requirement Sling(string id) => new(SlingPrefix + id, 0, 0);
 }
 
 /// <summary>

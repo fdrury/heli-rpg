@@ -3114,3 +3114,58 @@ thread progression for all nine story NPCs.
 `bel.thread.traded`/`traded.found` lines, `Knows.WreckPosition`, `BelTradeTests.cs`, and
 the Program.cs registrations. The `BuildTalkContext` fix and `Fitted()` prefix should be
 kept — they fix a real bug and are used by all NPCs, not just Bel.
+
+---
+
+### D-093 — Act III NPC dialogue depth · 2026-09-20
+
+**Decision:** Add reward tags and depth lines to Wray, Juno, and Sparrow's thread dialogue
+now that the engine features they depend on — passengers (D-090), sling loads (D-091), and
+the medical trade gate — all exist. Extend `TalkContext` and `Requirement` with two new
+prefix gates: `Passenger(id)` and `Sling(id)`.
+
+**What was built:**
+
+Four new reward lines:
+1. `wray.thread.load` → Knowledge `search.load` (420 kg load specification)
+2. `juno.thread.approach` → Knowledge `juno.approach` (terrace route past the aerostat)
+3. `sparrow.thread.window.paid` → Knowledge `sparrow.passage` (passage for medical stock)
+4. `sparrow.thread.bye` → SlingLoad `blade_pair` (the blade pair on the hook)
+
+Five new depth lines without rewards:
+1. `wray.thread.hook` — gated on `Fitted("hook")` + Magazine knowledge. She approves the prep.
+2. `wray.thread.ceiling` — gated on Window knowledge. The rotor-hour arithmetic.
+3. `juno.thread.passenger` — gated on `Passenger("wray")`. She sees Wray in the right seat.
+4. `juno.thread.approach` — gated on Window knowledge. The gully under the terrace.
+5. `sparrow.thread.door` — gated on Passage knowledge. The magazine door mechanism.
+
+Two new `Requirement` prefixes:
+- `Passenger(id)` checks `TalkContext.PassengerId` — who is in the right seat.
+- `Sling(id)` checks `TalkContext.SlingLoadId` — what is on the hook.
+Both populated by `BuildTalkContext` from `Progress.PassengerAboard` and `Progress.SlingLoadId`.
+
+Three new `Knows` constants: `Load`, `Passage`, `Approach`, all added to `Knows.All`.
+
+**Why the two-visit Sparrow trade:** the passage knowledge is granted by `thread.window.paid`
+(the talk-phase line) and the sling load is granted by `thread.bye` (the parting-phase line).
+`TalkContext` is fixed for the duration of a conversation, so the passage granted in talk
+does not appear in the context used for parting selection. The player visits twice: once to
+negotiate passage, once to coordinate the pickup. This matches how the medical trade reads
+narratively: first payment, then cooperation.
+
+**Why Passenger and Sling, not more knowledge gates:** knowledge gates check what the player
+has learned. Passenger and sling load status are observable facts about the physical state
+of the aircraft — Juno can see Wray in the right seat, Sparrow can see the blades on the
+hook. Using knowledge gates for these would imply the player "learned" that their own crew
+is aboard, which is a category error. The prefix pattern (`passenger:wray`, `sling:blade_pair`)
+follows the established `knows:`, `unknown:`, `fitted:` convention with no changes to the
+selector, save format, or coda.
+
+**Test:** `DialogueTests.ActIIIRewards` verifies all four reward lines (kind, target, label,
+detail), the Wray Magazine/Fitted gates, the two-visit Sparrow sequence (passage blocked
+on visit 1, sling load fires on visit 2), the Juno Passenger gate, and all three new IDs
+in `Knows.All`.
+
+**Reversibility:** high. The reward lines revert to LT() with one edit each; the five depth
+lines delete cleanly; the Requirement prefixes and TalkContext fields are unused outside
+this file and the test. `Knows.All` shrinks by three entries.

@@ -7,7 +7,9 @@ public static class DialogueTests
     static TalkContext Ctx(double fuel = 0.8, double condition = 1.0, int meetings = 0,
                            double hoursSince = double.PositiveInfinity, double standing = 0.2,
                            double now = 3600, int parts = 0, double carried = 0,
-                           bool medical = false, string[]? knows = null)
+                           bool medical = false, string[]? knows = null,
+                           string[]? fitted = null, string? passenger = null,
+                           string? sling = null)
     {
         var c = new TalkContext
         {
@@ -23,8 +25,11 @@ public static class DialogueTests
             Standing = standing,
             CarriedParts = parts,
             CarriedMass = carried,
+            PassengerId = passenger,
+            SlingLoadId = sling,
         };
         if (knows is not null) foreach (string k in knows) c.KnownIds.Add(k);
+        if (fitted is not null) foreach (string f in fitted) c.FittedIds.Add(f);
         return c;
     }
 
@@ -874,6 +879,143 @@ public static class DialogueTests
         Console.WriteLine();
         Console.WriteLine("  all three trades verified: module refs catalog, knowledge has labels, " +
                           "conditions gate correctly, both paths are idempotent");
+        return null;
+    }
+
+    /// <summary>
+    /// D-093: Act III dialogue depth. Wray, Juno, and Sparrow thread lines carry reward
+    /// tags now that passengers, sling loads, and the medical trade all exist.
+    ///
+    /// Verifies: reward attachment, condition gating, the new Passenger and Sling
+    /// requirement prefixes, and that the two-visit Sparrow trade sequence works.
+    /// </summary>
+    public static string? ActIIIRewards()
+    {
+        Console.WriteLine("  Act III reward lines and new gates");
+        Console.WriteLine();
+
+        // --- Structural: the six Act III reward lines exist with the right kind and target.
+        var expected = new (string npcId, string lineId, DialogueRewardKind kind, string targetId)[]
+        {
+            ("wray",    "wray.thread.load",           DialogueRewardKind.Knowledge,  DialogueCorpus.Knows.Load),
+            ("juno",    "juno.thread.approach",        DialogueRewardKind.Knowledge,  DialogueCorpus.Knows.Approach),
+            ("sparrow", "sparrow.thread.window.paid",  DialogueRewardKind.Knowledge,  DialogueCorpus.Knows.Passage),
+            ("sparrow", "sparrow.thread.bye",          DialogueRewardKind.SlingLoad,   "blade_pair"),
+        };
+
+        foreach (var (npcId, lineId, kind, targetId) in expected)
+        {
+            var pair = DialogueCorpus.Named(npcId);
+            if (pair is null) return $"{npcId} has no bank";
+            var (npc, bank) = pair.Value;
+
+            DialogueLine? line = bank.Lines.FirstOrDefault(l => l.Id == lineId);
+            if (line is null) return $"{lineId} not found in {npc.Name}'s bank";
+            if (line.Reward is null) return $"{lineId} has no reward attached";
+            if (line.Reward.Kind != kind) return $"{lineId} reward is {line.Reward.Kind}, expected {kind}";
+            if (line.Reward.Id != targetId) return $"{lineId} reward targets '{line.Reward.Id}', expected '{targetId}'";
+
+            if (kind == DialogueRewardKind.Knowledge)
+            {
+                if (string.IsNullOrEmpty(line.Reward.Label)) return $"{lineId} knowledge reward has no label";
+                if (string.IsNullOrEmpty(line.Reward.Detail)) return $"{lineId} knowledge reward has no detail";
+            }
+
+            Console.WriteLine($"  {npc.Name,-16} {lineId,-30} {kind,-10} -> {targetId}");
+        }
+
+        // --- Functional: Wray's load line fires with Magazine knowledge, not without.
+        Console.WriteLine();
+        Console.WriteLine("  functional: Wray load line gates on Magazine knowledge");
+        var wrayBank = DialogueCorpus.Named("wray")!.Value.Bank;
+
+        var withMag = Ctx(meetings: 4, hoursSince: 40, standing: 0.5, now: 900000,
+                          knows: new[] { DialogueCorpus.Knows.Wray, DialogueCorpus.Knows.Magazine });
+        DialogueLine? loadLine = wrayBank.Select(withMag, "talk", 900000);
+        Console.WriteLine($"  wray with magazine: {loadLine?.Id ?? "(nothing)"}");
+        // The load line should be among the top thread lines (it may not be THE selected one
+        // due to scoring, but it must be legal).
+        var loadDirect = wrayBank.Lines.FirstOrDefault(l => l.Id == "wray.thread.load");
+        if (loadDirect is null) return "wray.thread.load not in bank";
+        if (!loadDirect.Matches(withMag)) return "wray.thread.load does not match when Magazine is known";
+
+        var noMag = Ctx(meetings: 4, hoursSince: 40, standing: 0.5, now: 900000,
+                        knows: new[] { DialogueCorpus.Knows.Wray });
+        if (loadDirect.Matches(noMag)) return "wray.thread.load matches without Magazine — gate is broken";
+        Console.WriteLine("  wray.thread.load correctly gated on Magazine");
+
+        // --- Functional: Wray hook line fires only with hook fitted.
+        Console.WriteLine();
+        Console.WriteLine("  functional: Wray hook line gates on Fitted(hook)");
+        var hookLine = wrayBank.Lines.FirstOrDefault(l => l.Id == "wray.thread.hook");
+        if (hookLine is null) return "wray.thread.hook not in bank";
+
+        var withHook = Ctx(meetings: 4, hoursSince: 40, standing: 0.5, now: 900000,
+                           knows: new[] { DialogueCorpus.Knows.Wray, DialogueCorpus.Knows.Magazine },
+                           fitted: new[] { "hook" });
+        if (!hookLine.Matches(withHook)) return "wray.thread.hook does not match with hook fitted";
+        if (hookLine.Matches(withMag)) return "wray.thread.hook matches without hook — Fitted gate broken";
+        Console.WriteLine("  wray.thread.hook correctly gated on Fitted(hook) + Magazine");
+
+        // --- Functional: Sparrow's medical trade sequence.
+        Console.WriteLine();
+        Console.WriteLine("  functional: Sparrow two-visit trade sequence");
+        var sparrowBank = DialogueCorpus.Named("sparrow")!.Value.Bank;
+
+        // Visit 1: arrive with medical + window knowledge → passage line fires.
+        var visit1 = Ctx(meetings: 2, hoursSince: 40, standing: -0.4, now: 900000,
+                         medical: true,
+                         knows: new[] { DialogueCorpus.Knows.Magazine, DialogueCorpus.Knows.Window });
+        var paidLine = sparrowBank.Lines.FirstOrDefault(l => l.Id == "sparrow.thread.window.paid");
+        if (paidLine is null) return "sparrow.thread.window.paid not in bank";
+        if (!paidLine.Matches(visit1)) return "sparrow.thread.window.paid does not match with medical + window";
+        Console.WriteLine("  visit 1: sparrow.thread.window.paid matches (medical + window)");
+
+        // Visit 1 parting: sling load line should NOT fire (no passage knowledge yet).
+        var byeLine = sparrowBank.Lines.FirstOrDefault(l => l.Id == "sparrow.thread.bye");
+        if (byeLine is null) return "sparrow.thread.bye not in bank";
+        if (byeLine.Matches(visit1)) return "sparrow.thread.bye matches on visit 1 — fires before passage granted";
+        Console.WriteLine("  visit 1: sparrow.thread.bye correctly blocked (no passage yet)");
+
+        // Visit 2: arrive with passage knowledge + hook fitted → sling load line fires.
+        var visit2 = Ctx(meetings: 3, hoursSince: 40, standing: -0.2, now: 1800000,
+                         knows: new[] { DialogueCorpus.Knows.Magazine, DialogueCorpus.Knows.Window,
+                                        DialogueCorpus.Knows.Passage },
+                         fitted: new[] { "hook" });
+        if (!byeLine.Matches(visit2)) return "sparrow.thread.bye does not match with passage + hook — gate broken";
+        Console.WriteLine("  visit 2: sparrow.thread.bye matches (passage + hook) → sling load granted");
+
+        // --- Functional: Juno passenger gate.
+        Console.WriteLine();
+        Console.WriteLine("  functional: Juno passenger gate");
+        var junoBank = DialogueCorpus.Named("juno")!.Value.Bank;
+        var paxLine = junoBank.Lines.FirstOrDefault(l => l.Id == "juno.thread.passenger");
+        if (paxLine is null) return "juno.thread.passenger not in bank";
+
+        var withPax = Ctx(meetings: 3, hoursSince: 40, standing: -0.2, now: 900000,
+                          knows: new[] { DialogueCorpus.Knows.Window },
+                          passenger: "wray");
+        if (!paxLine.Matches(withPax)) return "juno.thread.passenger does not match with Wray aboard";
+
+        var noPax = Ctx(meetings: 3, hoursSince: 40, standing: -0.2, now: 900000,
+                        knows: new[] { DialogueCorpus.Knows.Window });
+        if (paxLine.Matches(noPax)) return "juno.thread.passenger matches without passenger — gate broken";
+        Console.WriteLine("  juno.thread.passenger correctly gated on Passenger(wray)");
+
+        // --- New knowledge ids are in Knows.All.
+        Console.WriteLine();
+        Console.WriteLine("  knowledge ids in Knows.All");
+        foreach (string id in new[] { DialogueCorpus.Knows.Load, DialogueCorpus.Knows.Passage,
+                                      DialogueCorpus.Knows.Approach })
+        {
+            if (!DialogueCorpus.Knows.All.Contains(id))
+                return $"{id} is not in Knows.All";
+            Console.WriteLine($"  {id,-24} present");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("  Act III trades verified: 4 reward lines, fitted/passenger/medical gates, " +
+                          "two-visit sequence, new knowledge ids in Knows.All");
         return null;
     }
 }

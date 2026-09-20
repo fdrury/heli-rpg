@@ -180,6 +180,7 @@ public static class Program
         Run("dialogue_knowledge", DialogueTests.KnowledgeGating);
         Run("dialogue_premise", DialogueTests.PremiseGuard);
         Run("dialogue_rewards", DialogueTests.Rewards);
+        Run("dialogue_act3", DialogueTests.ActIIIRewards);
         Run("governor_droop", GovernorTests.Droop);
         Run("governor_degraded", GovernorTests.Degraded);
         Run("governor_manual", GovernorTests.ManualThrottle);

@@ -828,6 +828,11 @@ public sealed partial class SiteInteraction : Node
             Standing = npc.Standing,
         };
 
+        // Passenger and sling load state — lets dialogue gate on who is aboard and what is
+        // on the hook (D-093).
+        ctx.PassengerId = Progress.PassengerAboard;
+        ctx.SlingLoadId = Progress.SlingLoadId;
+
         // Knowledge ids — unlocks every Knows()/Unknown() gate in the corpus (story.md §7.3).
         foreach (var k in Progress.AllKnown.Keys)
             ctx.KnownIds.Add(k);
