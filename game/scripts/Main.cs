@@ -244,6 +244,12 @@ public sealed partial class Main : Node3D
                 GetTree().Quit(0);
                 return;
             }
+            if (arg == "--ringscan")
+            {
+                RingScan.Run();
+                GetTree().Quit(0);
+                return;
+            }
             if (arg == "--djreport")
             {
                 DjReport.Run();
@@ -381,7 +387,21 @@ public sealed partial class Main : Node3D
             Name = "Helicopter",
             StartAltitude = 140f,
         };
-        heli.Position = new Vector3(0, 200, 1200);
+        // Spawn over the HOME REGION, worked out from the map rather than written down.
+        //
+        // This was `new Vector3(0, 200, 1200)`, which was a fine description of the old
+        // world and a silent lie about every one after it. D-087 put The Scald at (0, 0),
+        // so that constant started the aircraft two hundred metres over the citadel's
+        // hills - whose ground reaches 198 m - and the core loop test began reporting
+        // "touchdown at 0 s, dynamic rollover at 181 degrees" on flat ground, which reads
+        // as a flight model bug and is a spawn point sitting inside a hill.
+        //
+        // Third one of these the ring has turned up, after ContentHalfExtent and
+        // BasinCentre. They all have the same shape: a number sized against a layout,
+        // written as though it were sized against the world.
+        Region home = WorldMap.Regions[0];
+        float spawnGround = WorldHeight.At(home.Centre.X, home.Centre.Y);
+        heli.Position = new Vector3(home.Centre.X, spawnGround + 200f, home.Centre.Y);
 
         var af = Airframe.Workhorse();
         float rotorR = (float)af.MainRotor.Radius;
@@ -741,7 +761,101 @@ public sealed partial class Main : Node3D
     private void FireGunPod()
     {
         Vector3 noseDirection = -_heli.GlobalTransform.Basis.Z;
-        _gunpod.Fire(_heli.GlobalPosition, noseDirection, _threats);
+        var result = _gunpod.Fire(_heli.GlobalPosition, noseDirection, _threats);
+
+        // If the round missed every emitter, check whether it hit a building.
+        if (result is null || result.Value.Kind == GunHitKind.Miss)
+            CheckBuildingHit(_heli.GlobalPosition, noseDirection);
+    }
+
+    // ---------------------------------------------- building strafing (D-087)
+
+    // Accumulated hits per site, reset when the site's node rebuilds or streams out.
+    // Not persisted: the player cannot save mid-flight, so the counter does not need
+    // to survive a save/load cycle. Only the SiteDamage.Level call persists.
+    private readonly System.Collections.Generic.Dictionary<int, int> _buildingHits = new();
+
+    /// <summary>
+    /// Check whether a gun round hit a building at a nearby site.
+    ///
+    /// The round travels along the helicopter's nose. If it passes within
+    /// <see cref="BuildingGunnery.SiteHitRadius"/> of a strafeable site, the round
+    /// registers as a hit. After <see cref="BuildingGunnery.HitsToLevel"/> hits the
+    /// next standing structure is levelled, the site visual rebuilds immediately, and
+    /// the deed is recorded for the announcer.
+    /// </summary>
+    private void CheckBuildingHit(Vector3 heliPos, Vector3 noseDir)
+    {
+        float range = _gunpod.State.Range;
+        Site? bestSite = null;
+        float bestDist = float.MaxValue;
+
+        foreach (Site site in WorldMap.Sites)
+        {
+            if (!BuildingGunnery.CanStrafe((SiteKindTag)(int)site.Kind)) continue;
+
+            // Quick range gate — no point checking sites we cannot reach.
+            float dx = site.Ground.X - heliPos.X;
+            float dz = site.Ground.Z - heliPos.Z;
+            if (dx * dx + dz * dz > range * range) continue;
+
+            // Ray-to-point distance in Godot world coordinates.
+            Vector3 toSite = site.Ground - heliPos;
+            float along = toSite.Dot(noseDir);
+            if (along < 0 || along > range) continue;
+            Vector3 closest = heliPos + noseDir * along;
+            float dist = site.Ground.DistanceTo(closest);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                bestSite = site;
+            }
+        }
+
+        if (bestSite is null || bestDist > BuildingGunnery.SiteHitRadius) return;
+
+        // Accumulate hits.
+        _buildingHits.TryGetValue(bestSite.Id, out int count);
+        count++;
+        _buildingHits[bestSite.Id] = count;
+
+        // Show a hit marker on the HUD — rounds are landing. TimeSinceLastShot was
+        // already zeroed by Fire(), so the feedback timing is correct.
+        _gunpod.LastHit = new GunHitResult(
+            GunHitKind.BuildingHit, bestSite.Id, bestSite.Name, 0);
+
+        if (count % BuildingGunnery.HitsToLevel != 0) return;
+
+        // Level the next standing structure.
+        int structures = _sites.StructureCountFor(bestSite.Id);
+        if (structures <= 0) return;
+
+        var damage = _play.Progress.Damage(bestSite.Id);
+        for (int i = 0; i < structures; i++)
+        {
+            if (damage.IsRuined(i)) continue;
+
+            double workDays = BuildingGunnery.WorkDays((SiteKindTag)(int)bestSite.Kind, i, structures);
+            damage.Level(i, workDays);
+            damage.LosePeople(BuildingGunnery.CasualtiesPerBuilding);
+
+            // Rebuild the site visual so the rubble appears immediately.
+            _sites.RebuildSite(bestSite.Id);
+            _buildingHits.Remove(bestSite.Id);
+
+            // Upgrade the HUD marker to "destroyed".
+            _gunpod.LastHit = new GunHitResult(
+                GunHitKind.BuildingDestroyed, bestSite.Id,
+                $"{bestSite.Name} structure down", 0);
+
+            // Record a deed so the announcer picks it up.
+            int witnesses = WorldMap.PopulationNear(bestSite.Position.X, bestSite.Position.Y);
+            _play.Progress.RecordDeed(DjDeedKind.Levelled, bestSite.Name, 1, witnesses);
+
+            GD.Print($"[gunpod] Structure {i} at {bestSite.Name} levelled " +
+                     $"({damage.Ruins.Count} down, {damage.Workers(WorldMap.PopulationAt(bestSite))} people left)");
+            break;
+        }
     }
 
     // ------------------------------------------------------- mode transitions

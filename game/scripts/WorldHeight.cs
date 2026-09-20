@@ -41,7 +41,7 @@ public static class WorldHeight
     /// ask when they mean "the world" - neither of them wants to be told that the world is
     /// 250 km across, because neither of them has anything to say about the ocean.
     /// </summary>
-    public const float IslandHalfExtent = 16600f;
+    public const float IslandHalfExtent = 14300f;
 
     private static readonly FastNoiseLite Continent = new()
     {
@@ -110,7 +110,7 @@ public static class WorldHeight
     // BasinCheck below is what stops the copy drifting - the world report prints it.
 
     /// <summary>Centre of the drowned basin. Must match WorldMap's Wetland region centre.</summary>
-    public static readonly Vector2 BasinCentre = new(1746f, 8216f);
+    public static readonly Vector2 BasinCentre = new(-10460f, 915f);
 
     /// <summary>Carves the valley network. Ridged noise inverted becomes drainage.</summary>
     private static readonly FastNoiseLite Valleys = new()
@@ -237,26 +237,25 @@ public static class WorldHeight
         // Each region's own ground. Radii are sized from the measured reach of the sites
         // each region actually generates, plus enough margin that a site on the edge gets
         // its graded pad on dry land rather than half down the beach.
-        // Centres track WorldMap.BuildRegions exactly. Only The Pan and Long Acre overlap
-        // (their lobes share about a kilometre) - that union is the home island. Every
-        // other pair is separated by at least 2.5 km of open water, which is past the
-        // aircraft's glide from any sane cruise altitude.
-        new(new Vector2(     0,      0), new Vector2(     0,      0), 2400),  // The Pan
-        new(new Vector2( -3850,    500), new Vector2( -3850,    500), 2450),  // Long Acre
-        new(new Vector2(  4864,  -6225), new Vector2(  4864,  -6225), 2350),  // Fenmoor
-        // The Drowning's lobe is deliberately the largest of the eight, and it is not a
-        // matter of taste. The drowned basin is BasinOuter = 2500 m across, so a 2350 m
-        // lobe puts the entire island inside the flood: the region came back with its
-        // highest ground at 16 m and could not place its relay mast or its overlook
-        // anywhere, because there was nowhere above the water to put them. It used to get
-        // away with a small lobe by borrowing dry ground off the neighbours it overlapped,
-        // and it has no neighbours any more. 3100 m leaves a 600 m rim of ordinary terrain
-        // outside the flood - which is what a drowned basin looks like from the air anyway.
-        new(new Vector2(  1746,   8216), new Vector2(  1746,   8216), 3100),  // The Drowning
-        new(new Vector2( -1046, -11954), new Vector2( -1046, -11954), 2550),  // Cold Shoulder
-        new(new Vector2( 13002,  -3242), new Vector2( 13002,  -3242), 2650),  // Sawtooth Works
-        new(new Vector2( 13942,  11699), new Vector2( 13942,  11699), 2600),  // Ashmount
-        new(new Vector2(-13856,   8000), new Vector2(-13856,   8000), 2250),  // The Scald
+        // Centres track WorldMap.BuildRegions exactly: a ring of seven around a citadel.
+        // Only The Pan and Long Acre overlap - that union is the home island. Every other
+        // pair is separated by at least 2.5 km of open water, which is past the aircraft's
+        // glide from any sane cruise altitude.
+        //
+        // Two lobes are deliberately not the size their region radius suggests. The
+        // Drowning is 3100 because its own flood (BasinOuter, 2500 m) would otherwise
+        // cover the whole island and leave nowhere above water for its relay mast and
+        // overlook. The Scald is 2700 rather than 2250 because it is the citadel now and
+        // has to hold an airfield, a depot and the magazine on one island with no
+        // neighbours to spill onto.
+        new(new Vector2( -6023,  -8601), new Vector2( -6023,  -8601), 2400),  // The Pan
+        new(new Vector2( -8231, -11755), new Vector2( -8231, -11755), 2450),  // Long Acre
+        new(new Vector2(  4437,  -9516), new Vector2(  4437,  -9516), 2350),  // Fenmoor
+        new(new Vector2(-10460,    915), new Vector2(-10460,    915), 3100),  // The Drowning
+        new(new Vector2( 10460,   -915), new Vector2( 10460,   -915), 2550),  // Cold Shoulder
+        new(new Vector2( -4437,   9516), new Vector2( -4437,   9516), 2650),  // Sawtooth Works
+        new(new Vector2(  6023,   8601), new Vector2(  6023,   8601), 2600),  // Ashmount
+        new(new Vector2(     0,      0), new Vector2(     0,      0), 2700),  // The Scald
     };
 
     /// <summary>How much the shoreline wanders in or out, as a fraction of a lobe radius.</summary>

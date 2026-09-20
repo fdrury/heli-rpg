@@ -315,6 +315,8 @@ public enum DjDeedKind
     Declined,
     /// <summary>Came over low enough to take the washing off the line.</summary>
     Buzzed,
+    /// <summary>Levelled a structure from the air. The big one.</summary>
+    Levelled,
 }
 
 /// <summary>
@@ -438,6 +440,15 @@ public static class RadioDj
     /// </summary>
     public static readonly DjSiteRule[] SiteRules =
     {
+        // The citadel, first. D-086 put The Scald at the centre of the ring, and a central
+        // mast is the best-covered position on this map by a wide margin: every island is
+        // the same distance from it, so one transmitter reaches the whole world instead of
+        // half of it. It is also the LAST place the player can get to, which is the point -
+        // the station is with them from the first minute and cannot be interfered with
+        // until the end.
+        new(DialogueCorpus.RegionTag.Ashfield, SiteKindTag.Relay,    DjPick.HighestGround),
+        // The fallbacks are unchanged in spirit: high ground, away from the two relays
+        // StoryPlaces has already claimed (Long Acre and Sawtooth Works).
         new(DialogueCorpus.RegionTag.Upland,   SiteKindTag.Relay,    DjPick.HighestGround),
         new(DialogueCorpus.RegionTag.Upland,   SiteKindTag.Overlook, DjPick.HighestGround),
         new(DialogueCorpus.RegionTag.Exurb,    SiteKindTag.Relay,    DjPick.HighestGround),
@@ -606,6 +617,7 @@ public static class RadioDj
     /// </summary>
     public static double Newsworthiness(DjDeedKind kind) => kind switch
     {
+        DjDeedKind.Levelled => 3.2,
         DjDeedKind.Rescued => 3.0,
         DjDeedKind.Crashed => 2.6,
         DjDeedKind.WaterDrop => 2.4,
@@ -1018,6 +1030,16 @@ public static class DjCorpus
             "A very low pass at {PLACE}. Children delighted. Livestock not. There is a letter coming and I will read it when it arrives, in full, because that is the arrangement.",
             "It went through {PLACE} low and fast and did not stop. I have three accounts and they get lower and faster in the order I received them, which is how accounts work.",
             "The helicopter beat up {PLACE}, and that is the term, and I have had to ask somebody what the term was. Nobody has complained. One person has asked when it is next expected."),
+
+        [DjDeedKind.Levelled] = Keyed(DjTopic.Deed, "Levelled",
+            "The helicopter has shot up {PLACE}. I am going to read that again, because I did not believe it the first time either. The helicopter has shot up {PLACE}.",
+            "Buildings down at {PLACE}. From the air. I have been doing this for eleven years and I have never had to read a card like this one and I do not know what to do with my voice.",
+            "There has been firing at {PLACE} from the aircraft and there are buildings down. I am told {AMOUNT}. I would like to say something useful and I cannot think of what it would be.",
+            "{PLACE} has been strafed. That is the word {CALLER} used, and it is the right word, and I have put it on a card and I am looking at it.",
+            "Gun runs on {PLACE}. Structures destroyed. People at {NEIGHBOUR} heard it and I am told the sound carries in a way that small arms do not, which I believe.",
+            "The aircraft has levelled part of {PLACE}. I have had this station a long time and I have always known that the helicopter is the only one, and I have never until today thought about what that means.",
+            "Somebody has shot {PLACE} to pieces from the air and there is only one thing in this district that can do that, and I have spent the last year telling you how wonderful it is.",
+            "Damage at {PLACE}, done from the air. I am not going to say who, because there is only one answer, and I am not going to say why, because I do not have a card for that."),
     };
 
     /// <summary>

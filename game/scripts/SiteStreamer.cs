@@ -248,4 +248,35 @@ public sealed partial class SiteStreamer : Node3D
 
     public int ActiveSites => _active.Count;
     public int QueuedSites => _queue.Count;
+
+    /// <summary>
+    /// How many structures were built at a streamed-in site.
+    ///
+    /// Returns 0 if the site is not currently active or was never built. The count is
+    /// stored as metadata by <see cref="SiteKit.Build"/> and read here so the gun-pod
+    /// code knows which structure indices are valid without replaying the builder.
+    /// </summary>
+    public int StructureCountFor(int siteId)
+    {
+        if (!_active.TryGetValue(siteId, out Node3D? node)) return 0;
+        return (int)node.GetMeta("_structures", 0);
+    }
+
+    /// <summary>
+    /// Tear down a streamed-in site and rebuild it from the current damage state.
+    ///
+    /// Called when a strafing run levels a structure while the player is looking at it.
+    /// The site is freed and re-queued so the rubble appears immediately. Without this
+    /// the player would have to fly away and come back to see the damage.
+    /// </summary>
+    public void RebuildSite(int siteId)
+    {
+        if (!_active.TryGetValue(siteId, out Node3D? node)) return;
+        node.QueueFree();
+        _active.Remove(siteId);
+        _withCollision.Remove(siteId);
+
+        Site? site = FindSite(siteId);
+        if (site is not null) _queue.Enqueue(site);
+    }
 }

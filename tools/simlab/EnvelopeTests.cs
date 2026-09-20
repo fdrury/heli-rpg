@@ -850,14 +850,17 @@ public static class EnvelopeTests
         // the longest over-water runs --worldreport measures on each leg, not the leg
         // lengths: the number that matters is how far you are from land, not how far apart
         // the islands are.
+        // The longest over-water run on each leg, from --worldreport against the D-087 ring.
+        // These are gaps, not leg lengths: what matters is how far you are from land, not
+        // how far apart the islands are.
         (string Leg, double Km)[] crossings =
         {
-            ("home island (The Pan - Long Acre)", 0.0),
-            ("home -> tier 1 (Fenmoor)", 3.1),
-            ("tier 1 -> tier 2 (Cold Shoulder)", 3.4),
-            ("tier 1 -> tier 2 (Sawtooth Works)", 3.7),
-            ("home -> tier 3 (The Scald)", 7.8),
-            ("tier 1 -> tier 3 (Ashmount)", 7.0),
+            ("home island (The Pan - Long Acre)", 0.03),
+            ("The Drowning -> the citadel", 4.7),
+            ("home -> the citadel", 5.4),
+            ("round the ring (Fenmoor -> Cold Shoulder)", 5.5),
+            ("home -> Fenmoor", 5.7),
+            ("Long Acre -> Fenmoor, the long way", 8.1),
         };
 
         Console.WriteLine();
@@ -891,5 +894,134 @@ public static class EnvelopeTests
                    "be one";
 
         return null;
+    }
+
+    /// <summary>
+    /// Right cyclic rolls right, at every altitude. Pure sim, no Godot.
+    ///
+    /// The Godot bridge self-test started reporting "right cyclic produced -53.8 deg/s of
+    /// roll - wrong direction" after the world layout moved the spawn point, deterministic
+    /// to three decimal places, in flight code nothing had touched. That is either a sim
+    /// bug that only shows at some altitudes or a bridge problem, and the two need telling
+    /// apart before either can be fixed. This is the half with no Godot in it.
+    ///
+    /// <para><b>What it found.</b> The stick is fine: from a hover, right cyclic puts the
+    /// aircraft 12.7 m to the RIGHT in three seconds. What is unusual is the reported roll
+    /// ANGLE - positive cyclic produces a negative roll RATE in this sim's convention, which
+    /// <see cref="Stability"/> already knows about and compensates for (RollSign = -1,
+    /// measured, and commented as such). The Godot bridge self-test asserted the opposite
+    /// convention and passed anyway, because it read the absolute peak roll rate three and a
+    /// half seconds into an unstabilised departure and was picking up the leftover from the
+    /// previous phase. Moving the world spawn changed the departure and the accident stopped
+    /// working.
+    ///
+    /// So: assert on DISPLACEMENT, which is not a convention and is what the player feels,
+    /// and print the rate as information.</para>
+    /// </summary>
+    public static string? RollSenseAtAltitude()
+    {
+        Console.WriteLine("  roll response as a derivative, from a trimmed hover, 0.6 s, no wind");
+        Console.WriteLine("    alt   speed  trim roll   push right   push left    response   verdict");
+
+        var wrong = new List<string>();
+        foreach ((double alt, double kt) in new[] { (200.0, 0.0), (340.0, 0.0), (900.0, 0.0),
+                                                   (340.0, 20.0), (340.0, 46.0), (340.0, 80.0) })
+        {
+            Helicopter h = Fresh();
+            h.UseInternalGroundModel = false;
+            TrimResult t = Trim.Solve(h, alt, kt / Kt);
+            if (!t.Converged)
+            {
+                Console.WriteLine($"    {alt,5:F0} {kt,4:F0}kt  did not trim (autotrim's problem, not this one's)");
+                continue;
+            }
+            h.PlaceInFlight(alt);
+            h.State.Orientation = Quat.FromEuler(t.RollRad, t.PitchRad, 0);
+            h.State.Velocity = Vec3.Zero;
+            h.State.AngularVelocity = Vec3.Zero;
+
+            // Measured as a DERIVATIVE, not as an absolute response to a fixed input.
+            //
+            // A Huey hovers with left cyclic held in - it has to, to hold the tail rotor's
+            // translating tendency - so the trimmed CyclicRoll is well left of neutral. An
+            // input of "+0.22" is therefore not "right cyclic" at all, it is "less left
+            // cyclic", and whether the aircraft ends up rolling right depends entirely on
+            // whether 0.22 happens to exceed the trim offset. That is what the Godot bridge
+            // test was really measuring, which is why it flipped sign when the world layout
+            // moved the spawn and changed the trim.
+            //
+            // The derivative has no such ambiguity: push right against push left, same
+            // aircraft, same everything else, and the difference is the control's sense.
+            double Response(double delta)
+            {
+                Helicopter hh = Fresh();
+                hh.UseInternalGroundModel = false;
+                hh.PlaceInFlight(alt);
+                hh.State.Orientation = Quat.FromEuler(t.RollRad, t.PitchRad, 0);
+                hh.State.Velocity = new Vec3(kt / Kt, 0, 0);
+                hh.State.AngularVelocity = Vec3.Zero;
+
+                Controls cc = t.Controls;
+                cc.CyclicRoll += delta;
+                cc.ClampToRange();
+
+                double pk = 0;
+                for (int i = 0; i < 60; i++)
+                {
+                    hh.Input = cc;
+                    hh.Step(0.01);
+                    if (Math.Abs(hh.State.AngularVelocity.X) > Math.Abs(pk)) pk = hh.State.AngularVelocity.X;
+                }
+                return pk;
+            }
+
+            // And the question that actually matters: which way does the aircraft GO?
+            //
+            // A reported roll angle is a sign convention and this sim's is unusual -
+            // Stability.RollSign is -1, measured, precisely because positive cyclic gives a
+            // negative rate here. Displacement is not a convention. A helicopter banked
+            // right translates right, so flying it for three seconds and looking at where
+            // it ended up settles what the stick is really doing, and it is the same thing
+            // the player will feel.
+            double Sideways(double delta)
+            {
+                Helicopter hh = Fresh();
+                hh.UseInternalGroundModel = false;
+                hh.PlaceInFlight(alt);
+                hh.State.Orientation = Quat.FromEuler(t.RollRad, t.PitchRad, 0);
+                hh.State.Velocity = new Vec3(kt / Kt, 0, 0);
+                hh.State.AngularVelocity = Vec3.Zero;
+                Vec3 start = hh.State.Position;
+
+                Controls cc = t.Controls;
+                cc.CyclicRoll += delta;
+                cc.ClampToRange();
+                for (int i = 0; i < 300; i++) { hh.Input = cc; hh.Step(0.01); }
+                return hh.State.Position.Y - start.Y;      // +Y is east/right in NED
+            }
+
+            double right = Response(+0.22), left = Response(-0.22);
+            double derivative = (right - left) / 0.44;
+            double goesRight = Sideways(+0.22) - Sideways(-0.22);
+
+            // The directional claim is asserted from the HOVER cases only. In forward
+            // flight a roll starts a turn rather than a sideslip, so displacement in a
+            // world axis is dominated by the heading change and says nothing clean about
+            // which way the stick went. The forward-flight rows are printed because the
+            // rate is still informative, and not asserted on because the measurement is
+            // not valid there - measuring a quantity that does not mean what you want in
+            // the condition you are measuring it in is how this whole investigation began.
+            bool ok = kt > 0.5 || goesRight > 0;
+            Console.WriteLine($"    {alt,5:F0} {kt,4:F0}kt trim {t.Controls.CyclicRoll,6:F3}   " +
+                              $"right {right * 57.2958,7:F1}   left {left * 57.2958,7:F1}   " +
+                              $"d/dx {derivative * 57.2958,7:F1}  moves {goesRight,7:F1} m  " +
+                              $"{(ok ? "RIGHT" : "LEFT - REVERSED")}");
+            if (!ok) wrong.Add($"right cyclic moved the aircraft {goesRight:F1} m to the LEFT " +
+                               $"in a hover at {alt:F0} m - the stick is inverted");
+        }
+
+        if (wrong.Count == 0) return null;
+        foreach (string w in wrong) Console.WriteLine($"  !! {w}");
+        return $"{wrong.Count} altitude(s) where right cyclic does not roll right";
     }
 }

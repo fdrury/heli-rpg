@@ -79,6 +79,16 @@ public static class DialogueCorpus
         return line;
     }
 
+    /// <summary>Thread line that grants a reward when delivered (D-089).</summary>
+    private static DialogueLine LR(string id, string text, string[] tags, double weight,
+                                   DialogueReward reward, params Requirement[] reqs)
+    {
+        var line = new DialogueLine { Id = id, Text = text, Weight = weight, Reward = reward };
+        line.Tags.AddRange(tags);
+        line.Requires.AddRange(reqs);
+        return line;
+    }
+
     private static readonly string[] Thread = { "talk", "thread" };
     private static readonly string[] ThreadGreeting = { "greeting", "thread" };
     private static readonly string[] ThreadParting = { "parting", "thread" };
@@ -695,10 +705,12 @@ public static class DialogueCorpus
             LT("nell.thread.roster",
               "Alive four years after. So the loadsheet did not kill everybody on it. That is not absolution. I will take it anyway.",
               Thread, 5, Requirement.Knows(Knows.Roster)),
-            LT("nell.thread.rwr",
+            LR("nell.thread.rwr",
               "The crate is yours. It is a warning receiver, it is older than you are, and it will tell "
               + "you when somebody is looking at you. That is all it does and it is enough.",
-              Thread, 5, Requirement.Knows(Knows.Manifest), Requirement.Standing(0.3, 1)),
+              Thread, 5,
+              new DialogueReward(DialogueRewardKind.Module, "rwr"),
+              Requirement.Knows(Knows.Manifest), Requirement.Standing(0.3, 1)),
             LT("nell.thread.bye",
               "Nothing. Go. I will be here weighing things.",
               ThreadParting, 5, Requirement.Knows(Knows.Cairn)),
@@ -1034,10 +1046,14 @@ public static class DialogueCorpus
               "Then she is alive. Well. I have been the man who holds the dead in this valley for six "
               + "years and today somebody has walked in with the other kind of news.",
               ThreadGreeting, 8, Requirement.Knows(Knows.Wray), Requirement.Meetings(1, 99)),
-            LT("osie.thread.chart",
+            LR("osie.thread.chart",
               "There is a way through the tops that keeps you out of sight of the col the whole way. I "
               + "will draw it. It is not worth anything to me and it took a man's whole life to learn.",
-              Thread, 5, Requirement.Knows(Knows.Cairn), Requirement.Meetings(2, 99)),
+              Thread, 5,
+              new DialogueReward(DialogueRewardKind.Knowledge, "chart.upland.masking",
+                  KnowledgeKind.Chart, "Upland masking routes",
+                  "Dead ground through the Cold Shoulder ridges. A life's knowledge, given freely."),
+              Requirement.Knows(Knows.Cairn), Requirement.Meetings(2, 99)),
             LT("osie.thread.bye",
               "Write them down properly when you are down. Not up here. You will get it wrong up here.",
               ThreadParting, 5, Requirement.Knows(Knows.Cairn)),
@@ -1203,10 +1219,14 @@ public static class DialogueCorpus
             LT("ferren.thread.window",
               "Ninety minutes. I have run a shift change in less and lost a man doing it. Plan it like a shift change and do not improvise.",
               Thread, 5, Requirement.Knows(Knows.Window)),
-            LT("ferren.thread.chart",
+            LR("ferren.thread.chart",
               "The chart shows where the emitters sit, near enough. It came off a lorry driver who is dead "
               + "now and it is accurate, and I want the delivery made before you take it.",
-              Thread, 5, Requirement.Knows(Knows.Cairn), Requirement.Meetings(2, 99)),
+              Thread, 5,
+              new DialogueReward(DialogueRewardKind.Knowledge, "chart.emitter.locations",
+                  KnowledgeKind.ThreatSite, "Emitter locations",
+                  "Where the emitters sit in the outer tiers. Off a lorry driver who knew the roads."),
+              Requirement.Knows(Knows.Cairn), Requirement.Meetings(2, 99)),
             LT("ferren.thread.bye",
               "Do the delivery or do not. The roster will be in the office either way, and I will be at the furnace.",
               ThreadParting, 5, Requirement.Knows(Knows.Roster)),

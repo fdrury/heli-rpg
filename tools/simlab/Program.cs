@@ -49,6 +49,7 @@ public static class Program
         Run("poshold", TrimTests.PositionHold);
         Run("envelope", EnvelopeTests.Performance);
         Run("range_crossings", EnvelopeTests.CrossingRange);
+        Run("rollsense", EnvelopeTests.RollSenseAtAltitude);
         Run("autoglide", EnvelopeTests.Autorotation);
         Run("autotrim", EnvelopeTests.AutorotationTrim);
         Run("autobalance", EnvelopeTests.AutorotationBalance);
@@ -172,6 +173,7 @@ public static class Program
         Run("dialogue_voices", DialogueTests.Voices);
         Run("dialogue_knowledge", DialogueTests.KnowledgeGating);
         Run("dialogue_premise", DialogueTests.PremiseGuard);
+        Run("dialogue_rewards", DialogueTests.Rewards);
         Run("governor_droop", GovernorTests.Droop);
         Run("governor_degraded", GovernorTests.Degraded);
         Run("governor_manual", GovernorTests.ManualThrottle);

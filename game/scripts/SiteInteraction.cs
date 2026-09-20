@@ -817,6 +817,41 @@ public sealed partial class SiteInteraction : Node
         };
     }
 
+    /// <summary>
+    /// Execute a dialogue reward (D-089). Called by <see cref="DialoguePanel"/> when a
+    /// line with a <see cref="DialogueReward"/> is delivered.
+    ///
+    /// Module rewards follow the same path as salvage discovery (D-011): the module goes
+    /// into the bag (not installed), the player learns a Schematic, and the journal notes
+    /// it. Knowledge rewards call <see cref="Progress.Learn"/> directly. Both paths are
+    /// idempotent — a duplicate find or learn is a no-op.
+    /// </summary>
+    public void DeliverReward(DialogueReward reward)
+    {
+        switch (reward.Kind)
+        {
+            case DialogueRewardKind.Module:
+                if (Loadout.Find(reward.Id) && Loadout.Catalog.TryGetValue(reward.Id, out var mod))
+                {
+                    Progress.Learn(new Knowledge(KnowledgeKind.Schematic,
+                        $"module.{reward.Id}", mod.Name, mod.Description));
+                    Progress.Journal($"Received: {mod.Name}.");
+                    Notice?.Invoke($"Received: {mod.Name}");
+                    GD.Print($"[reward] module: {reward.Id} ({mod.Name})");
+                }
+                break;
+
+            case DialogueRewardKind.Knowledge:
+                if (Progress.Learn(new Knowledge(reward.KnowledgeKind, reward.Id,
+                        reward.Label ?? reward.Id, reward.Detail ?? "")))
+                {
+                    Notice?.Invoke($"Learned: {reward.Label ?? reward.Id}");
+                    GD.Print($"[reward] knowledge: {reward.Id}");
+                }
+                break;
+        }
+    }
+
     private ThreadContext BuildThreadContext()
     {
         // Resolve which story-role sites the player has visited, using the role ids

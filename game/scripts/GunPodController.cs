@@ -27,7 +27,7 @@ public sealed partial class GunPodController : Node
     public float TimeSinceLastShot { get; private set; } = 99f;
 
     /// <summary>Most recent hit result, for HUD feedback.</summary>
-    public GunHitResult? LastHit { get; private set; }
+    public GunHitResult? LastHit { get; set; }
 
     /// <summary>Cooldown remaining before the next round can fire.</summary>
     private float _cooldown;

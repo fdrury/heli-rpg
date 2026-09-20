@@ -159,6 +159,25 @@ public readonly record struct Requirement(string Key, double Min, double Max)
     public static Requirement Unknown(string id) => new(UnknownPrefix + id, 0, 0);
 }
 
+/// <summary>
+/// What a dialogue line grants when delivered. The bridge between NPC trades and the
+/// progression system (D-089): when Nell says "the crate is yours", this is the crate.
+///
+/// Module rewards call <see cref="Loadout.Find"/> (add to bag, not installed).
+/// Knowledge rewards call <see cref="Progress.Learn"/>.
+/// Both paths already persist through save/load.
+/// </summary>
+public sealed record DialogueReward(DialogueRewardKind Kind, string Id,
+    KnowledgeKind KnowledgeKind = default, string? Label = null, string? Detail = null);
+
+public enum DialogueRewardKind
+{
+    /// <summary>Add a module to the loadout bag. The player still has to install it.</summary>
+    Module,
+    /// <summary>Learn a Knowledge entry — a chart, a threat site, a frequency.</summary>
+    Knowledge,
+}
+
 /// <summary>One hand-vetted line. Thousands of these are generated offline and shipped.</summary>
 public sealed class DialogueLine
 {
@@ -171,6 +190,13 @@ public sealed class DialogueLine
 
     /// <summary>Tags for selection and for telling the coda what tone to match.</summary>
     public readonly List<string> Tags = new();
+
+    /// <summary>
+    /// If non-null, this line grants a capability when delivered (D-089). The game layer
+    /// executes it in <c>SiteInteraction.DeliverReward</c> when the line is selected.
+    /// Idempotent: a module already in the bag or knowledge already learned is a no-op.
+    /// </summary>
+    public DialogueReward? Reward;
 
     /// <summary>
     /// Estimated delivery time. This is not decoration: it is the latency budget. A coda

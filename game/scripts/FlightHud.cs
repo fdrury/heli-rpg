@@ -1104,9 +1104,11 @@ public sealed partial class FlightHud : Control
         // up to avoid overlapping with the attitude indicator.
         Vector2 pos = new(size.X * 0.5f, size.Y * 0.32f);
 
-        if (hit.Value.Kind is GunHitKind.EmitterHit or GunHitKind.EmitterDestroyed)
+        if (hit.Value.Kind is GunHitKind.EmitterHit or GunHitKind.EmitterDestroyed
+            or GunHitKind.BuildingHit or GunHitKind.BuildingDestroyed)
         {
-            Color c = hit.Value.Kind == GunHitKind.EmitterDestroyed ? Danger : Warn;
+            Color c = hit.Value.Kind is GunHitKind.EmitterDestroyed or GunHitKind.BuildingDestroyed
+                ? Danger : Warn;
             c.A *= alpha;
             string text = hit.Value.Description.ToUpperInvariant();
             var sz = _font.GetStringSize(text, HorizontalAlignment.Left, -1, 16);

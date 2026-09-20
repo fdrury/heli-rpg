@@ -152,7 +152,7 @@ public sealed partial class CockpitRadio : Node3D
                 case "--selftest": case "--looptest": case "--foottest":
                 case "--combattest": case "--savetest": case "--windingtest":
                 case "--screenshot": case "--threatreport": case "--worldreport":
-                case "--warntest": case "--djreport":
+                case "--warntest": case "--djreport": case "--ringscan":
                     _quiet = true;
                     break;
             }
@@ -305,6 +305,16 @@ public sealed partial class CockpitRadio : Node3D
             Weather.Conditions wx = SceneMood.Now;
             signal = Radio.Quality(d, Math.Max(t.HeightAgl - _skidHeight, 0), station,
                                    wx.Precipitation, wx.StormIntensity);
+
+            // ...and then the ground between here and there.
+            //
+            // Radio.Quality is pure geometry and weather: distance, how high the receiver
+            // is, how hard it is raining. It has no idea there is a hill in the way, which
+            // meant reception was identical in a gorge and on the ridge above it. Fred
+            // asked for the station to go to static down in a canyon, and it is the same
+            // question the threat system already answers for line of sight - so it is
+            // answered the same way, by walking the height field along the path.
+            signal *= TerrainShadow(here, station);
         }
 
         DamageState dmg = _heli.Sim.Damage;
@@ -575,6 +585,55 @@ public sealed partial class CockpitRadio : Node3D
             p?.Search.Complete ?? false,
             null, null,
             p?.Deeds);
+    }
+
+    /// <summary>
+    /// How much of the signal the ground in between takes out, 0 (blocked) to 1 (clear).
+    ///
+    /// VHF does not stop dead at a ridge - it diffracts over it, which is why you can still
+    /// hear a station from behind a hill and why the sound is a degraded version rather than
+    /// silence. So this measures how far the terrain intrudes ABOVE the straight line from
+    /// the mast to the aircraft, as a fraction of the path, and attenuates on that rather
+    /// than testing a single blocked/not-blocked boolean. Sitting in a gorge with three
+    /// hundred metres of rock either side is most of the path obstructed and reads as
+    /// static; being ten metres below a ridge line is a shade quieter.
+    ///
+    /// Sampled coarsely on purpose. This runs every frame the radio is on, the answer only
+    /// has to be good enough to move a gain, and the terrain function is the most-called
+    /// thing in the game already.
+    /// </summary>
+    private static double TerrainShadow(Vector3 here, in RadioStation station)
+    {
+        var from = new Vector2(here.X, here.Z);
+        var to = new Vector2((float)station.X, (float)station.Y);
+        float span = from.DistanceTo(to);
+        if (span < 200f) return 1.0;
+
+        // The mast top is the transmitting end; the aircraft is wherever it is.
+        float mastTop = WorldHeight.At(to.X, to.Y) + (float)RadioDj.MastHeightM;
+
+        const int steps = 24;
+        double blocked = 0;
+        for (int i = 1; i < steps; i++)
+        {
+            float f = i / (float)steps;
+            Vector2 p = from.Lerp(to, f);
+            float sight = Mathf.Lerp(here.Y, mastTop, f);
+            float ground = WorldHeight.At(p.X, p.Y);
+
+            // How far the ground pokes through the sight line, normalised against a
+            // hundred metres - past that it is comprehensively in the way and more rock
+            // makes no difference.
+            if (ground > sight)
+                blocked += Math.Min(1.0, (ground - sight) / 100.0);
+        }
+
+        double fraction = blocked / (steps - 1);
+
+        // Floor at 0.05 rather than 0: a completely shadowed station is a carrier you can
+        // just about tell is there, which is a more interesting sound than silence and is
+        // also what actually happens.
+        return Math.Clamp(1.0 - fraction * 1.6, 0.05, 1.0);
     }
 
     // ------------------------------------------------------------- for the panel

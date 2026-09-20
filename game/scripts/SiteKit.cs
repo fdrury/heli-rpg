@@ -108,6 +108,9 @@ public static class SiteKit
         public SiteDamage? Damage;
         private int _next;
 
+        /// <summary>How many structures have been allocated so far.</summary>
+        public int Count => _next;
+
         /// <summary>
         /// Take the next ordinal and say what state that structure is in: 1 whole, 0 flat,
         /// in between under construction.
@@ -144,6 +147,10 @@ public static class SiteKit
         // The authored-site layer: if this site plays a story role, the role's prop goes on
         // top of the generic build. A no-op for every other site, which is almost all of them.
         StoryPlaces.Decorate(root, site);
+
+        // The structure count is consumed by the building-damage system: it needs to know
+        // how many valid indices exist so it does not level a structure that was never built.
+        root.SetMeta("_structures", plan.Count);
 
         return root;
     }

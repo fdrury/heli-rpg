@@ -65,10 +65,11 @@ public static class WorldMap
     /// the only sites that survived out there were wrecks, which are placed by a different
     /// rule. The terrain was fine; the envelope was the wall.
     ///
-    /// Sized from the layout: Ashmount is the furthest out at (13942, 11699) with a 1800 m
-    /// region radius, so 16000 clears it with room for the placement jitter.
+    /// Sized from the layout: the ring is at 10.5 km and the widest region on it is
+    /// Ashmount with an 1800 m radius, so 13500 clears every disc with room for the
+    /// placement jitter.
     /// </summary>
-    public const float ContentHalfExtent = 16000f;
+    public const float ContentHalfExtent = 14500f;
 
     private static List<Region>? _regions;
     private static List<Site>? _sites;
@@ -87,45 +88,68 @@ public static class WorldMap
         // nowhere was ever remote. Measured, you were within 3.1 km of something from ANY
         // point on the map. These are tighter, and the country between them is meant to be
         // empty: that emptiness is what turns a leg into a journey.
-        // D-059 made this an archipelago and the layout did not follow, because it could
-        // not: every adjacent pair of regions was 2.4 to 3.7 km apart and each needed a
-        // 2.4 km lobe of land under it, so there was no cut anywhere that left a channel
-        // the aircraft could not glide across. The measured result was "2 landmasses,
-        // largest 121 km2" and exactly ONE committed crossing on the whole map. It was one
-        // island with bays.
+        // A RING AROUND A CITADEL. Fred's shape, and a better one than the layout it
+        // replaces.
         //
-        // Fred asked for the islands to be spaced out, on the grounds that it helps the
-        // range-against-map-size problem. It does, and the reason it is free is worth
-        // stating: spacing regions apart adds WATER, not empty land. Each region keeps its
-        // own lobe and its own sites, so site density per island is exactly what it was -
-        // what grows is the sea between them, and an over-water leg is allowed to be empty
-        // because crossing it is the activity.
+        // D-077 spread the regions out and made the world a real archipelago, but it put
+        // the home island in the middle and raised tier with radius, so every trip was
+        // radial: out to the rim and back, and the middle of the map was the safest place
+        // in it. This inverts that. The Scald sits at the centre - it is Act III, the
+        // sealed magazine, the blades, the thing the whole search is for - and everywhere
+        // else is on a ring around it at 10.5 km.
         //
-        // The gradient is deliberate and it is the gating system (D-010, D-059):
+        // What that buys:
         //
-        //   * The Pan and Long Acre OVERLAP. The home island is one landmass and the
-        //     player can learn to fly without ever being committed over water, which
-        //     matters when the first aircraft is a salvaged one and the tank is rarely
-        //     full.
-        //   * Tier 1 is a 2.9 to 3.2 km hop off the home island.
-        //   * Tier 2 is 3.3 to 3.7 km from a tier 1 island - but 7 km direct from home, so
-        //     island-hopping is the cheap route and the direct line is the expensive one.
-        //   * Tier 3 is a 7.8 to 8.0 km committed crossing. At best glide (2:1, so about
-        //     1 km from 500 m) there is no point on those legs with an option.
+        //   * The endgame is VISIBLE from everywhere and unreachable. A citadel you fly
+        //     around for the whole campaign is a better object than one over the horizon.
+        //   * Gating is D-010's air defence rather than distance. Hexagonal geometry means
+        //     a hop to the centre and a hop to the next island along are necessarily the
+        //     same length, so the centre being close and lethal is the design rather than
+        //     a compromise - you are not kept out by fuel, you are kept out by what is
+        //     down there.
+        //   * Opposite sides of the ring are where the circulation actually bites. The Pan
+        //     to Ashmount is 21 km straight across and goes directly through the citadel's
+        //     envelope; round the ring it is two ordinary hops. That is a navigation
+        //     decision with a real reason behind it, which the old layout never produced.
+        //   * The transmitter goes on the citadel (RadioDj.SiteRules). A central mast is
+        //     audible from the entire ring, which is the best coverage any position on
+        //     this map can have, and it is the last place the player can reach - so the
+        //     station is with them from the first minute and destroying it is an endgame
+        //     choice rather than an early accident.
         //
-        // The lobe table in WorldHeight.Land is the same eight centres and has to move
-        // with this. If you change one, change both, then run --worldreport: the numbers
-        // that matter are landmass count, committed crossings, and site shortfalls at zero.
+        // Spacing rules are unchanged from D-077: The Pan and Long Acre OVERLAP and remain
+        // one home island so a player can learn to fly without being committed over water,
+        // and every other pair is at least 2.5 km apart. Long Acre sits radially OUTWARD
+        // of The Pan rather than alongside it - tangentially it came within 1.7 km of
+        // Fenmoor, which would have joined the home island to a tier 1 one.
+        //
+        // The ring is ROTATED 55 degrees, and the angle was measured rather than chosen.
+        // The layout says where a region is; the continental noise field decides what the
+        // ground is like once it gets there, and the two know nothing about each other. At
+        // 0 degrees Cold Shoulder - the region literally called Upland, whose relay mast and
+        // overlook both need ground above 110 m - landed on a patch topping out at 109 m
+        // and 30% under water. The region wanted a hill and the noise gave it a bog, and
+        // every placement rule downstream then failed in ways that looked like placement
+        // bugs. --ringscan samples the whole ring in one pass; 55 degrees is the rotation
+        // that puts Cold Shoulder on ground reaching 188 m with the most usable flat ground
+        // of any rotation that clears the threshold at all.
+        //
+        // The world is 28.4 km across, which is smaller than the 33 km of D-077: a ring
+        // packs eight islands more tightly than a tiered spiral does.
+        //
+        // The lobe table in WorldHeight.Land is the same eight centres and has to move with
+        // this. If you change one, change both, then run --worldreport: landmass count,
+        // committed crossings, and site shortfalls at zero.
         return new List<Region>
         {
-            new(RegionKind.Basin,      "The Pan",          new Vector2(     0,      0), 1500, 0),
-            new(RegionKind.Farmland,   "Long Acre",        new Vector2( -3850,    500), 1600, 0),
-            new(RegionKind.Exurb,      "Fenmoor",          new Vector2(  4864,  -6225), 1400, 1),
-            new(RegionKind.Wetland,    "The Drowning",     new Vector2(  1746,   8216), 1400, 1),
-            new(RegionKind.Upland,     "Cold Shoulder",    new Vector2( -1046, -11954), 1700, 2),
-            new(RegionKind.Industrial, "Sawtooth Works",   new Vector2( 13002,  -3242), 1300, 2),
-            new(RegionKind.City,       "Ashmount",         new Vector2( 13942,  11699), 1800, 3),
-            new(RegionKind.Ashfield,   "The Scald",        new Vector2(-13856,   8000), 1200, 3),
+            new(RegionKind.Basin,      "The Pan",          new Vector2( -6023,  -8601), 1500, 0),
+            new(RegionKind.Farmland,   "Long Acre",        new Vector2( -8231, -11755), 1600, 0),
+            new(RegionKind.Exurb,      "Fenmoor",          new Vector2(  4437,  -9516), 1400, 1),
+            new(RegionKind.Wetland,    "The Drowning",     new Vector2(-10460,    915), 1400, 1),
+            new(RegionKind.Upland,     "Cold Shoulder",    new Vector2( 10460,   -915), 1700, 2),
+            new(RegionKind.Industrial, "Sawtooth Works",   new Vector2( -4437,   9516), 1300, 2),
+            new(RegionKind.City,       "Ashmount",         new Vector2(  6023,   8601), 1800, 3),
+            new(RegionKind.Ashfield,   "The Scald",        new Vector2(     0,      0), 1200, 3),
         };
     }
 
@@ -295,13 +319,38 @@ public static class WorldMap
                 // far worse outcome than two workshops being closer together than ideal, so
                 // once the ideal spacing has genuinely failed, the rule relaxes rather than
                 // the place vanishing. Full spacing is still tried first, every time.
-                foreach (float gapScale in new[] { 1.0f, 0.6f, 0.35f })
+                // ...and then, if the terrain itself is the obstacle rather than the
+                // spacing, three more at widening TERRAIN desperation.
+                //
+                // The same argument, applied to the other rule. The height and slope bands
+                // are what a place of that kind would REALLY want - a relay on a ridge above
+                // 110 m, a runway under four and a half degrees - and they were being
+                // enforced as absolutes against a continental noise field that has never
+                // heard of them. Every time the region layout moved, two or three regions
+                // landed on ground that could not satisfy its own plan and silently produced
+                // nothing: the ring's first cut lost Cold Shoulder's mast to a hilltop of
+                // 109 m against a 110 m threshold, and rotating to fix that took Fenmoor's
+                // mast and Long Acre's airfield instead. Three rounds of whack-a-mole is
+                // enough to conclude the thresholds are the problem.
+                //
+                // So they relax, in the same shape and for the same reason as the spacing:
+                // the ideal is always tried first and everywhere, and a region that cannot
+                // meet it gets the best ground it actually has rather than nothing at all.
+                // A mast on the highest hill in a low region is right - that IS where people
+                // would put it - and a relay that does not exist is a frequency the player
+                // can never find.
+                foreach (float terrain in new[] { 1.0f, 0.55f, 0.25f })
                 {
-                    while (placed < n && TryPlace(rng, region, kind, sites, out Vector2 pos, gapScale))
+                    foreach (float gapScale in new[] { 1.0f, 0.6f, 0.35f })
                     {
-                        sites.Add(new Site(id++, NameFor(kind, region, rng), kind, pos,
-                                           region.Kind, RadiusFor(kind), region.Tier));
-                        placed++;
+                        while (placed < n &&
+                               TryPlace(rng, region, kind, sites, out Vector2 pos, gapScale, terrain))
+                        {
+                            sites.Add(new Site(id++, NameFor(kind, region, rng), kind, pos,
+                                               region.Kind, RadiusFor(kind), region.Tier));
+                            placed++;
+                        }
+                        if (placed >= n) break;
                     }
                     if (placed >= n) break;
                 }
@@ -339,8 +388,13 @@ public static class WorldMap
     /// terrain: a relay wants a ridge, a settlement wants shelter and flat ground, a
     /// wetland wreck wants to be half in the water.
     /// </summary>
+    /// <param name="terrainStrict">
+    /// 1 = the ideal height and slope bands; below that they widen. Only ever reduced after
+    /// the ideal has genuinely failed everywhere in the region - see Place above.
+    /// </param>
     private static bool TryPlace(RandomNumberGenerator rng, Region region, SiteKind kind,
-                                 List<Site> placed, out Vector2 pos, float gapScale = 1.0f)
+                                 List<Site> placed, out Vector2 pos, float gapScale = 1.0f,
+                                 float terrainStrict = 1.0f)
     {
         List<Vector2> anchors = AnchorsFor(region);
         bool clustered = Clusters(kind);
@@ -383,10 +437,30 @@ public static class WorldMap
             // slope; the graded pad then makes the spot landable regardless.
             float slope = RawSlope(pos.X, pos.Y, 3f);
 
+            // Widening the bands - and SLOPE IS NOT LIKE THE OTHERS.
+            //
+            // The first version relaxed everything the same way, by dividing, so at the
+            // widest pass a settlement would accept 28 degrees. That is not a village on
+            // awkward ground, it is a cliff, and the consequence showed up two steps
+            // downstream in a place nothing was watching: the core loop test flew to a
+            // site, tried to land, and rolled the aircraft over at 154 degrees of bank on
+            // a 56 degree slope. Height is a matter of taste - a mast at 80 m instead of
+            // 110 m is still the highest thing around - but slope decides whether an
+            // aircraft can be PUT DOWN there, and the landing model is not negotiable.
+            //
+            // So slope widens additively and barely: 7 degrees becomes 9.8 at the most
+            // desperate pass, which is awkward ground rather than impossible ground.
+            // Heights widen generously, because nothing breaks if they do.
+            float Slope(float ideal) => ideal * (1f + (1f - terrainStrict) * 0.5f);
+            float Ceil(float ideal) => ideal / Mathf.Max(terrainStrict, 0.5f);
+
             bool ok = kind switch
             {
                 // A mast on a hilltop is visible from 8 km, which is the entire point of it.
-                SiteKind.Relay => h > 110f && slope < 18f,
+                // The only rule with a FLOOR rather than a ceiling, so it relaxes downward:
+                // a mast wants the highest ground there is, and in a low region that is
+                // lower than 110 m but is still the highest ground there is.
+                SiteKind.Relay => h > 110f * terrainStrict && slope < Slope(18f),
                 SiteKind.Overlook => h > 130f && slope < 22f,
                 // People build where it is flat and not underwater.
                 // Flatness is the real constraint; absolute height was not.
@@ -398,21 +472,21 @@ public static class WorldMap
                 // demonstrably live in high country - 320 m keeps towns off the peaks while
                 // letting the uplands have somewhere to live.
                 SiteKind.Settlement or SiteKind.Farmstead
-                    => slope < 7f && h > 6f && h < 320f,
+                    => slope < Slope(7f) && h > 6f && h < Ceil(320f),
                 // A workshop is ONE SHED, not a town, and it can sit on ground a village
                 // could not. Sharing the settlement rule left Sawtooth Works - an industrial
                 // region literally named "Works" - with no workshop at all, because the
                 // towns placed first took every flat spot the region had.
-                SiteKind.Workshop => slope < 11f && h > 6f && h < 340f,
+                SiteKind.Workshop => slope < Slope(11f) && h > 6f && h < Ceil(340f),
                 // Same correction as the settlements above: a runway needs FLAT ground, not
                 // LOW ground, and the 130 m ceiling was leaving three regions with nowhere
                 // to land a fixed-wing aircraft at all. The 4.5 degree slope limit is the
                 // constraint that actually matters and it is unchanged.
-                SiteKind.Airfield => slope < 4.5f && h > 20f && h < 300f,
-                SiteKind.Depot or SiteKind.FuelCache => slope < 9f && h > 4f,
+                SiteKind.Airfield => slope < Slope(4.5f) && h > 20f && h < Ceil(300f),
+                SiteKind.Depot or SiteKind.FuelCache => slope < Slope(9f) && h > 4f,
                 // A wreck is wherever it came down, which is usually somewhere awkward.
-                SiteKind.Wreck => slope < 26f,
-                _ => slope < 12f,
+                SiteKind.Wreck => slope < Slope(26f),
+                _ => slope < Slope(12f),
             };
             if (!ok) continue;
 

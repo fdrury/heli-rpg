@@ -62,6 +62,60 @@ public enum GunHitKind
     EmitterHit,
     EmitterDestroyed,
     NpcHit,
+    BuildingHit,
+    BuildingDestroyed,
+}
+
+/// <summary>
+/// Resolve a gun round against a site's structures.
+///
+/// <para>The emitter system tracks individual targets; this one counts hits and
+/// levels a building when the count crosses a threshold. At 8 rounds per building
+/// a committed strafing pass (2–3 seconds, ~16 rounds) levels two structures and
+/// a fly-by that scatters a few rounds does nothing — the player has to commit.</para>
+///
+/// <para>Each building levelled also kills two people at the site, because the rounds
+/// that knocked the building down went through it first. This ties structural damage
+/// to population damage: level a village and it stays empty; level a building and
+/// leave, and the survivors rebuild it. That is the choice the attrition model exists
+/// to make legible.</para>
+/// </summary>
+public static class BuildingGunnery
+{
+    /// <summary>Rounds on target to level one structure.</summary>
+    public const int HitsToLevel = 8;
+
+    /// <summary>People killed per structure levelled.</summary>
+    public const int CasualtiesPerBuilding = 2;
+
+    /// <summary>Hit radius for a site: rounds landing within this distance of the
+    /// site centre hit something.</summary>
+    public const double SiteHitRadius = 40.0;
+
+    /// <summary>Whether the gun pod can damage structures at this kind of site.</summary>
+    public static bool CanStrafe(SiteKindTag kind) => kind switch
+    {
+        SiteKindTag.Settlement => true,
+        SiteKindTag.Farmstead => true,
+        SiteKindTag.Workshop => true,
+        SiteKindTag.Depot => true,
+        SiteKindTag.Airfield => true,
+        SiteKindTag.Relay => true,
+        _ => false,
+    };
+
+    /// <summary>
+    /// Work-days for rebuilding a structure, by its position in the build order.
+    ///
+    /// The last structure in a settlement is a water tower; the first in a relay or
+    /// overlook is a mast. Everything else is a house or a shed.
+    /// </summary>
+    public static double WorkDays(SiteKindTag kind, int structureIndex, int totalStructures) =>
+        (kind == SiteKindTag.Settlement && structureIndex == totalStructures - 1) ||
+        (kind == SiteKindTag.Relay && structureIndex == 0) ||
+        (kind == SiteKindTag.Overlook)
+            ? SiteDamage.TallWorkDays
+            : SiteDamage.HouseWorkDays;
 }
 
 /// <summary>

@@ -781,5 +781,100 @@ public static class DialogueTests
         if (falsePositives.Count > 0) return $"the blocklist rejects legitimate setting text: {falsePositives[0]}";
         return null;
     }
+
+    /// <summary>
+    /// D-089: dialogue rewards. When an NPC says "the crate is yours", the module or
+    /// knowledge must actually be granted. This test verifies that the reward lines exist,
+    /// reference valid targets, fire under the right conditions, and are idempotent.
+    /// </summary>
+    public static string? Rewards()
+    {
+        Console.WriteLine("  reward lines tagged in the corpus");
+        Console.WriteLine();
+
+        // The three Act II capability trades from story.md 3.
+        var expected = new (string npcId, string lineId, DialogueRewardKind kind, string targetId)[]
+        {
+            ("nell",    "nell.thread.rwr",      DialogueRewardKind.Module,    "rwr"),
+            ("osie",    "osie.thread.chart",     DialogueRewardKind.Knowledge, "chart.upland.masking"),
+            ("ferren",  "ferren.thread.chart",   DialogueRewardKind.Knowledge, "chart.emitter.locations"),
+        };
+
+        foreach (var (npcId, lineId, kind, targetId) in expected)
+        {
+            var pair = DialogueCorpus.Named(npcId);
+            if (pair is null) return $"{npcId} has no bank";
+
+            var (npc, bank) = pair.Value;
+            DialogueLine? line = bank.Lines.FirstOrDefault(l => l.Id == lineId);
+            if (line is null) return $"{lineId} not found in {npc.Name}'s bank";
+            if (line.Reward is null) return $"{lineId} has no reward attached";
+            if (line.Reward.Kind != kind) return $"{lineId} reward is {line.Reward.Kind}, expected {kind}";
+            if (line.Reward.Id != targetId) return $"{lineId} reward targets '{line.Reward.Id}', expected '{targetId}'";
+
+            Console.WriteLine($"  {npc.Name,-16} {lineId,-24} {kind,-10} -> {targetId}");
+
+            // Module rewards must reference a real module in the catalog.
+            if (kind == DialogueRewardKind.Module)
+            {
+                if (!Loadout.Catalog.ContainsKey(targetId))
+                    return $"{lineId} grants module '{targetId}' which is not in the catalog";
+            }
+
+            // Knowledge rewards must have a label and detail.
+            if (kind == DialogueRewardKind.Knowledge)
+            {
+                if (string.IsNullOrEmpty(line.Reward.Label))
+                    return $"{lineId} knowledge reward has no label";
+                if (string.IsNullOrEmpty(line.Reward.Detail))
+                    return $"{lineId} knowledge reward has no detail";
+            }
+        }
+
+        // --- Functional test: the reward line fires under the right conditions.
+        Console.WriteLine();
+        Console.WriteLine("  functional: does the reward line fire when conditions are met?");
+
+        var nellBank = DialogueCorpus.Named("nell")!.Value.Bank;
+        // Conditions for nell.thread.rwr: Knows(Manifest), Standing(0.3, 1)
+        var rwrCtx = Ctx(meetings: 4, hoursSince: 40, standing: 0.4, now: 900000,
+                         knows: new[] { DialogueCorpus.Knows.Manifest });
+        DialogueLine? rwrLine = nellBank.Select(rwrCtx, "talk", 900000);
+        Console.WriteLine($"  nell with manifest + standing 0.4: {rwrLine?.Id ?? "(nothing)"}");
+        if (rwrLine?.Id != "nell.thread.rwr")
+            return $"expected nell.thread.rwr but got {rwrLine?.Id}";
+        if (rwrLine.Reward is null)
+            return "the selected line has no reward";
+
+        // Without the requirement, the reward line should not fire.
+        var noManifest = Ctx(meetings: 4, hoursSince: 40, standing: 0.4, now: 900000);
+        DialogueLine? noRwr = nellBank.Select(noManifest, "talk", 900000);
+        Console.WriteLine($"  nell without manifest: {noRwr?.Id ?? "(nothing)"}");
+        if (noRwr?.Id == "nell.thread.rwr")
+            return "nell.thread.rwr fired without search.manifest — gate is broken";
+
+        // --- Module reward is idempotent through Loadout.Find.
+        var loadout = new Loadout();
+        bool first = loadout.Find("rwr");
+        bool second = loadout.Find("rwr");
+        Console.WriteLine($"  loadout.Find idempotency: first={first}, second={second}");
+        if (!first) return "first Find for rwr should succeed";
+        if (second) return "second Find for rwr should be a no-op";
+
+        // --- Knowledge reward is idempotent through Progress.Learn.
+        var progress = new Progress();
+        bool k1 = progress.Learn(new Knowledge(KnowledgeKind.Chart, "chart.upland.masking",
+                                               "Upland masking routes", "test"));
+        bool k2 = progress.Learn(new Knowledge(KnowledgeKind.Chart, "chart.upland.masking",
+                                               "Upland masking routes", "test"));
+        Console.WriteLine($"  progress.Learn idempotency: first={k1}, second={k2}");
+        if (!k1) return "first Learn should succeed";
+        if (k2) return "second Learn should be a no-op";
+
+        Console.WriteLine();
+        Console.WriteLine("  all three trades verified: module refs catalog, knowledge has labels, " +
+                          "conditions gate correctly, both paths are idempotent");
+        return null;
+    }
 }
 

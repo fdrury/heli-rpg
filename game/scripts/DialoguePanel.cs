@@ -135,6 +135,10 @@ public sealed partial class DialoguePanel : Control
         _codaDeliveryTime = 0;
         _codaTask = null;
 
+        // D-089: execute the reward when the line is delivered.
+        if (line.Reward is not null && _play is not null)
+            _play.DeliverReward(line.Reward);
+
         // Check the coda gate.
         if (_coda is not null && _npc is not null)
         {

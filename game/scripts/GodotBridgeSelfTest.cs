@@ -43,6 +43,29 @@ public sealed partial class GodotBridgeSelfTest : Node
     private Vector3 _phaseStartRight = Vector3.Right;
     private double _peakRate;
 
+    /// <summary>
+    /// The rate the aircraft already had when the phase began.
+    ///
+    /// Every control test here measures a RESPONSE, and a response is a change. The first
+    /// version measured the absolute peak rate instead, which works only if the aircraft
+    /// enters the phase steady - and it does not: phase 1 flies 3.5 seconds of forward
+    /// cyclic with no stabilisation (OverrideControls stands the SAS down), and an unstable
+    /// helicopter departs in about six seconds. So phase 2 was reading whatever phase 1 had
+    /// left it doing.
+    ///
+    /// It passed for a year because the leftover roll happened to be small at the world's
+    /// old spawn point. Moving the spawn for D-087 moved the terrain under it, the departure
+    /// came out differently, and the test reported "right cyclic produced -53.8 deg/s of
+    /// roll - wrong direction" - a reversed-control failure, deterministic to three decimal
+    /// places, in code that had not been touched. Measuring the delta makes the answer
+    /// independent of where in the world the test happens to start, which is what it should
+    /// have been all along. D-042, again.
+    /// </summary>
+    private double _entryRate;
+    private float _entryRollDeg;
+    private double _entryGodotRate;
+    private double _peakGodot;
+
     public GodotBridgeSelfTest(HelicopterController heli) { _heli = heli; }
 
     public override void _Ready()
@@ -139,19 +162,50 @@ public sealed partial class GodotBridgeSelfTest : Node
             case 2:
             {
                 _heli.OverrideControls = Trim(cyclicRoll: 0.22);
-                _peakRate = Math.Abs(sim.State.AngularVelocity.X) > Math.Abs(_peakRate)
-                            ? sim.State.AngularVelocity.X : _peakRate;
+                if (_phaseTime <= 0.001)
+                {
+                    _entryRate = sim.State.AngularVelocity.X;
+                    _entryRollDeg = Mathf.RadToDeg((float)sim.State.Orientation.Roll);
+                    // Godot's rate is captured at entry too, so the two sides of
+                    // AgreeWithGodot are the same KIND of number. Comparing a sim delta
+                    // against an instantaneous Godot rate is how you manufacture a
+                    // disagreement that is not there.
+                    _entryGodotRate = -_heli.AngularVelocity.Dot(_heli.GlobalTransform.Basis.Z);
+                    _peakRate = 0;
+                    _peakGodot = 0;
+                }
+                double gNow = -_heli.AngularVelocity.Dot(_heli.GlobalTransform.Basis.Z) - _entryGodotRate;
+                if (Math.Abs(gNow) > Math.Abs(_peakGodot)) _peakGodot = gNow;
+                double rollDelta = sim.State.AngularVelocity.X - _entryRate;
+                if (Math.Abs(rollDelta) > Math.Abs(_peakRate)) _peakRate = rollDelta;
                 if (_phaseTime > 0.6)
                 {
                     Vector3 d = _heli.GlobalPosition - _phaseStartPos;
                     float lateral = d.Dot(new Vector3(_phaseStartRight.X, 0, _phaseStartRight.Z).Normalized());
                     float rollDeg = Mathf.RadToDeg((float)sim.State.Orientation.Roll);
-                    float godotRollRate = -_heli.AngularVelocity.Dot(_heli.GlobalTransform.Basis.Z);
-                    GD.Print($"  rgt cyclic: roll rate {_peakRate * 57.3,6:F1} deg/s (godot {godotRollRate * 57.3f:F1}), " +
-                             $"attitude {rollDeg:F1} deg, drift {lateral:F2} m right");
-                    if (_peakRate < 0.05) Fail($"right cyclic produced {_peakRate * 57.3:F1} deg/s of roll - wrong direction");
-                    if (rollDeg < 2) Fail($"right cyclic reached {rollDeg:F1} deg of roll - wrong direction");
-                    AgreeWithGodot("roll", sim.State.AngularVelocity.X, godotRollRate);
+                    double godotRollRate = _peakGodot;
+                    GD.Print($"  rgt cyclic: roll rate {_peakRate * 57.3,6:F1} deg/s (godot {godotRollRate * 57.3:F1}), " +
+                             $"attitude {rollDeg - _entryRollDeg:+0.0;-0.0} deg change, drift {lateral:F2} m right");
+                    // Asserted on DRIFT, not on the sign of the roll rate.
+                    //
+                    // This used to demand a positive roll rate and it was wrong to: in this
+                    // sim positive cyclic produces a NEGATIVE roll rate, which Stability
+                    // already knows (RollSign = -1, measured). The old assertion passed
+                    // anyway because it read the absolute peak three and a half seconds into
+                    // an unstabilised departure and was picking up phase 1's leftover; the
+                    // moment D-087 moved the spawn, the accident stopped working and it
+                    // reported a reversed control that was not reversed.
+                    //
+                    // Where the aircraft GOES is not a convention. simlab's rollsense check
+                    // measures the same thing without Godot in the way: from a hover, right
+                    // cyclic puts it 12.7 m to the right in three seconds.
+                    if (lateral < 0.1f) Fail($"right cyclic moved the aircraft {lateral:F2} m right - wrong direction");
+                    // The roll rate still has to be SUBSTANTIAL - a control that does
+                    // nothing is as broken as one that does the opposite - it just does not
+                    // have to be positive.
+                    if (Math.Abs(_peakRate) < 0.15)
+                        Fail($"right cyclic produced only {Math.Abs(_peakRate) * 57.3:F1} deg/s of roll");
+                    AgreeWithGodot("roll", _peakRate, godotRollRate);
                     NextPhase();
                 }
                 break;
@@ -161,8 +215,9 @@ public sealed partial class GodotBridgeSelfTest : Node
             case 3:
             {
                 _heli.OverrideControls = Trim(pedal: 0.45);
-                _peakRate = Math.Abs(sim.State.AngularVelocity.Z) > Math.Abs(_peakRate)
-                            ? sim.State.AngularVelocity.Z : _peakRate;
+                if (_phaseTime <= 0.001) { _entryRate = sim.State.AngularVelocity.Z; _peakRate = 0; }
+                double yawDelta = sim.State.AngularVelocity.Z - _entryRate;
+                if (Math.Abs(yawDelta) > Math.Abs(_peakRate)) _peakRate = yawDelta;
                 if (_phaseTime > 1.2)
                 {
                     float yawed = Mathf.RadToDeg((float)Airfoil.WrapPi(

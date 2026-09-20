@@ -674,9 +674,14 @@ public static class RadioDjTests
         Console.WriteLine($"  {RadioDj.HostName}, {RadioDj.StationName}");
         Console.WriteLine($"  site rule: {RadioDj.SiteRuleText}");
 
+        // The intent is the CITADEL relay (D-086). A central mast on the ring's hub is the
+        // best-covered position on the map - every island is the same distance from it - and
+        // it is the last place the player can reach, so the station is with them from the
+        // first minute and cannot be interfered with until the end. If this ever reverts to
+        // a rim region, the announcer goes quiet over half the world.
         DjSiteRule intent = RadioDj.SiteRules[0];
-        if (intent.Region != DialogueCorpus.RegionTag.Upland || intent.Kind != SiteKindTag.Relay)
-            problems.Add($"the intent rule is {intent.Text}, not the upland relay");
+        if (intent.Region != DialogueCorpus.RegionTag.Ashfield || intent.Kind != SiteKindTag.Relay)
+            problems.Add($"the intent rule is {intent.Text}, not the citadel relay");
         if (RadioDj.SiteRules.Length < 3)
             problems.Add("no fallback chain: site placement is rejection sampling and fails silently");
 
