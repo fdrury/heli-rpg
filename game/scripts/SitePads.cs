@@ -68,17 +68,25 @@ public static class SitePads
             // asking At() here would be circular.
             float h = WorldHeight.RawAt(site.Position.X, site.Position.Y);
 
-            // Sit the pad slightly into the hillside rather than on top of it. Averaging a
-            // ring around the centre stops a site perched on a local bump.
-            float sum = 0; int n = 0;
-            for (int i = 0; i < 8; i++)
+            // A crash site is not graded: it sits where it came down.  Averaging with
+            // the surrounding ring lifts a wreck in a depression out of it, which is
+            // exactly what keeps DrowningWreck dry — the terrain IS below the waterline
+            // and the blend pulls it above.  The tiny pad (14 m flat) still levels the
+            // immediate landing area, but at the natural centre height.
+            if (site.Kind != SiteKind.Wreck)
             {
-                float a = Mathf.Tau * i / 8f;
-                sum += WorldHeight.RawAt(site.Position.X + Mathf.Cos(a) * flat * 0.7f,
-                                         site.Position.Y + Mathf.Sin(a) * flat * 0.7f);
-                n++;
+                // Sit the pad slightly into the hillside rather than on top of it.
+                // Averaging a ring around the centre stops a site perched on a local bump.
+                float sum = 0; int n = 0;
+                for (int i = 0; i < 8; i++)
+                {
+                    float a = Mathf.Tau * i / 8f;
+                    sum += WorldHeight.RawAt(site.Position.X + Mathf.Cos(a) * flat * 0.7f,
+                                             site.Position.Y + Mathf.Sin(a) * flat * 0.7f);
+                    n++;
+                }
+                h = h * 0.35f + sum / n * 0.65f;
             }
-            h = h * 0.35f + sum / n * 0.65f;
 
             var pad = new Pad(site.Position.X, site.Position.Y, flat, blend, h);
             reach = Mathf.Max(reach, blend);

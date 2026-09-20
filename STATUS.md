@@ -323,14 +323,11 @@ lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, a
    timbre read as a man talking. Carrier hiss fills gaps between sentences. The voice goes
    through the same volume knob and warning duck as the music stations. Four simlab tests
    check waveform, carrier hiss, voice-above-hiss ratio, and duration accuracy.
-7. **The drowned wreck is dry.** `--worldreport` warns that `DrowningWreck` sits 11.9 m
-   above the waterline, and story beat 8 wants an aircraft half in the water. The region
-   itself is now genuinely wet (38.9% standing water after D-077), so the ground is no
-   longer the problem - the *placement* is. `SiteKind.Wreck` has no height gate at all, so
-   a wreck is allowed in the shallows and none lands there; the next thing to check is
-   whether `SitePads` is grading a dry pad under every site and lifting submerged ones
-   clear. The doc comment on `TryPlace` already says "a wetland wreck wants to be half in
-   the water" and no rule implements it.
+7. ~~**The drowned wreck is dry.**~~ **DONE** (D-079). Two changes: `IncidentsFor` adds
+   the Wetland's centre as a second incident anchor so wreck candidates reach the basin
+   floor, and `SitePads` no longer ring-averages wreck heights (a crash site sits where
+   it came down). DrowningWreck (#60 Salt Sink) now sits at −10.1 m, 5.1 m below the
+   waterline. Zero shortfalls, 16/16 story roles bound, zero problems.
 8. **The world has no acoustics.** Still the top item in `benchmarks/audio.md`: no reverb,
    no occlusion, and sites make no sound at all. Landing somewhere and shutting down
    produces silence at exactly the moment the player is most receptive to being told where

@@ -2430,3 +2430,61 @@ warning duck without knowing either exists.
 
 **Reversibility:** high. Remove `VoiceSynth`, revert the three-line changes in
 `DjBroadcast` and `CockpitRadio`, and captions alone remain — which is what was there before.
+
+---
+
+### D-079 — The drowned wreck sits in the water (2026-09-20)
+
+**Decision.** Two changes put the DrowningWreck story site below the waterline where
+beat 8 needs it.
+
+**The problem.** `--worldreport` warned that the DrowningWreck sat 11.9 m above the
+waterline (-5 m). The story says "half in the water, tail boom up", and the
+`DrownedAircraft` prop is authored to stand in flat water with a fuselage mostly
+underneath. But the wreck was dry, on a hummock, because of two things:
+
+1. **No wreck candidates reached the basin floor.** The incident-anchor system that
+   scatters wreck fields (WorldMap.IncidentsFor) generated one anchor 1.3–2.6 radii
+   from the region centre. For The Drowning (r = 1400 m) that put the anchor 1820–
+   3640 m out — on the dry rim or off the island entirely, well above the standing
+   water that sits inside 2500 m (BasinOuter). All three Wetland wrecks clustered
+   around that dry anchor, and Pick.LowestGround found the lowest of them: still dry.
+
+2. **SitePads lifted crash sites out of depressions.** Every site gets a graded pad
+   whose height is a weighted average of the centre (35%) and a ring of samples at
+   0.7× the flat radius (65%). For a wreck in a channel (raw centre −7 m) surrounded
+   by higher ground (+3 m ring average), the pad sat at (−7 × 0.35 + 3 × 0.65) =
+   −0.5 m — 4.5 m above the waterline. The ring pulled the wreck up and out.
+
+**What changed.**
+
+1. `WorldMap.IncidentsFor`: the Wetland region gets a second incident anchor at its
+   own centre. Half the placement attempts now scatter from the basin centre (the low,
+   wet ground), the other half from the original incident (the wreck field on the rim).
+   This is the minimal change that gives candidates a path to the waterline without
+   overriding the wreck-field mechanic for every other region.
+
+2. `SitePads.Ensure`: wrecks no longer blend with the surrounding ring. A crash site
+   is not graded — it sits where it came down. The tiny pad (14 m flat, 40 m blend)
+   still levels the immediate landing area for salvage, but at the natural centre
+   height rather than the ring average. This stops the pad lifting a wreck in a
+   depression out of it, which is exactly what was happening.
+
+**Measured, before → after:**
+
+| | before | after |
+|---|---|---|
+| DrowningWreck raw ground | +6.9 m (11.9 m above waterline) | **−10.1 m (5.1 m below waterline)** |
+| sites placed | 119 | **119** |
+| shortfalls | 0 | **0** |
+| story roles bound / degraded | 16 / 0 | **16 / 0** |
+| story problems | 1 (DrowningWreck DRY) | **0** |
+
+The three Wetland wrecks are now: #60 Salt Sink at −10.1 m (in the water), #61 Broke
+Wash at 1.7 m (at the edge), #59 the Turn at 8.6 m (dry, on the rim). The spread
+means the wreck field has wrecks both in and out of the water, which is what a flooded
+valley with aircraft wreckage in it looks like.
+
+**Reversibility:** high. Revert the two edits — one line in IncidentsFor, one `if`
+block wrapping the ring-average loop in SitePads — and the old placement returns.
+The world is seed-generated and all constraints are verified by `--worldreport`.

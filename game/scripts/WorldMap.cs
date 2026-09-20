@@ -208,6 +208,14 @@ public static class WorldMap
                             Mathf.Clamp(c.Y, -ContentHalfExtent, ContentHalfExtent));
             list.Add(c);
         }
+        // In the wetland the wreck field needs access to the basin floor, where the
+        // standing water is.  The regular incident scatters 1.3–2.6 radii from the
+        // centre and can land entirely on the dry rim; a second anchor at the centre
+        // gives candidates a path into the low ground the DrowningWreck story role
+        // sorts on (Pick.LowestGround).
+        if (region.Kind == RegionKind.Wetland)
+            list.Add(region.Centre);
+
         _incidents[region.Kind] = list;
         return list;
     }
