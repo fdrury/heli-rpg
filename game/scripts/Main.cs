@@ -278,6 +278,12 @@ public sealed partial class Main : Node3D
                 GetTree().Quit(0);
                 return;
             }
+            if (arg == "--playprobe")
+            {
+                // Flies the aircraft through the KEYBOARD, which nothing else here does.
+                AddChild(new PlayProbe(this, _heli, _pilot, _camera) { Name = "PlayProbe" });
+                break;
+            }
             if (arg == "--menushot")
             {
                 // Show the menu and photograph it. The title screen is the one part of this
@@ -1086,6 +1092,31 @@ public sealed partial class Main : Node3D
                 _threats.Field.AnyEngaging);
             var msg = _copilotCallouts.Update(delta, cs);
             if (msg is not null) _radioStrip.Enqueue(msg);
+        }
+
+        // D-097: intercepted radio calls — overheard hostile traffic when tracked.
+        // "You overhear traffic not meant for you when you are inside a threat
+        // envelope and being tracked." (story.md §4.3, carrier type 3)
+        if (_mode == GameMode.Flying && !_landing.OnGround)
+        {
+            _play.Progress.InterceptedCalls.Update(delta);
+            ThreatKind? bestKind = null;
+            double bestConf = 0;
+            foreach (var track in _threats.Field.Tracks)
+            {
+                if (track.Destroyed) continue;
+                if (track.State < TrackState.Tracking) continue;
+                if (track.Confidence > bestConf)
+                {
+                    bestConf = track.Confidence;
+                    bestKind = track.Emitter.Kind;
+                }
+            }
+            if (bestKind is ThreatKind kind)
+            {
+                var intercept = _play.Progress.InterceptedCalls.TryFire(kind);
+                if (intercept is not null) _radioStrip.Enqueue(intercept);
+            }
         }
 
         // D-085: radio strip — suppress during threat engagement, update word reveal.

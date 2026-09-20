@@ -153,6 +153,13 @@ public sealed class SaveData
     public List<int> DirectedCallsFired { get; set; } = new();
 
     /// <summary>
+    /// Corpus keys for intercepted radio lines already delivered (story.md §4.3).
+    /// A save written before this field existed loads with none used, which is
+    /// correct — all hostile chatter is available again.
+    /// </summary>
+    public List<int> InterceptedCallsUsed { get; set; } = new();
+
+    /// <summary>
     /// True when the post-ending contamination has fired (story.md §6.3).
     /// A save written before this field existed loads as false, which is correct.
     /// </summary>
@@ -251,6 +258,9 @@ public sealed class SaveData
         DirectedCallsFired.Clear();
         DirectedCallsFired.AddRange(p.DirectedCalls.Save());
 
+        InterceptedCallsUsed.Clear();
+        InterceptedCallsUsed.AddRange(p.InterceptedCalls.Save());
+
         LegClosedAt.Clear();
         LegClosedAt.AddRange(p.Search.LegClosedAt);
 
@@ -325,6 +335,7 @@ public sealed class SaveData
         if (ContaminatedSites.Count > 0)
             p.RestoreContaminatedSites(ContaminatedSites);
         p.DirectedCalls.Restore(DirectedCallsFired.Count > 0 ? DirectedCallsFired.ToArray() : null);
+        p.InterceptedCalls.Restore(InterceptedCallsUsed.Count > 0 ? InterceptedCallsUsed.ToArray() : null);
 
         for (int i = 0; i < Math.Min(LegClosedAt.Count, 4); i++)
             p.Search.LegClosedAt[i] = LegClosedAt[i];

@@ -326,6 +326,15 @@ via `WorldMap.RegionAt()` and checks whether any relay in the new region has `fr
 knowledge. Fired regions persist through save/load. Five simlab tests verify content
 coverage, one-shot behaviour, HasFired tracking, save round-trip, and tone compliance
 (no instructions).
+**Intercepted radio calls** (D-097): the third carrier type from story.md §4.3.
+When the player is inside a threat envelope and being tracked (`TrackState >= Tracking`),
+they overhear hostile radio chatter — operators coordinating against the aircraft they
+can see. 27 authored lines across all five threat kinds (search radar, gun, SAM,
+MANPADS, aerostat), each a terse coordination call that never addresses the player.
+The highest-confidence tracker determines which voice is heard. 90-second cooldown;
+each line fires once; used set persists through save/load. Overheard traffic is a
+reward for being somewhere dangerous (D-005a). `InterceptedCalls` lives in sim/
+(pure .NET); six simlab tests.
 
 **Rotor ceiling** — the clock on the search (D-086). `MainRotorCeiling` degrades with
 total flight hours (0.0019/h, floor 0.55) and caps how far `Repair` can restore the main
@@ -473,6 +482,12 @@ Story build order item 8: "Everything else, region by region, in tier order."
    on the kneeboard map, actions blocked with "ASH" tag), journal records the change.
    FogOfWar gains a contamination layer (parallel bool array, separate serialisation).
    Five simlab tests. All three §6 post-ending deltas are now implemented.
+8. ~~**Intercepted radio calls**~~ **DONE** (D-097). The third carrier type from
+   story.md §4.3: overheard hostile radio traffic when tracked inside a threat
+   envelope. 27 authored lines across five threat kinds, each a terse coordination
+   call between operators who never address the player. Highest-confidence tracker
+   determines the voice. 90-second cooldown, once-per-line, persisted. Six simlab
+   tests. All three §4.3 radio carrier types are now implemented.
 
 ## Open questions for Fred
 

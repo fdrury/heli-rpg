@@ -62,6 +62,9 @@ public sealed class Progress
     /// <summary>One-time radio calls from tuned relays, per region (story.md §4.3).</summary>
     public DirectedCalls DirectedCalls { get; } = new();
 
+    /// <summary>Overheard hostile radio traffic when tracked in a threat envelope (story.md §4.3).</summary>
+    public InterceptedCalls InterceptedCalls { get; } = new();
+
     /// <summary>
     /// Who is riding in the right seat, or null. Set by DialogueRewardKind.Passenger.
     /// This is not a module or cargo — it is a person who agreed to fly with you, and

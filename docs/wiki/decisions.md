@@ -3381,3 +3381,49 @@ contamination fields from FogOfWar/Progress/SaveData, revert the three-line chan
 in Kneeboard/FlightHud/SiteInteraction, remove the test. A save written with these
 fields loads without them (false/null/empty defaults); a save written without them
 loads correctly.
+
+### D-097 — Intercepted radio calls · 2026-09-20
+
+**Decision:** Implement the third radio carrier from story.md §4.3: overheard hostile
+traffic when the player is inside a threat envelope and being tracked. 27 authored
+lines across all five threat kinds (SearchRadar, Gun, Sam, Manpads, Aerostat), each
+a short terse coordination call between operators — never addressing the player.
+
+**Why:** "Overheard traffic is a reward for being somewhere dangerous, which pairs
+with D-005a's rule that the bad sortie must pay out." Flying into a threat envelope
+and surviving gives intel (RWR detections), knowledge (threat positions on the map),
+and now atmosphere (hostile chatter on the radio). The player hears the people who
+are trying to shoot them down, talking to each other about the helicopter they can
+see. The `RadioMessageKind.Intercepted` enum value and warm-red HUD colour were
+already reserved; this fills them with content.
+
+**Trigger:** Any emitter with `TrackState >= Tracking` (the emitter has the aircraft
+and is building a firing solution). The highest-confidence tracker determines which
+threat kind's corpus is sampled. 90-second cooldown between messages prevents spam.
+Each line fires once per session and the used set persists through save/load. The
+RadioStrip is already suppressed during engagement (`AnyEngaging`), so intercepted
+calls fire in the tense window between being tracked and being shot at — the moment
+they are most useful.
+
+**Architecture:** `InterceptedCalls` in sim/ (pure .NET, no Godot dependency),
+mirroring the `DirectedCalls` pattern. Corpus keyed by `ThreatKind`, used-set
+tracked as `HashSet<int>` of encoded (kind, index) pairs. Save/load via
+`Progress.InterceptedCalls` → `SaveData.InterceptedCallsUsed`. Game layer
+integration: 15 lines in Main.cs scanning `ThreatField.Tracks` each frame.
+
+**Content tone (story.md §9):** No instructions, no chosen-one language, no
+"you". These are operators talking to each other. "Contact bearing two-seven-zero,
+range six. Single rotary, low and slow." — the player overhears it and knows they
+have been seen.
+
+**Tests:** Six simlab tests:
+- `intercept_kinds`: all 5 threat kinds have authored content (27 lines total).
+- `intercept_exhaust`: lines fire sequentially until exhausted, then null.
+- `intercept_cooldown`: 90s cooldown blocks rapid fire.
+- `intercept_save`: used set round-trips through SaveData JSON.
+- `intercept_noinstructions`: no line tells the player what to do.
+- `intercept_notaddressed`: no line addresses the player ("you"/"your").
+
+**Reversibility:** high. Remove the `InterceptedCalls` class, the Progress property,
+the SaveData field, and the 15-line check in Main.cs. A save written with this field
+loads without it (empty list default).

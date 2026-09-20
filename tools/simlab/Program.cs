@@ -258,6 +258,12 @@ public static class Program
         Run("directed_hasfired", DirectedCallTests.HasFired);
         Run("directed_save", DirectedCallTests.SaveRoundTrip);
         Run("directed_noinstructions", DirectedCallTests.NoInstructions);
+        Run("intercept_kinds", InterceptedCallTests.AllKinds);
+        Run("intercept_exhaust", InterceptedCallTests.Exhaustion);
+        Run("intercept_cooldown", InterceptedCallTests.Cooldown);
+        Run("intercept_save", InterceptedCallTests.SaveRoundTrip);
+        Run("intercept_noinstructions", InterceptedCallTests.NoInstructions);
+        Run("intercept_notaddressed", InterceptedCallTests.NotAddressed);
         Run("pax_mass", PassengerTests.WrayMass);
         Run("pax_cg", PassengerTests.CgShift);
         Run("pax_torque", PassengerTests.CalloutTorque);
