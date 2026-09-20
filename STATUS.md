@@ -289,9 +289,11 @@ lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, a
    DetectionScale/ReactionScale into the threat field, persisted in save, shown on kneeboard.
 3. ~~**Contract depth.**~~ **DONE.** Clear contracts, danger pay, hostile-aware recovery
    briefs, alert-aware brief suffixes, and survey preference for quiet regions (D-062).
-4. **The three degraded story roles.** `--worldreport` shows `DossHome`, `FerrenOffice` and
-   `ScaldMagazine` falling back because their region has no site of the right kind. The
-   placement fix improved this a lot; check whether it is now fixable properly.
+4. ~~**The three degraded story roles.**~~ **DONE.** Verified: all three now bind to their
+   primary intent (Settlement in Long Acre, Settlement in Sawtooth Works, Depot in The
+   Scald). Zero degraded, zero unbound, zero shortfalls. The placement improvements that
+   raised altitude ceilings and added the three-pass desperation system resolved the
+   terrain mismatches that were causing silent placement failures (D-075).
 
 ## Open questions for Fred
 

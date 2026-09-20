@@ -2241,3 +2241,31 @@ with a hole in it, and that the distortion is both stable and a function of the 
 crash, salvage run and low pass, with `Witnesses` taken from the population of the nearest
 site - which is a number the world already knows and nothing currently reads. Logged in
 `integration-debt.md` rather than guessed at here.
+
+## D-075 — Degraded story roles resolved: verification, not a fix · 2026-09-19
+
+**Decision:** Close the "three degraded story roles" item as verified-fixed. No code change
+was required. The placement improvements already in the codebase (altitude ceiling raised to
+320 m for settlements, three-pass desperation spacing relaxation) resolved the terrain
+mismatches that were causing `DossHome`, `FerrenOffice`, and `ScaldMagazine` to fall back.
+
+**Measured (seed 40404, `--worldreport`):**
+
+| Role | Wanted | Got | Site |
+|------|--------|-----|------|
+| DossHome | 1st Settlement in Long Acre | Settlement | Low Furrow #16 |
+| FerrenOffice | 1st Settlement in Sawtooth Works | Settlement | Rust Works #75 |
+| ScaldMagazine | 1st Depot in The Scald furthest from centre | Depot | Stone Line #111 |
+
+All 16 roles bind to their primary intent. Zero degraded, zero unbound, zero shortfalls.
+Every region got everything the plan asked for. The fallback chains remain in place as
+insurance against future terrain or placement changes.
+
+**Why this matters:** the three degraded roles were the only outstanding StoryPlaces issue.
+With them clean, every beat in the search thread has a place to happen, and that place is
+the site the story actually wanted — not a structural substitute. The fallback mechanism
+worked exactly as designed (it caught the problem and reported it loudly), and the placement
+fixes upstream made the fallbacks unnecessary.
+
+**Reversibility:** N/A — no code was changed. If a future seed or placement change re-introduces
+shortfalls, the fallback chains and the worldreport will catch it immediately.
