@@ -122,6 +122,7 @@ public sealed partial class SiteInteraction : Node
         KeepMassInSync();
         CheckSearchThread();
         CheckContractCompletion();
+        CheckDirectedCalls();
     }
 
     private double _busyTotal;
@@ -643,6 +644,55 @@ public sealed partial class SiteInteraction : Node
 
         // Prune old completed contracts after 1 game-day.
         Progress.PruneContracts(86400);
+    }
+
+    // ------------------------------------------------------------------ directed calls
+
+    private int _prevRegionOrdinal = -1;
+    private double _lastDirectedCheck;
+
+    /// <summary>
+    /// Directed radio calls: "Somebody raises you, because you tuned their mast
+    /// and they have been listening since. Fires on entering a region, once."
+    /// (story.md §4.3, carrier type 2)
+    /// </summary>
+    private void CheckDirectedCalls()
+    {
+        if (RadioStrip is null) return;
+
+        // Check every few seconds of game time, not every frame.
+        if (Progress.Clock - _lastDirectedCheck < 30) return;
+        _lastDirectedCheck = Progress.Clock;
+
+        // Must be airborne — directed calls are radio messages you hear in flight.
+        if (_landing.OnGround) return;
+
+        var pos = new Vector2(_heli.GlobalPosition.X, _heli.GlobalPosition.Z);
+        var region = WorldMap.RegionAt(pos);
+        int ord = (int)region.Kind;
+
+        if (ord == _prevRegionOrdinal) return;
+        _prevRegionOrdinal = ord;
+
+        // Check whether any relay in this region has been tuned.
+        bool hasTunedRelay = false;
+        foreach (var site in WorldMap.Sites)
+        {
+            if (site.Kind != SiteKind.Relay || site.Region != region.Kind) continue;
+            if (Progress.Knows($"freq.{site.Id}"))
+            {
+                hasTunedRelay = true;
+                break;
+            }
+        }
+        if (!hasTunedRelay) return;
+
+        var msg = Progress.DirectedCalls.TryFire(ord);
+        if (msg is not null)
+        {
+            RadioStrip.Enqueue(msg);
+            GD.Print($"[radio] Directed call from {msg.Speaker}");
+        }
     }
 
     // ------------------------------------------------------------------ util

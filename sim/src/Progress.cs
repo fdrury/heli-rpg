@@ -59,6 +59,9 @@ public sealed class Progress
     /// <summary>Main quest search thread. Persists through save/load.</summary>
     public SearchThread Search { get; } = new();
 
+    /// <summary>One-time radio calls from tuned relays, per region (story.md §4.3).</summary>
+    public DirectedCalls DirectedCalls { get; } = new();
+
     /// <summary>
     /// Who is riding in the right seat, or null. Set by DialogueRewardKind.Passenger.
     /// This is not a module or cargo — it is a person who agreed to fly with you, and

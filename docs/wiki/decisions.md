@@ -3235,3 +3235,76 @@ with `blade_pair` on the hook. Also counts: 6 night, 10 story, 4 passenger, 3 sl
 **Reversibility:** high. Delete the 23 lines from `CommonSettlerLines()`, remove
 `Requirement.Night()` and the `"night"` case in `Numeric()`, remove the test. No save
 format change, no TalkContext field change (ArrivedAtNight already existed).
+
+### D-095 — Directed radio calls · 2026-09-20
+
+**Decision:** Implement the second carrier type from story.md §4.3: one-time directed
+radio calls that fire when the player enters a region whose relay has been tuned. Eight
+messages, one per region, each from a relay operator reporting local conditions.
+
+**What was built:**
+
+`DirectedCalls` class in sim/ (pure .NET, no Godot dependency):
+- A static dictionary of 8 `(Speaker, Text)` entries keyed by region ordinal
+  (Basin=0 through Ashfield=7), matching the `RegionKind` enum order.
+- A `HashSet<int>` tracking which regions have fired.
+- `TryFire(int regionOrdinal)` → `RadioMessage?`: returns the message on first
+  call for a region, null thereafter. The game layer checks relay-tuning state
+  before calling this.
+- `Save()` / `Restore()` for persistence through save/load.
+
+Property added to `Progress`:
+- `DirectedCalls` property alongside `SearchThread`, so save/load flows through
+  the existing `SaveData.CaptureProgress` / `ApplyProgress` pipeline.
+
+SaveData:
+- `DirectedCallsFired` field (List<int>): region ordinals whose call has fired.
+  A save written before this field existed loads with none fired, which is correct.
+
+Game layer integration in `SiteInteraction.CheckDirectedCalls()`:
+- Runs every 30 game seconds (same cadence as `CheckSearchThread`).
+- Only fires when airborne — directed calls are radio messages heard in flight.
+- Tracks `_prevRegionOrdinal`; on region change, iterates `WorldMap.Sites` to
+  find relays in the new region and checks `Progress.Knows("freq.<siteId>")`.
+- Enqueues result as `RadioMessageKind.Directed` (green on the HUD).
+
+**The 8 messages:**
+
+| Region | Speaker | Character |
+|--------|---------|-----------|
+| The Pan (Basin) | PAN RELAY | Familiar, dry. Pumps running, nothing changes. |
+| Long Acre (Farmland) | LONG ACRE | Surprised the set works. Rain, creek is up. |
+| Fenmoor (Exurb) | FENMOOR | First traffic on the frequency. Wind, dry strip. |
+| Ashmount (City) | ASHMOUNT | Brave or careless. The bag is up. Always up. |
+| Sawtooth Works (Industrial) | SAWTOOTH | You've been here. Mill running. Smoke goes east. |
+| Cold Shoulder (Upland) | COLD SHOULDER | Loud and clear. Gusting thirty, ten miles vis. |
+| The Drowning (Wetland) | DROWNING | Someone's been at the mast. Water is high. |
+| The Scald (Ashfield) | SCALD RELAY | Close enough to touch the mast. Ash is worse. |
+
+**Why one per region, not one per relay:** story.md §4.3 says "fires on entering a
+region, once." A region with two relays should not fire twice; the message is about
+the region, not the relay. The relay-tuning check is a gate, not a per-relay trigger.
+
+**Why airborne-only:** "Somebody raises you" implies they are calling you in flight.
+Hearing the call while parked at the relay you just tuned would feel wrong — you are
+already there. The call fires when you re-enter the region later, airborne, which
+makes it feel like someone was waiting.
+
+**Voice compliance:** All 8 messages follow story.md §9. Nobody tells the player what
+to do. Nobody is a chosen one. Nobody explains the collapse. Each message reports
+conditions — wind, water, smoke, the aerostat — as facts. The content was validated
+by simlab test `NoInstructions` against a forbidden-phrase blocklist.
+
+**Tests:** Five simlab tests:
+- `directed_regions`: all 8 regions have authored content.
+- `directed_oneshot`: TryFire returns message once, null on repeat, independent
+  across regions.
+- `directed_hasfired`: HasFired tracks fired state correctly.
+- `directed_save`: full Progress round-trip through SaveData JSON.
+- `directed_noinstructions`: no message contains instructional phrases.
+
+**Reversibility:** high. Delete `DirectedCalls.cs`, remove the property from
+`Progress`, remove the `DirectedCallsFired` field from `SaveData` and its two
+capture/apply lines, remove `CheckDirectedCalls()` from `SiteInteraction`, remove
+the test. A save written with this field loads without it (empty list is the default);
+a save written without it loads with none fired (correct).

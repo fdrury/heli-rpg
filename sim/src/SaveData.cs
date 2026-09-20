@@ -145,6 +145,13 @@ public sealed class SaveData
     /// </summary>
     public string? SlingLoadId { get; set; }
 
+    /// <summary>
+    /// Region ordinals whose directed radio call has already fired (story.md §4.3).
+    /// A save written before this field existed loads with none fired, which is
+    /// correct — undelivered calls will fire on the next region entry.
+    /// </summary>
+    public List<int> DirectedCallsFired { get; set; } = new();
+
     // ================================================================ JSON
 
     private static readonly JsonSerializerOptions Opts = new()
@@ -218,6 +225,9 @@ public sealed class SaveData
         PassengerAboard = p.PassengerAboard;
         SlingLoadId = p.SlingLoadId;
 
+        DirectedCallsFired.Clear();
+        DirectedCallsFired.AddRange(p.DirectedCalls.Save());
+
         LegClosedAt.Clear();
         LegClosedAt.AddRange(p.Search.LegClosedAt);
 
@@ -288,6 +298,7 @@ public sealed class SaveData
         p.Search.Stage = SearchStage;
         p.PassengerAboard = PassengerAboard;
         p.SlingLoadId = SlingLoadId;
+        p.DirectedCalls.Restore(DirectedCallsFired.Count > 0 ? DirectedCallsFired.ToArray() : null);
 
         for (int i = 0; i < Math.Min(LegClosedAt.Count, 4); i++)
             p.Search.LegClosedAt[i] = LegClosedAt[i];

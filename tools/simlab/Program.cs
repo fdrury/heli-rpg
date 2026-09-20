@@ -253,6 +253,11 @@ public static class Program
         Run("strip_suppressed", RadioStripTests.Suppressed);
         Run("strip_queue", RadioStripTests.QueueOrder);
         Run("strip_voicebeat", RadioStripTests.VoiceBeat);
+        Run("directed_regions", DirectedCallTests.AllRegions);
+        Run("directed_oneshot", DirectedCallTests.OneShot);
+        Run("directed_hasfired", DirectedCallTests.HasFired);
+        Run("directed_save", DirectedCallTests.SaveRoundTrip);
+        Run("directed_noinstructions", DirectedCallTests.NoInstructions);
         Run("pax_mass", PassengerTests.WrayMass);
         Run("pax_cg", PassengerTests.CgShift);
         Run("pax_torque", PassengerTests.CalloutTorque);

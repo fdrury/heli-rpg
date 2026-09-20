@@ -317,6 +317,15 @@ window after learning about the rota — a METAR-style broadcast mentioning knot
 Doss described. This is the moment the game stops being a sandbox: the world speaks to you
 in flight. `RadioStrip` lives in sim/ (pure .NET, no Godot dependency); six simlab tests
 verify queue management, word-reveal timing, suppression, and the beat 5 gate.
+**Directed radio calls** (D-095): the second carrier type from story.md §4.3. When the
+player enters a region whose relay has been tuned, a one-time radio message fires from
+that region's relay operator. Eight messages, one per region, each reporting local
+conditions in the voice of someone who noticed you tuned their mast and has been listening
+since. `DirectedCalls` lives in sim/ (pure .NET); the game layer tracks region transitions
+via `WorldMap.RegionAt()` and checks whether any relay in the new region has `freq.<siteId>`
+knowledge. Fired regions persist through save/load. Five simlab tests verify content
+coverage, one-shot behaviour, HasFired tracking, save round-trip, and tone compliance
+(no instructions).
 
 **Rotor ceiling** — the clock on the search (D-086). `MainRotorCeiling` degrades with
 total flight hours (0.0019/h, floor 0.55) and caps how far `Repair` can restore the main
@@ -453,6 +462,11 @@ Story build order item 8: "Everything else, region by region, in tier order."
    to Wray in the right seat; sling lines react to the blade pair on the hook. One new
    simlab test verifies all four categories fire under the right conditions and stay silent
    when their gates are unmet.
+6. ~~**Directed radio calls**~~ **DONE** (D-095). Eight one-time radio messages from
+   relay operators, fired when the player re-enters a region whose relay has been tuned
+   (story.md §4.3, carrier type 2). Each region reports local conditions — weather,
+   terrain, atmosphere — in the voice of someone who noticed you tuned their mast. The
+   world speaks to you in flight, region by region. Five simlab tests.
 
 ## Open questions for Fred
 
