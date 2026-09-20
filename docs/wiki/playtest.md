@@ -26,6 +26,22 @@ What works end to end, verified headlessly before this was written:
 | **Radio** | Streams real stations; the announcer talks about what you did. |
 | **Save / load** | F5 / F9. Parked only, by design (D-036). |
 
+## Menus
+
+`ESC` pauses — it used to quit the game outright with no confirmation, which was the single
+most hostile thing in here for anybody trying to test.
+
+- **Title** on boot: Continue / New sortie / Settings / Quit. It is the paused game with a
+  menu over it rather than a separate scene, so there is no loading wait when you start, and
+  the camera orbits the aircraft while you read it.
+- **Pause** (`ESC`): Resume / Save / Load / Settings / Flight controls / Quit. Quitting takes
+  two deliberate choices and offers to save on the way out.
+- **Settings**: master volume, radio volume, graphics tier, field of view, look sensitivity,
+  invert cyclic pitch. Left/right changes a value; it saves itself to `user://settings.cfg`.
+
+Saving is still parked-only by design (D-036) — the menu will tell you to land first rather
+than failing silently.
+
 ## Start here
 
 ```
