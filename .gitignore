@@ -34,3 +34,11 @@ tools/autopilot/RUNNING.lock
 tools/autopilot/retry-after.txt
 tools/autopilot/STOP
 tools/autopilot/pause-until.txt
+
+# Session-local agent state
+.claude/scheduled_tasks.lock
+
+# Scratch from research sessions. Saved web pages and scraper helpers are not
+# project files, and publishing copies of somebody else's pages in a repo that
+# may be shared is an attribution problem nobody asked for.
+*.html
