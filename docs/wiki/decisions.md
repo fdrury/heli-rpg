@@ -2886,3 +2886,40 @@ the player can methodically dismantle over multiple sorties as the endgame appro
 a single method that can be deleted or retuned (radii, counts, angular offsets) without
 touching any other system. The emitters use the same `ThreatField.Make` factory as every
 other emplacement. One new simlab test (`citadel_ring`) verifies the crossing is lethal.
+
+### D-089 — Dialogue rewards: NPC trades actually grant things · 2026-09-20
+
+The dialogue corpus has thread lines where NPCs describe giving the player capability items
+("the crate is yours" — Nell Abergale on the RWR). Before this change, nothing was actually
+granted. The lines were text-only; the story said the progression happened but the progression
+system did not agree.
+
+**Decision:** add `DialogueReward` to `DialogueLine` — a small record that says what to grant
+when the line is delivered. The game layer (`DialoguePanel.BeginLine → SiteInteraction.DeliverReward`)
+executes it. Module rewards follow the same path as salvage discovery (D-011): module goes
+into the bag via `Loadout.Find`, player learns a Schematic, journal notes it. Knowledge rewards
+call `Progress.Learn` directly. Both paths are idempotent — a duplicate find/learn is a no-op.
+
+**Three trades wired (Act II):**
+* `nell.thread.rwr` → module "rwr" (gated on `Knows(Manifest)` + standing ≥ 0.3)
+* `osie.thread.chart` → `KnowledgeKind.Chart` "chart.upland.masking" (gated on `Knows(Cairn)` + 2 meetings)
+* `ferren.thread.chart` → `KnowledgeKind.ThreatSite` "chart.emitter.locations" (gated on `Knows(Cairn)` + 2 meetings)
+
+**Why these three:** they are the Act II capability trades from story.md §3 — the ones that
+make the progression system (D-005, D-010) feel mechanical rather than cosmetic. Each
+corresponds to a story region (Fenmoor, Cold Shoulder, Sawtooth Works) and each gives the
+player something that opens the next region: the RWR makes threats survivable, the upland
+chart opens dead-ground routes, and the emitter chart reveals where the threat sites sit.
+
+**Why not Bel's trade:** Bel Tiernan's trade (wreck position for a generator lift) is
+multi-step: she needs the hoist installed first, then a contract completed. That requires a
+contract-completion hook, which is a separate piece of work.
+
+**Why idempotent:** the same line can fire on every visit if the requirements hold. Making the
+reward a no-op on the second delivery means there is no penalty for talking to the same NPC
+again, and no need for a "reward already delivered" gate that would add state to every line.
+
+**Reversibility:** high. The entire feature is three lines in `DialogueLine` (the `Reward`
+field), a helper in `DialogueCorpus` (`LR`), three tagged lines, one method in
+`SiteInteraction`, and one line in `DialoguePanel`. Removing `Reward` and reverting to `LT`
+restores the prior state. No save/load format changes — modules and knowledge already persist.

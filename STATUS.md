@@ -131,6 +131,12 @@ quests, questions and anachronisms. NPCs remember across visits, which the resea
 where the perceived magic actually lives. The llama-server subprocess is wired up behind a
 Windows Job Object for crash safety, the conversation UI draws in the HUD aesthetic with
 word-by-word reveal, and everything degrades to the baked layer when the model is absent.
+**Dialogue rewards** (D-089): when an NPC says "the crate is yours", the module or knowledge
+is actually granted. Nell Abergale trades the RWR at standing ≥ 0.3, Osie Crane gives the
+upland terrain-masking chart freely, Halvard Ferren trades the emitter-location chart. Module
+rewards follow the salvage path (bag, then install at a workshop); knowledge rewards call
+`Progress.Learn`. Both are idempotent and persist through save/load. One simlab test verifies
+reward attachment, condition gating, catalog references, and idempotency.
 
 **Play** — refuel, repair, salvage, survey, tune a relay, ask around, contract board.
 Carried load is real mass and is felt in the hover. The kneeboard records facts, not
@@ -367,56 +373,21 @@ godot --headless --path game -- --djreport
 
 ## Next
 
-Six agents are working in parallel right now on: salvage integration, the coning-inflow
-lateral bias, the warning panel, governor/throttle depth, NPC dialogue voices, and water.
-**Do not start any of those.** These are the things nobody is holding:
+Story build order item 8: "Everything else, region by region, in tier order."
 
-0. ~~**`SiteInteraction.cs` bottleneck.**~~ **DONE.** All four hooks (salvage yields, named
-   NPCs, richer generic register, knowledge-on-search) are wired in.
-1. ~~**Wire `StoryPlaces` into `SiteInteraction`.**~~ **DONE.** `StoryPlaces.For(site.Id)` is
-   consulted in both `GetOrCreateNpc` and `AddSalvage`.
-2. ~~**Wire `AlertState` into the world.**~~ **DONE.** Driven from ThreatWorld, feeds
-   DetectionScale/ReactionScale into the threat field, persisted in save, shown on kneeboard.
-3. ~~**Contract depth.**~~ **DONE.** Clear contracts, danger pay, hostile-aware recovery
-   briefs, alert-aware brief suffixes, and survey preference for quiet regions (D-062).
-4. ~~**The three degraded story roles.**~~ **DONE.** Verified: all three now bind to their
-   primary intent (Settlement in Long Acre, Settlement in Sawtooth Works, Depot in The
-   Scald). Zero degraded, zero unbound, zero shortfalls. The placement improvements that
-   raised altitude ceilings and added the three-pass desperation system resolved the
-   terrain mismatches that were causing silent placement failures (D-075).
-5. ~~**The announcer was not in the game.**~~ **DONE** (D-074). `RadioDj` had 676 authored
-   lines, 28 topics and eleven simlab checks, and **nothing in `game/` referenced it**.
-   `UplandService` resolves his mast from `RadioDj.SiteRules`, `DjBroadcast` runs him
-   against live weather, alert state and the player's own deeds, and `--djreport` measures
-   the whole path. He is Hollis Kerr, on Old Tor; 157 breaks in eighteen hours, 5.8% of
-   the airtime, and he does not mention the salvage run nobody watched.
-6. ~~**He has no voice.**~~ **DONE** (D-078). `VoiceSynth` generates a formant-based murmur —
-   a glottal pulse train at ~105 Hz through three resonant filters with syllable-rate
-   amplitude modulation, band-passed to 300–3400 Hz for radio character. Nobody understands
-   the words; the captions still carry meaning; through the radio channel the rhythm and
-   timbre read as a man talking. Carrier hiss fills gaps between sentences. The voice goes
-   through the same volume knob and warning duck as the music stations. Four simlab tests
-   check waveform, carrier hiss, voice-above-hiss ratio, and duration accuracy.
-7. ~~**The drowned wreck is dry.**~~ **DONE** (D-079). Two changes: `IncidentsFor` adds
-   the Wetland's centre as a second incident anchor so wreck candidates reach the basin
-   floor, and `SitePads` no longer ring-averages wreck heights (a crash site sits where
-   it came down). DrowningWreck (#60 Salt Sink) now sits at −10.1 m, 5.1 m below the
-   waterline. Zero shortfalls, 16/16 story roles bound, zero problems.
-8. ~~**The world has no acoustics.**~~ **DONE** (D-080). `AcousticSpace` samples the terrain
-   height field in two rings around the listener, computing enclosure and water proximity,
-   which drive a dynamically configured reverb bus (room size, damping, wet level) and a
-   distance low-pass filter. `AmbientSynth` gives every site kind its own voice: generator
-   drone + activity murmur (settlements), metal creaking (wrecks), electrical hum (relays),
-   wind through structures, and a cooling tick when the aircraft shuts down at a site. Both
-   live in `sim/` with no Godot dependency; six simlab tests verify open ground, valley,
-   water, AGL fade, every site kind's waveform, and wind response. The helicopter audio now
-   routes through the Reverb bus so terrain acoustics shape its sound.
-9. ~~**Story engine readiness.**~~ **DONE** (D-083). Three pieces from story.md §7 that
-   make the search thread and dialogue system usable by the authored beats: `ThreadContext`
-   with place-based gates (§7.2) so beats fire where the story says they happen, not
-   wherever counters overflow; Talk at non-Settlement sites (§7.5) so story NPCs at
-   airfields, workshops and depots can be spoken to; `ArrivedAtNight` driven by the sun
-   (§7.8) so night-gated dialogue lines work.
+0. ~~**Dialogue rewards.**~~ **DONE** (D-089). NPC capability trades now actually grant
+   modules and knowledge when the line is delivered. Three Act II trades wired: Nell → RWR
+   module, Osie → upland terrain chart, Ferren → emitter-location chart.
+1. **Passengers** (story.md §7.6). Sera Wray must ride in the right seat for the finale.
+   A mass item at the co-pilot position, dialogue bank that opens on landing at Ashmount,
+   voice callouts during the final flight through the radio strip.
+2. **Cargo hook sling load** (story.md §7.7). The 420 kg blade pair slung under the hook
+   as an external load. Mass at the hook point, drag delta, trim and power effects.
+   The finale cannot close without this.
+3. **Bel's trade completion** — wreck position knowledge granted after the generator lift
+   contract. Requires the hoist module and a contract completion hook.
+4. **Act III NPC dialogue depth** — Wray, Juno, Sparrow thread lines need reward tags
+   once the engine features they depend on exist (passengers, sling load, medical trade).
 
 ## Open questions for Fred
 
