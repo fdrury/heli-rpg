@@ -93,7 +93,7 @@ public sealed partial class GameMenu : Control
             {
                 AssistLevel.Off      => "off - bare airframe",
                 AssistLevel.Light    => "light - rate damping",
-                AssistLevel.Standard => "standard",
+                AssistLevel.Standard => "standard - the default",
                 _                    => "full - holds attitude",
             }),
             new("Back", () => Go(_main.Started ? Page.Paused : Page.Title)),
