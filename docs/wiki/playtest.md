@@ -14,6 +14,13 @@ this is the brief for **playing** it.*
 > separate check had reported the aircraft unflyable from the keyboard, and the fault was in
 > the check, twice over. Both are fixed. Everything below is current.
 
+> **It was played on 2026-09-20 and the answer below is too optimistic.** See
+> `playtest-findings.md`. A person with an Xbox controller found the aircraft very hard to
+> fly, buildings with no colliders, an invisible pilot on foot, warnings firing for no
+> apparent reason, and a controller that works in flight and nowhere else. None of that is
+> in this brief, because none of it was visible to any check in the repository. Read the
+> findings before trusting anything on this page.
+
 ## Is it playable?
 
 Yes, with one caveat that matters more than the rest: **the aircraft is unstable hands-off**

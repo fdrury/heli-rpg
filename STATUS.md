@@ -502,55 +502,37 @@ fails, the instrument is a suspect before the aircraft is.
 
 ## Next
 
-Story build order item 8 is done to the end of its list: items 0 through 8 (D-089 through
-D-097) all landed, and the section that used to be here is in git history.
+**Read `docs/wiki/playtest-findings.md` first.** The game was played by a person for the
+first time on 2026-09-20, with an Xbox controller, and that list supersedes everything
+that was planned before it.
 
-**The first session on a machine that could render this changed the priorities.** Godot
-4.7.2 was fetched, the whole battery ran against a real GPU, and the interface turned out
-to have been drawing off the edge of the screen - see the commit. What that says about
-what to do next is more useful than the list it replaced: the parts of this game that are
-measured are in good shape, and the parts that can only be looked at had never been
-looked at.
+The short version, in the order it probably wants doing:
 
-1. **Look at the rest of it.** `--hudshot` covers the flight HUD and the six kneeboard
-   pages. Not yet photographed, and therefore not yet known to work: the dialogue panel,
-   the warning panel under a real caution, the binding screen, the on-foot HUD, the
-   contract board, the save/load menus. Every one of those is a Control in the same
-   CanvasLayer that hid the bug, and `DialoguePanel` and `WarningPanel` were both fixed
-   blind - the fix is right, but nobody has seen them draw.
+1. **"Very difficult to control heli"** - on a CONTROLLER, which no check in this repo has
+   ever measured. Both robot pilots called the aircraft flyable hours earlier; they were
+   measuring the keyboard, and they were machines. Find out what is actually hard before
+   changing any gain.
+2. **Buildings have no colliders.** You walk through them.
+3. **The pilot is invisible on foot.** `PlayProbe` checks the `Visible` flag, which passes,
+   so it is something else - camera, scale, draw order or the model.
+4. **Warnings fire for no reason** - quite possibly latched cautions from an earlier event
+   that the player never caused and does not know how to clear.
+5. **The pad is wired into flight and nothing else** - no menu navigation, no dismount
+   button. Mouse capture is not restored after the window loses focus.
+6. **No gun sound. No menu music.** For the second, Fred suggests the radio station at full
+   clarity, and both halves of that already exist.
+7. **"Visuals/world is ugly"** - unqualified on purpose. Ask what specifically reads badly
+   before touching a shader.
 
-2. **The cockpit is crude.** The instruments are now inside the frame and readable as
-   shapes, and that is all they are: six bezels per seat, no faces, no needles, no
-   numbers. The HUD carries the actual figures. Whether that is acceptable is a design
-   question, not a bug, but it is the first thing a playtester will mention.
+Everything the previous list contained (story build order items 0-8, D-089 through D-097)
+is done and in git history.
 
-3. **`DrowningWreck: DRY`** - the one standing story warning, in every run, and it now
-   says considerably more than it did. Beat 8 wants the Wetland's drowned ferry "half in
-   the water, tail boom up"; the rule picks the lowest-lying wreck there and the ground is
-   still 9 m above the waterline.
-
-   **Decorating round it was tried and does not work.** Giving the wreck its own flooded
-   hollow - wet silt, a disc of the same water the streamed terrain uses, reeds through
-   the rim - runs straight into the pad geometry: a Wreck gets 14 m of flat pad blending
-   back to natural ground by 40 m, and there is 9.6 m of relief within 30 m even after the
-   pad. A flat pond big enough to hold a 30 m wreck cuts into the high side and hangs off
-   the low one, which looks far worse than dry ground ever did. That experiment was backed
-   out; the warning carries the measurement so nobody has to repeat it.
-
-   Two real options, both design calls rather than fixes: regrade the wreck pad wide
-   enough to hold water, or write the beat so it stops promising any.
-
-4. **The keyboard pedal has a spring now and no evidence that it helps.** `--flysweep`
-   could not separate it from the unsprung original over three flights per configuration,
-   and the reason is in the tool: the test pilot re-presses the key every frame, which is
-   the input pattern a machine handles best and a person handles worst. It is in on the
-   argument that an 84 deg/s step input from a key press is not something a human can
-   modulate. **This one wants a person at a keyboard**, and it is a good first question
-   for the playtest.
-
-5. **Nobody has played it.** Every check here is a robot. The loop closes, the aircraft
-   can be held in a hover, the interface is on the screen - none of that is the same as
-   twenty minutes with a person in the seat.
+**The lesson worth keeping.** The session before this playtest found and fixed four real
+things: the interface drawing off the edge of the screen, a fatal crash on quit, an
+unreadable cockpit panel, and an assist ladder nothing ever called. Not one of them appears
+in the playtest list. Every single item a player reported was invisible to every check in
+this repository, robot pilots included. The headless suite is good and it is not a
+substitute for somebody holding a controller.
 
 ## Open questions for Fred
 
