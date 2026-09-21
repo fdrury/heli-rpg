@@ -537,11 +537,32 @@ public static class StoryPlaces
         {
             float h = WorldHeight.RawAt(wreck.Position.X, wreck.Position.Y);
             if (h > WorldHeight.WaterLevel + 8f)
+            {
+                // How much room is there to put water, if anyone wants to?
+                //
+                // Measured on At() rather than RawAt(), because SitePads is what the
+                // decoration actually stands on. A Wreck gets a 14 m flat pad blending
+                // back to natural ground by 40 m, so the honest question is not "is the
+                // ground dry" - it is "how big a flat pond could sit here at all".
+                float low = float.MaxValue, high = float.MinValue;
+                for (int i = 0; i < 8; i++)
+                {
+                    float a = Mathf.Tau * i / 8f;
+                    float g = WorldHeight.At(wreck.Position.X + Mathf.Sin(a) * 30f,
+                                             wreck.Position.Y + Mathf.Cos(a) * 30f);
+                    low = Mathf.Min(low, g);
+                    high = Mathf.Max(high, g);
+                }
                 problems.Add(new StoryProblem(false,
                     $"DrowningWreck: DRY. #{wreck.Id} \"{wreck.Name}\" sits at {h:F1} m, " +
                     $"{h - WorldHeight.WaterLevel:F1} m above the waterline ({WorldHeight.WaterLevel:F0} m). " +
                     "It is the lowest wreck in the wetland, so the rule is right and the ground is wrong: " +
-                    "The Drowning has no standing water in it. Beat 8 says half in the water."));
+                    "The Drowning has no standing water in it. Beat 8 says half in the water. " +
+                    $"Relief within 30 m is {high - low:F1} m and a Wreck pad is flat for only 14 m, " +
+                    "so decorating this with a flat pond does not work either - it was tried, and it " +
+                    "cut into the high side. Fixing it properly means one of two design calls: regrade " +
+                    "the pad wide enough to hold water, or write the beat so it stops promising any."));
+            }
         }
 
         if (byRole.TryGetValue(StoryRole.ColdShoulderCairn, out Site? cairn))

@@ -10,8 +10,8 @@ every choice and why; `docs/wiki/benchmarks/` is where it was measured against t
 
 **The core loop closes, people talk, the machine levels up, the map fills in, there is
 somewhere to go and a reason to get there — and now a voice on the radio that knows what
-you did, a world that speaks to you in flight, and a clock on the airframe that makes
-every hour count.** You can fly a physically simulated Huey across a streamed archipelago,
+you did, a world that speaks to you in flight, a clock on the airframe that makes every
+hour count, and an interface that is actually on the screen.** You can fly a physically simulated Huey across a streamed archipelago,
 find a named settlement, put it down, shut down, talk to whoever lives there, take a
 contract from the board, fly it, and come back for the payout. The main search — 12
 authored beats about finding Sera Wray, a flight engineer, and a set of matched blades —
@@ -36,6 +36,21 @@ altitude band. A straight crossing produces 113 hits; the gun pod can dismantle 
 60 fps at 1600x900 on a GTX 1650 Ti, which is well under the GTX 1080 target.
 
 ## Run it
+
+The engine is not vendored (`tools/godot/` is gitignored, it is 111 MB). On a fresh
+machine, fetch it first:
+
+```
+# Godot 4.7.2 mono, win64 - the MONO build, or none of the C# loads
+https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_win64.zip
+# unzip into tools/godot/
+```
+
+> **One Godot at a time.** Two instances against `game/` race on `.godot/imported/` and
+> corrupt the texture cache - every material then fails to load with "Unable to open file:
+> ...ctex" and it looks like missing assets rather than a collision. Recover with
+> `godot --headless --path game --import`. Cost twenty minutes once; do not background a
+> long headless run and then start another.
 
 ```
 # the game
@@ -67,6 +82,15 @@ godot --headless --path game -- --threatreport
 
 # the standard screenshot set, for comparing the look over time
 godot --path game -- --screenshot
+
+# photograph the INTERFACE - HUD and all six kneeboard pages, on a damaged aircraft
+godot --path game -- --hudshot
+
+# fly it through the actual keyboard and report whether a person could hold it
+godot --headless --path game -- --playprobe
+
+# sweep the keyboard control tuning, three flights per row, and print the table
+godot --headless --path game -- --flysweep
 ```
 
 Controls: `W`/`S` or throttle = collective · arrows or stick = cyclic · `A`/`D` or twist =
@@ -81,6 +105,34 @@ On foot: `WASD` move · `Shift` sprint · `LMB` fire · `RMB` Rotor Time · `R` 
 `F` board Hugh.
 
 ## Done
+
+**Interface** — the flight HUD (rotor Nr, torque, fuel, endurance, attitude, damage, RWR,
+warnings, control hints) and a six-page kneeboard: aircraft condition, knowledge, journal,
+map, jobs, and the search thread. It draws correctly, which is newer than it sounds: until
+this was photographed, all four of these panels were sizing themselves from a `Control`
+whose rect never resolved, so everything positioned from the right edge or the centre
+landed at a negative coordinate and the rest piled into the top-left corner. The screenshot
+pass hides the HUD by design, so the only frame that ever contained any of it was the
+kneeboard capture and nobody had opened the file. `--hudshot` exists so that cannot happen
+again: it photographs the interface on a damaged, low-fuel aircraft, because the panels
+worth checking are the ones that only appear when something is wrong.
+
+**Assists** — the stability ladder is selectable at last. `Stability` has had four measured
+rungs (Off / Light / Standard / Full) and simlab coverage for three of them for a long
+time, and `Sas.Set()` was called from nowhere in the game: the only caller in the whole
+repository was the test suite, so the level was whatever the field initialisers happened to
+be and the player had no say. It is now a Settings row that persists, and
+`HelicopterController` respects `Off` instead of re-enabling augmentation on the next
+physics frame.
+
+**Shutdown** — the terrain and prop streamers build their chunks on worker threads out of
+`WorldHeight`, whose noise fields are static `FastNoiseLite`: engine-owned objects. When
+the tree was torn down Godot freed them under any worker still running, which surfaced as
+"Cannot access a disposed object", as an `AccessViolationException`, or as a bare
+`Fatal error. Internal CLR error. (0x80131506)` — reproducible just by quitting. Both
+streamers now stop dispatching and wait (bounded to two seconds) for outstanding builds in
+`_ExitTree`. Cancellation alone was not enough: a task already inside `GetNoise2D` cannot
+be interrupted, only waited for. Six consecutive clean shutdowns, from one crash in two.
 
 **Flight** — blade-element rotor with per-blade flapping, dynamic inflow, vortex ring
 state, ground effect; turboshaft with governor, torque limits, density lapse and a
@@ -426,8 +478,21 @@ Headless, always run before committing:
 dotnet run --project tools/simlab -c Release -- all
 godot --headless --path game -- --selftest
 godot --headless --path game -- --looptest
+godot --headless --path game -- --playprobe
 godot --headless --path game -- --djreport
 ```
+
+`--playprobe` is in that list now because it is the only check that goes through
+`FlightInput`. Everything else drives the aircraft by setting `OverrideControls`, so a
+suite that is entirely green still says nothing about whether the game can be flown.
+
+**A green test is a claim about what it measured, and twice in one session it was not the
+claim it printed.** The pedal check measured 180.1 degrees of yaw by differencing two
+angles through `WrapPi`, read that back as -179.9, and failed a perfectly healthy
+aircraft. `--playprobe` announced that the aircraft could not be flown from the keyboard
+for two reasons that were both in the probe: it flew the cyclic and left the pedals alone,
+and it started measuring on the same frame it teleported the rigid body. When a check
+fails, the instrument is a suspect before the aircraft is.
 
 > **Godot runs the Debug assembly.** `dotnet build game/Rotorwash.csproj -c Release`
 > succeeds, changes nothing Godot loads, and the next headless run executes the *previous*
@@ -437,57 +502,55 @@ godot --headless --path game -- --djreport
 
 ## Next
 
-Story build order item 8: "Everything else, region by region, in tier order."
+Story build order item 8 is done to the end of its list: items 0 through 8 (D-089 through
+D-097) all landed, and the section that used to be here is in git history.
 
-0. ~~**Dialogue rewards.**~~ **DONE** (D-089).
-1. ~~**Passengers.**~~ **DONE** (D-090). Sera Wray in the right seat: 68 kg mass, co-pilot
-   callouts (torque, Nr, altitude, fuel, threat) via RadioStrip in warm amber, boarding
-   reward, save/load.
-2. ~~**Cargo hook sling load**~~ **DONE** (D-091). 420 kg blade pair on the cargo hook:
-   SlingLoads.BladePair() factory, Progress.SlingLoadId persistence, SyncSlingLoad() in
-   game layer, DialogueRewardKind.SlingLoad for story triggers. Finale feasibility
-   measured: closes with 265 kg fuel margin at worst ceiling (0.58), ISA+10, full load.
-3. ~~**Bel's trade completion**~~ **DONE** (D-092). `ContractKind.Lift` for hoist-based
-   contracts, `ContractBoard.StoryContract()` injects the generator lift at Bel's settlement
-   when the hoist is installed, `Requirement.Fitted()` gates dialogue on installed modules,
-   and `BuildTalkContext` now populates knowledge and fitting ids — fixing a bug where all
-   `Knows()`/`Unknown()` dialogue gates were inert. Completing the generator lift grants
-   wreck position knowledge (`bel.wreck_position`). Six new simlab tests.
-4. ~~**Act III NPC dialogue depth**~~ **DONE** (D-093). Wray, Juno, and Sparrow thread
-   lines now carry reward tags: Wray's load-specification line grants `search.load`
-   knowledge, Sparrow's medical trade grants `sparrow.passage` knowledge, Sparrow's
-   parting line grants the `blade_pair` sling load (gated on passage + hook), and Juno's
-   approach line grants `juno.approach` knowledge. Two new `Requirement` prefixes —
-   `Passenger()` and `Sling()` — let the corpus gate on who is aboard and what is on the
-   hook; Juno has a greeting that fires only when Wray is in the right seat. Wray's
-   hook-approval and ceiling lines use `Fitted("hook")`. One new simlab test verifies
-   all four reward lines, the two-visit Sparrow trade sequence, and every new gate type.
-5. ~~**World-state-reactive settler dialogue**~~ **DONE** (D-094). 23 new settler lines
-   that react to night arrival, story progress, passenger presence, and sling loads.
-   `Requirement.Night()` gates dialogue on `ArrivedAtNight`. Story-progress lines use
-   `Knows()`/`Unknown()` to track the player's journey through the search arc — settlers
-   mention the callsign, the wreck, the roster, and finding Wray as the player learns each
-   beat, with negative gates so lines age out as the story moves on. Passenger lines react
-   to Wray in the right seat; sling lines react to the blade pair on the hook. One new
-   simlab test verifies all four categories fire under the right conditions and stay silent
-   when their gates are unmet.
-6. ~~**Directed radio calls**~~ **DONE** (D-095). Eight one-time radio messages from
-   relay operators, fired when the player re-enters a region whose relay has been tuned
-   (story.md §4.3, carrier type 2). Each region reports local conditions — weather,
-   terrain, atmosphere — in the voice of someone who noticed you tuned their mast. The
-   world speaks to you in flight, region by region. Five simlab tests.
-7. ~~**One place goes dark**~~ **DONE** (D-096). Post-ending ash expansion (story.md
-   §6.3). When the search completes: citadel guns go silent (three Scald gun pits
-   destroyed), the two nearest tier 1-2 sites are covered by ash (permanently fogged
-   on the kneeboard map, actions blocked with "ASH" tag), journal records the change.
-   FogOfWar gains a contamination layer (parallel bool array, separate serialisation).
-   Five simlab tests. All three §6 post-ending deltas are now implemented.
-8. ~~**Intercepted radio calls**~~ **DONE** (D-097). The third carrier type from
-   story.md §4.3: overheard hostile radio traffic when tracked inside a threat
-   envelope. 27 authored lines across five threat kinds, each a terse coordination
-   call between operators who never address the player. Highest-confidence tracker
-   determines the voice. 90-second cooldown, once-per-line, persisted. Six simlab
-   tests. All three §4.3 radio carrier types are now implemented.
+**The first session on a machine that could render this changed the priorities.** Godot
+4.7.2 was fetched, the whole battery ran against a real GPU, and the interface turned out
+to have been drawing off the edge of the screen - see the commit. What that says about
+what to do next is more useful than the list it replaced: the parts of this game that are
+measured are in good shape, and the parts that can only be looked at had never been
+looked at.
+
+1. **Look at the rest of it.** `--hudshot` covers the flight HUD and the six kneeboard
+   pages. Not yet photographed, and therefore not yet known to work: the dialogue panel,
+   the warning panel under a real caution, the binding screen, the on-foot HUD, the
+   contract board, the save/load menus. Every one of those is a Control in the same
+   CanvasLayer that hid the bug, and `DialoguePanel` and `WarningPanel` were both fixed
+   blind - the fix is right, but nobody has seen them draw.
+
+2. **The cockpit is crude.** The instruments are now inside the frame and readable as
+   shapes, and that is all they are: six bezels per seat, no faces, no needles, no
+   numbers. The HUD carries the actual figures. Whether that is acceptable is a design
+   question, not a bug, but it is the first thing a playtester will mention.
+
+3. **`DrowningWreck: DRY`** - the one standing story warning, in every run, and it now
+   says considerably more than it did. Beat 8 wants the Wetland's drowned ferry "half in
+   the water, tail boom up"; the rule picks the lowest-lying wreck there and the ground is
+   still 9 m above the waterline.
+
+   **Decorating round it was tried and does not work.** Giving the wreck its own flooded
+   hollow - wet silt, a disc of the same water the streamed terrain uses, reeds through
+   the rim - runs straight into the pad geometry: a Wreck gets 14 m of flat pad blending
+   back to natural ground by 40 m, and there is 9.6 m of relief within 30 m even after the
+   pad. A flat pond big enough to hold a 30 m wreck cuts into the high side and hangs off
+   the low one, which looks far worse than dry ground ever did. That experiment was backed
+   out; the warning carries the measurement so nobody has to repeat it.
+
+   Two real options, both design calls rather than fixes: regrade the wreck pad wide
+   enough to hold water, or write the beat so it stops promising any.
+
+4. **The keyboard pedal has a spring now and no evidence that it helps.** `--flysweep`
+   could not separate it from the unsprung original over three flights per configuration,
+   and the reason is in the tool: the test pilot re-presses the key every frame, which is
+   the input pattern a machine handles best and a person handles worst. It is in on the
+   argument that an 84 deg/s step input from a key press is not something a human can
+   modulate. **This one wants a person at a keyboard**, and it is a good first question
+   for the playtest.
+
+5. **Nobody has played it.** Every check here is a robot. The loop closes, the aircraft
+   can be held in a hover, the interface is on the screen - none of that is the same as
+   twenty minutes with a person in the seat.
 
 ## Open questions for Fred
 

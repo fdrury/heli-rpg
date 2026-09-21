@@ -37,7 +37,15 @@ public sealed partial class ChaseCamera : Camera3D
     /// of glass floating in it: the camera was inside the hull with every body panel
     /// backface-culled away from it, and only the double-sided glass left to see.
     /// </summary>
-    [Export] public Vector3 CockpitOffset { get; set; } = new(-0.62f, 0.22f, -2.15f);
+    /// <summary>
+    /// The pilot's eye, in the airframe's own frame: left seat, and 0.78 m above the seat
+    /// cushion, which is about where a seated person's eyes actually are.
+    ///
+    /// It was 0.22, or 0.95 m above the cushion - a tall pilot sitting up very straight -
+    /// and that extra 17 cm was enough to put the lower instrument row outside a 68 degree
+    /// vertical FOV and tuck the upper row under the glareshield.
+    /// </summary>
+    [Export] public Vector3 CockpitOffset { get; set; } = new(-0.62f, 0.05f, -2.15f);
     [Export] public Vector3 ThirdPersonOffset { get; set; } = new(0.6f, 1.8f, 3.5f);
 
     [Export] public float PositionLag { get; set; } = 6.5f;

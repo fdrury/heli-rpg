@@ -169,8 +169,17 @@ public static class AirframeBuilder
         // --- Panel, glareshield, pedestal, overhead --------------------------
         // The glareshield is the piece that makes a cockpit read as a cockpit from the
         // seat: it puts a hard horizontal edge across the bottom of the windscreen.
-        AddBox(st, new Vector3(0, -0.52f, NoseZ + 1.08f), new Vector3(1.62f, 0.70f, 0.20f));
-        AddBox(st, new Vector3(0, -0.14f, NoseZ + 1.24f), new Vector3(1.70f, 0.10f, 0.48f));
+        // The panel reaches up to meet the glareshield, so there is no daylight gap
+        // between the two from the seat.
+        AddBox(st, new Vector3(0, -0.495f, NoseZ + 1.08f), new Vector3(1.62f, 0.75f, 0.20f));
+
+        // The glareshield WAS 0.48 m deep and sat 4 cm lower, and it was overhanging its
+        // own instruments: a ray from the design eye point to the top row of gauges passed
+        // through it. From the left seat the panel was a featureless grey slab across the
+        // bottom third of the windscreen with the gauge faces hidden underneath, which is
+        // what the first cockpit shot showed. Shallower and a little higher; it still puts
+        // the hard horizontal edge across the base of the glass, which is its job.
+        AddBox(st, new Vector3(0, -0.075f, NoseZ + 1.25f), new Vector3(1.70f, 0.08f, 0.20f));
         AddBox(st, new Vector3(0, -0.68f, NoseZ + 1.95f), new Vector3(0.36f, 0.76f, 1.45f));
         AddBox(st, new Vector3(0, 0.82f, NoseZ + 1.80f), new Vector3(0.88f, 0.16f, 1.05f));
 
@@ -225,9 +234,13 @@ public static class AirframeBuilder
             // They were at NoseZ + 0.97, which is the forward face of a panel spanning 0.98
             // to 1.18 - so every instrument was mounted facing out of the nose, where only
             // the weather could read them.
+            // Both rows have to fall inside a 68 degree vertical FOV from an eye point
+            // 0.93 m aft of them. At the old spacing the lower row sat 42 degrees below
+            // the sight line and was simply off the bottom of the screen - the gauges
+            // existed, were lit, and could not be read from the seat.
             for (int r = 0; r < 2; r++)
                 for (int c = 0; c < 3; c++)
-                    AddBox(st, new Vector3(x - 0.20f + c * 0.20f, -0.34f - r * 0.22f, NoseZ + 1.20f),
+                    AddBox(st, new Vector3(x - 0.20f + c * 0.20f, -0.26f - r * 0.18f, NoseZ + 1.20f),
                                 new Vector3(0.15f, 0.15f, 0.05f));
         }
 

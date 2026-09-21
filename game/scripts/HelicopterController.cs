@@ -124,7 +124,7 @@ public sealed partial class HelicopterController : RigidBody3D
             UseInternalGroundModel = false,   // Godot owns contacts
         };
         Sim.InvalidateMass();
-        Sim.Sas.Enabled = StabilityAugmentation;
+        Sim.Sas.Enabled = StabilityAugmentation && Sim.Sas.Level != AssistLevel.Off;
 
         Input = new FlightInput();
         AddChild(Input);
@@ -297,7 +297,11 @@ public sealed partial class HelicopterController : RigidBody3D
         // A human is the slow outer loop the augmentation is FOR; another controller is
         // not, and it already does attitude hold itself. So: whoever is flying, only one
         // of them gets to be the damper.
+        // AssistLevel.Off has to survive this line. Stability.Set(Off) clears Enabled, and
+        // this runs every physics frame - so without the Level check the setting turned
+        // itself back on again before the player let go of the key.
         Sim.Sas.Enabled = StabilityAugmentation
+                          && Sim.Sas.Level != AssistLevel.Off
                           && OverrideControls is null
                           && SasAuthority <= 0.001f;
 

@@ -129,10 +129,10 @@ public sealed partial class PlayProbe : Node
 
         // ---- can a keyboard pilot actually hold it? --------------------------
         //
-        // The question the whole suite could not ask. A simple proportional pilot, driving
-        // the same four KEYS a person has, trying to keep the aircraft level and where it
-        // is. If this cannot hold it, neither can anybody, and no amount of green tests
-        // elsewhere means the game can be flown.
+        // The question the whole suite could not ask. A proportional pilot with rate lead,
+        // driving the same keys a person has - all four controls, which the first version
+        // of this did not: it flew the cyclic, left the pedals alone, watched the nose run
+        // away and concluded the aircraft was unflyable. See KeyboardPilot.
         if (_step == 0)
         {
             ResetToHover();
@@ -143,8 +143,8 @@ public sealed partial class PlayProbe : Node
 
         // Let the teleport actually land before measuring anything.
         //
-        // The reset below was already here, with a comment about the Godot body and the
-        // sim being two states with only one of them reset. It was right and it was still
+        // ResetToHover was already here, with a comment about the Godot body and the sim
+        // being two states with only one of them reset. It was right and it was still
         // not enough: writing GlobalTransform on a rigid body is a request, the physics
         // server applies it on its own schedule, and this probe started flying on the same
         // frame it asked. So the "clean hover" it measured was in fact the tail end of the

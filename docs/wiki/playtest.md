@@ -6,13 +6,28 @@ this is the brief for **playing** it.*
 
 ---
 
+> **Updated later the same day, after the first session on a machine that could render it.**
+> This brief was written against headless checks, and two of its claims did not survive
+> contact with a screen. The interface was not on it: the HUD and the kneeboard were sizing
+> themselves from a rect that never resolved, so most of both drew at negative coordinates
+> and what was left piled into the top-left corner. And the flight controls are fine — a
+> separate check had reported the aircraft unflyable from the keyboard, and the fault was in
+> the check, twice over. Both are fixed. Everything below is current.
+
 ## Is it playable?
 
 Yes, with one caveat that matters more than the rest: **the aircraft is unstable hands-off**
 and always will be. Let go of the cyclic and it diverges in about six seconds. That is
 correct for a Huey with no autopilot and it is the central skill of the game, but it means
 there is no moment where you can take your hands off to read the kneeboard in flight. Land
-first, or use the SAS module once you find one.
+first, use the SAS module once you find one — or turn the assist up (see Settings below),
+which is now something you can actually do.
+
+It has been flown by a robot at a keyboard for thirty seconds at a time and held to about
+eleven degrees of bank while keeping height within a few metres. That is a floor, not a
+verdict: a machine that re-presses a key every frame is the best possible case for a
+digital control and the worst possible proxy for how it feels. **How it feels is the thing
+this playtest is for.**
 
 What works end to end, verified headlessly before this was written:
 
@@ -37,7 +52,15 @@ most hostile thing in here for anybody trying to test.
 - **Pause** (`ESC`): Resume / Save / Load / Settings / Flight controls / Quit. Quitting takes
   two deliberate choices and offers to save on the way out.
 - **Settings**: master volume, radio volume, graphics tier, field of view, look sensitivity,
-  invert cyclic pitch. Left/right changes a value; it saves itself to `user://settings.cfg`.
+  invert cyclic pitch, and **stability assist**. Left/right changes a value; it saves itself
+  to `user://settings.cfg`.
+
+**Stability assist** is the new one and worth knowing about before you start:
+*off* is the bare airframe (departs trim in about 6 s), *light* is rate damping with a hand
+on heading and no levelling, *standard* is the default (holds trim about 22 s), *full* is
+close to attitude-command. All four are limited-authority — you can always fly past them —
+and all four are measured, not guessed. Until today none of them was reachable from inside
+the game.
 
 **Saves are slots now.** Six numbered slots plus an autosave, each listed with where you were
 parked, the in-game day and time, hours on the airframe, and when it was written — so picking
@@ -90,6 +113,27 @@ running on the test PC before you start - it will say what it thinks your hardwa
 
 ## What to look for, in order
 
+**0. Does the keyboard pedal feel right?** Ask this first, because it changed today and the
+evidence for the change is an argument rather than a number. It used to be a switch: press
+`A` or `D` and the pedal went instantly to its stop, about 84 deg/s of yaw arriving in a
+single frame. It now springs in over 0.3 s and back out over 0.2 s, like the cyclic
+already did, and keeps its full travel — the sweep was unambiguous that capping the travel
+makes the aircraft depart, because the pedal that trims a hover is a third of a travel
+wrong by 40 kt. What the sweep could *not* show is whether the spring helps, because its
+test pilot corrects every frame and bang-bang is exactly what such a pilot handles best.
+So: does a pedal input feel like a control or like a switch, and can you hold a heading in
+a hover without hunting?
+
+**0b. What do you do in the first five minutes?** A new sortie starts at dawn with 120 kg
+of fuel (about fifty minutes), an unsurveyed map, no airspeed or altitude until you find
+the SAS module, one rumour — "Wray. A name, and four legs in her handwriting." — and one
+journal line saying everything else is guesswork. There is a fuel cache within a couple of
+minutes' flying, but the map will not tell you that because you have not surveyed it.
+That is all deliberate. The question is whether it reads as *deliberate* or as the game
+having failed to tell you something: press `TAB` and the KNOWN, LOG and THREAD pages are
+the opening briefing, and if a new player does not find them, they are not an opening
+briefing.
+
 **1. Does the aircraft feel like an aircraft?** This is the only question that cannot be
 answered from here. Specifically: does it settle into a hover without pilot-induced
 oscillation, does translational lift arrive as a distinct event around 15-20 kt, and does
@@ -121,6 +165,15 @@ things you actually did, with the numbers slightly wrong.
   words. That is deliberate for now, not a bug.
 - **Two of seven overlooks fail to place.** No loot, no story role; recorded in
   `--worldreport` rather than hidden.
+- **`DrowningWreck: DRY`** in every run's warnings. Story beat 8 wants the Wetland's
+  drowned ferry "half in the water"; the lowest-lying wreck the rule can pick still sits
+  9 m above the waterline. The beat fires, the place just is not wet.
+- **The cockpit instruments are shapes, not gauges.** Six bezels per seat with no faces,
+  needles or numbers. They are inside the frame and lit; the HUD carries the real figures.
+  Worth one line if it bothers you, but it is known.
+- **No flight data without the SAS module.** "NO FLIGHT DATA" where airspeed and altitude
+  would be is deliberate (D-055: instruments are items). Rotor, torque and fuel are always
+  there. If it reads as a bug rather than as a deprivation, that is worth knowing.
 
 ## Reporting
 

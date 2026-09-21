@@ -4,6 +4,17 @@ This repository is developed on a laptop that cannot comfortably render it. Ever
 headless is verified here; **anything that has to be looked at is verified on the test
 machine**. This page is the brief for whoever (or whatever) is doing the looking.
 
+> **This brief was run for the first time on 2026-09-20**, on a GTX 1080. It found that the
+> flight HUD and the kneeboard had been drawing off the edge of the screen — four Controls
+> sizing themselves from a rect that never resolved, so everything positioned from the
+> right edge or the centre rendered at a negative coordinate. The table below already asked
+> whoever ran shot `03` to check "instruments visible at the bottom". They were not. Nobody
+> had opened the file.
+>
+> The lesson is not that the brief was wrong. It is that a brief nobody executes is worth
+> exactly nothing, and this one sat unexecuted long enough for the entire interface to
+> break without a single test going red.
+
 The rule this project runs on: *every real bug so far was invisible in code review and
 obvious in a measurement or a render.* So the job is not "does it look nice". The job is to
 catch the thing that is wrong and that nobody can see from here.
@@ -20,7 +31,18 @@ godot --headless --path game -- --worldreport
 
 # The render set. Writes builds/screenshots/*.png and prints the conditions of each shot.
 godot --path game --resolution 1600x900 -- --screenshot
+
+# The INTERFACE set. The screenshot pass hides the HUD by design, so these are the only
+# frames that contain it: flight HUD in three camera modes, and all six kneeboard pages,
+# on a damaged aircraft low on fuel so the panels that only appear when something is
+# wrong have something to say.
+godot --path game --resolution 1600x900 -- --hudshot
 ```
+
+**Run one Godot at a time.** Two instances against `game/` race on `.godot/imported/` and
+corrupt the texture cache; every material then fails with "Unable to open file: ...ctex",
+which looks like missing assets rather than a collision. Recover with
+`godot --headless --path game --import`.
 
 The screenshot run prints a line per shot giving the in-game date, sun elevation and full
 weather. Quote those when reporting — "dark" means something different at 54° and at 5°.
@@ -39,6 +61,8 @@ weather. Quote those when reporting — "dark" means something different at 54°
 | `14`–`17` dawn / dusk / night | Time of day, and whether night is dark but flyable. |
 | `18`–`19` rain | Rain density and slant, and the wet-weather grade. |
 | `20`–`22` high country | The steep terrain. Rock on slopes, strata banding, valleys. |
+| `hud_01`–`03` | Flight HUD in chase, cockpit and orbit. Is it readable, and is all of it on the screen? |
+| `hud_10`–`15` | The six kneeboard pages. Only `MAP` had ever been rendered before. |
 
 ## Open questions I cannot answer from here
 
@@ -59,7 +83,13 @@ These are the things most likely to be wrong. Please look specifically.
 
 ## One thing that needs a stick, not a screen
 
-`Stability` now has an assist ladder — **Off / Light / Standard / Full** (`Sas.Set(...)`).
+The assist ladder is now **selectable in Settings** ("Stability assist"), which it was not
+when this section was written. `Sas.Set()` existed, had four measured rungs and simlab
+tests for three of them, and was called from nowhere in the game — the only caller in the
+repository was the test suite. So the instruction below could not actually be carried out.
+It can now.
+
+`Stability` has an assist ladder — **Off / Light / Standard / Full** (`Sas.Set(...)`).
 Three rungs are measurable and measured: Standard and Full hold trim hands-off for 22 s and
 indefinitely, against 6.5 s bare.
 

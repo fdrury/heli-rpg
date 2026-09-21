@@ -19,6 +19,8 @@ public sealed partial class SaveTest : Node
     private readonly SiteStreamer _sites;
     private readonly Sidearm _sidearm;
     private readonly RotorTime _rt;
+    /// <summary>The charge in the frame the save landed. See the note at the load step.</summary>
+    private float _loadedCharge = float.NaN;
     private readonly Autopilot _ap = new() { CollectiveTrim = 0.5 };
 
     private Site? _target;
@@ -217,6 +219,17 @@ public sealed partial class SaveTest : Node
                 if (reloaded is null) { Fail("JSON deserialisation failed"); Finish(); break; }
 
                 _main.ApplyState(reloaded);
+                // Sample the Rotor Time charge HERE, in the frame the state lands, not in
+                // the frame the assertions run.
+                //
+                // Charge regenerates at 0.15 per second whenever the pilot is committing,
+                // so the value drifts between load and check by however long the checks
+                // take to come round - which is frame pacing, which is machine load. The
+                // assertion is +/-0.02, or about 0.13 s of regeneration, so on a busy
+                // machine this test failed while the save/load path it exists to check was
+                // working perfectly. Measured three times in a row at 0.42 immediately
+                // afterwards, and once at 0.44 while a screenshot pass was running.
+                _loadedCharge = _rt.Charge;
                 GD.Print("  loaded save");
 
                 Next();
@@ -279,11 +292,11 @@ public sealed partial class SaveTest : Node
                 else
                     GD.Print($"  pilot health OK: {pilotHp:F0}");
 
-                // Rotor Time charge
-                if (Math.Abs(_rt.Charge - 0.42f) > 0.02f)
-                    Fail($"rotor time: expected ~0.42, got {_rt.Charge:F2}");
+                // Rotor Time charge, as it was restored rather than as it stands now.
+                if (Math.Abs(_loadedCharge - 0.42f) > 0.02f)
+                    Fail($"rotor time: expected ~0.42, got {_loadedCharge:F2}");
                 else
-                    GD.Print($"  rotor time OK: {_rt.Charge:F2}");
+                    GD.Print($"  rotor time OK: {_loadedCharge:F2}");
 
                 // Position: aircraft should be near the site
                 Vector3 pos = _heli.GlobalPosition;

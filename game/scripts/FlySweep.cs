@@ -44,8 +44,19 @@ public sealed partial class FlySweep : Node
     /// the keyboard pedal had no spring and no authority limit at all and every tap was a
     /// full deflection.
     ///
-    /// So the cyclic is pinned at what measured well and the pedal gets the ladder. The
-    /// first row is the old behaviour - full authority, no spring - kept as the control.
+    /// So the cyclic is pinned at what measured well and the pedal is the variable. The
+    /// authority ladder has already been run and is not repeated here: every rung below
+    /// 0.70 crashed or went unflyable, because the pedal that trims a hover is a third of
+    /// a travel wrong by 40 kt and a pilot who cannot reach that third cannot stop a yaw.
+    /// What is left is the spring, against the unsprung original as a control.
+    ///
+    /// **This grid returned a null result and the code is honest about it.** Averaged over
+    /// three flights each, the sprung rows did not beat the switch on heading error. That
+    /// is not evidence the spring is wrong; it is evidence this instrument cannot see the
+    /// difference, because the pilot below re-presses its keys every frame and bang-bang
+    /// is precisely the input pattern a machine handles best and a person handles worst.
+    /// The spring shipped on the argument, not on this table. A human at a keyboard is the
+    /// outstanding question - see docs/wiki/playtest.md.
     /// </summary>
     private static readonly Trial[] Grid =
     {

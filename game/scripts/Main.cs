@@ -301,6 +301,7 @@ public sealed partial class Main : Node3D
                 // is that anything visual gets looked at rather than assumed.
                 Settings.Load();
                 Settings.Camera = _heli.GetViewport()?.GetCamera3D();
+                Settings.Aircraft = _heli.Sim;
                 _menu.ShowTitle();
                 AddChild(new MenuShot(_menu) { Name = "MenuShot" });
                 break;
@@ -348,6 +349,17 @@ public sealed partial class Main : Node3D
                 _threats.Disabled = true;
                 AddChild(new SaveTest(this, _heli, _play, _landing, _sites, _sidearm, _rotorTime)
                 { Name = "SaveTest" });
+                break;
+            }
+            if (arg == "--uishot")
+            {
+                // The panels that only exist when you are somewhere: the site action list,
+                // the dialogue panel and the on-foot HUD. None of them can be photographed
+                // from a hover, and two of them were fixed without ever being seen.
+                GD.Print("[main] running the UI shot pass");
+                _threats.Disabled = true;
+                AddChild(new UiShots(this, _heli, _play, _landing, _sites, _hud,
+                                     "res://../builds/screenshots") { Name = "UiShots" });
                 break;
             }
             if (arg == "--hudshot")
@@ -469,7 +481,9 @@ public sealed partial class Main : Node3D
         // and waits for somebody to press Enter is a test that hangs.
         Settings.Load();
         Settings.Camera = _heli.GetViewport()?.GetCamera3D();
-        if (_headless) { Started = true; Settings.Apply(); }
+        Settings.Aircraft = _heli.Sim;
+        Settings.Apply();
+        if (_headless) { Started = true; }
         else _menu.ShowTitle();
     }
 

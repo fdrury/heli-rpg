@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Rotorwash.Sim;
 
 namespace Rotorwash;
 
@@ -88,6 +89,13 @@ public sealed partial class GameMenu : Control
             new("Field of view", () => { }, () => $"{Settings.Fov:F0} deg"),
             new("Look sensitivity", () => { }, () => $"{Settings.LookSensitivity:F2}"),
             new("Invert cyclic pitch", () => { }, () => Settings.InvertPitch ? "yes" : "no"),
+            new("Stability assist", () => { }, () => Settings.Assist switch
+            {
+                AssistLevel.Off      => "off - bare airframe",
+                AssistLevel.Light    => "light - rate damping",
+                AssistLevel.Standard => "standard",
+                _                    => "full - holds attitude",
+            }),
             new("Back", () => Go(_main.Started ? Page.Paused : Page.Title)),
         },
         Page.ConfirmQuit => new()
@@ -324,6 +332,12 @@ public sealed partial class GameMenu : Control
             case 3: Settings.Fov = Mathf.Clamp(Settings.Fov + dir * 5f, 50f, 110f); break;
             case 4: Settings.LookSensitivity = Mathf.Clamp(Settings.LookSensitivity + dir * 0.05f, 0.1f, 3.0f); break;
             case 5: Settings.InvertPitch = !Settings.InvertPitch; break;
+            case 6:
+            {
+                int a = Mathf.Clamp((int)Settings.Assist + dir, 0, 3);
+                Settings.Assist = (AssistLevel)a;
+                break;
+            }
         }
         Settings.Apply();
         Settings.Save();
@@ -470,6 +484,21 @@ public static class Settings
     public static float LookSensitivity { get; set; } = 1.0f;
     public static bool InvertPitch { get; set; }
 
+    /// <summary>
+    /// How much the aircraft helps its pilot.
+    ///
+    /// The ladder has existed in <see cref="Rotorwash.Sim.Stability"/> for a long time,
+    /// with four measured rungs and simlab tests for three of them - and nothing in the
+    /// game ever called Set(). The only caller in the repository was the test suite, so
+    /// the level was whatever the field initialisers happened to be and the player had no
+    /// say in it at all. visual-check.md asks a tester to "fly a minute at each of Off,
+    /// Light and Standard", which could not be done from inside the game.
+    /// </summary>
+    public static AssistLevel Assist { get; set; } = AssistLevel.Standard;
+
+    /// <summary>Set by Main so changing the assist level reaches the aircraft.</summary>
+    public static Helicopter? Aircraft { get; set; }
+
     /// <summary>Set by Main so the FOV slider has something to move.</summary>
     public static Camera3D? Camera { get; set; }
 
@@ -480,6 +509,7 @@ public static class Settings
             AudioServer.SetBusVolumeDb(master, Master <= 0.001f ? -80f : Mathf.LinearToDb(Master));
 
         if (Camera is not null && IsInstanceValid(Camera)) Camera.Fov = Fov;
+        Aircraft?.Sas.Set(Assist);
     }
 
     private static bool IsInstanceValid(GodotObject o) => GodotObject.IsInstanceValid(o);
@@ -492,6 +522,7 @@ public static class Settings
         cfg.SetValue("view", "fov", Fov);
         cfg.SetValue("view", "look", LookSensitivity);
         cfg.SetValue("view", "invert_pitch", InvertPitch);
+        cfg.SetValue("flight", "assist", (int)Assist);
         cfg.Save(ConfigPath);
     }
 
@@ -504,5 +535,6 @@ public static class Settings
         Fov = (float)cfg.GetValue("view", "fov", Fov);
         LookSensitivity = (float)cfg.GetValue("view", "look", LookSensitivity);
         InvertPitch = (bool)cfg.GetValue("view", "invert_pitch", InvertPitch);
+        Assist = (AssistLevel)Mathf.Clamp((int)cfg.GetValue("flight", "assist", (int)Assist), 0, 3);
     }
 }

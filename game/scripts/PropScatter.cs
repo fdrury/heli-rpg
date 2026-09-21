@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Godot;
 
@@ -53,6 +54,30 @@ public sealed partial class PropScatter : Node3D
     private readonly Queue<Built> _ready = new();
     private readonly object _lock = new();
     private Vector2I _lastCentre = new(int.MinValue, int.MinValue);
+
+    /// <summary>
+    /// Shutdown handshake for the scatter workers. Same hazard as TerrainStreamer, and
+    /// the same fix: these tasks read WorldHeight's static FastNoiseLite fields and this
+    /// class's own two, all of them engine-owned, and a worker still inside one when the
+    /// tree is torn down is reading freed memory. See the long note in TerrainStreamer.
+    /// </summary>
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly List<Task> _builds = new();
+    private readonly object _buildsLock = new();
+
+    /// <summary>Stop handing out work, then wait for what is already out.</summary>
+    public override void _ExitTree()
+    {
+        _shutdown.Cancel();
+        Task[] outstanding;
+        lock (_buildsLock) { outstanding = _builds.ToArray(); }
+        if (outstanding.Length > 0)
+        {
+            try { Task.WaitAll(outstanding, TimeSpan.FromSeconds(2)); }
+            catch (AggregateException) { /* a failed build already reported itself */ }
+        }
+        _shutdown.Dispose();
+    }
 
     private sealed class Built
     {
@@ -170,7 +195,13 @@ public sealed partial class PropScatter : Node3D
         {
             _pending.Add(key);
             var k = key;
-            Task.Run(() => BuildChunk(k.Item1, k.Item2));
+            if (_shutdown.IsCancellationRequested) return;
+            Task t = Task.Run(() => BuildChunk(k.Item1, k.Item2));
+            lock (_buildsLock)
+            {
+                _builds.RemoveAll(b => b.IsCompleted);
+                _builds.Add(t);
+            }
         }
     }
 
@@ -186,6 +217,7 @@ public sealed partial class PropScatter : Node3D
 
     private void BuildChunk(Vector2I coord, PropKind kind)
     {
+        if (_shutdown.IsCancellationRequested) return;
         try
         {
             int variants = kind switch

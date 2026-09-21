@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Godot;
 
@@ -53,6 +54,26 @@ public sealed partial class TerrainStreamer : Node3D
     private Vector2I _lastCentre = new(int.MinValue, int.MinValue);
     private int _chunksBuilt;
 
+    /// <summary>
+    /// Shutdown handshake for the worker threads.
+    ///
+    /// Every chunk is built off the main thread out of <see cref="WorldHeight"/>, whose
+    /// noise fields are static FastNoiseLite - engine-owned objects. When the tree goes
+    /// away Godot frees them, and any worker still inside GetNoise2D is reading a freed
+    /// object. That shows up as "Cannot access a disposed object: Godot.FastNoiseLite" if
+    /// you are lucky and as "Fatal error. Internal CLR error. (0x80131506)" if you are not,
+    /// and both were reproducible just by quitting: --worldreport calls Quit() while a ring
+    /// of chunks is still in flight.
+    ///
+    /// Cancelling alone does not fix it - a task already inside the noise call cannot be
+    /// interrupted - so _ExitTree also WAITS for the workers to finish. This is the same
+    /// hazard the ChunkBuild comment above warns about, arriving from the other end: not a
+    /// worker touching the scene tree, but the scene tree being torn down under a worker.
+    /// </summary>
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly List<Task> _builds = new();
+    private readonly object _buildsLock = new();
+
     [Export] public int MaxApplyPerFrame { get; set; } = 2;
     [Export] public int MaxConcurrentBuilds { get; set; } = 4;
 
@@ -89,6 +110,22 @@ public sealed partial class TerrainStreamer : Node3D
         _terrainMaterial = TerrainMaterial.Build();
         _waterMaterial = BuildWaterMaterial();
         _waterQuad = BuildWaterQuad(ChunkSize);
+    }
+
+    /// <summary>Stop handing out work, then wait for what is already out. See _shutdown.</summary>
+    public override void _ExitTree()
+    {
+        _shutdown.Cancel();
+        Task[] outstanding;
+        lock (_buildsLock) { outstanding = _builds.ToArray(); }
+        if (outstanding.Length > 0)
+        {
+            // Bounded: a hung worker must not stop the game from closing. Two seconds is
+            // far longer than a chunk takes and far shorter than anyone would notice.
+            try { Task.WaitAll(outstanding, TimeSpan.FromSeconds(2)); }
+            catch (AggregateException) { /* a failed build already reported itself */ }
+        }
+        _shutdown.Dispose();
     }
 
     public override void _Process(double delta)
@@ -177,7 +214,15 @@ public sealed partial class TerrainStreamer : Node3D
             neighbours[(int)Edge.West] = LodAt(new Vector2I(c.X - 1, c.Y), centre);
             neighbours[(int)Edge.East] = LodAt(new Vector2I(c.X + 1, c.Y), centre);
 
-            Task.Run(() => BuildChunk(c, l, needsCollision, neighbours));
+            if (_shutdown.IsCancellationRequested) return;
+            Task t = Task.Run(() => BuildChunk(c, l, needsCollision, neighbours));
+            lock (_buildsLock)
+            {
+                // Drop the ones that have already finished, so this does not grow for the
+                // whole session.
+                _builds.RemoveAll(b => b.IsCompleted);
+                _builds.Add(t);
+            }
         }
     }
 
@@ -193,6 +238,7 @@ public sealed partial class TerrainStreamer : Node3D
     /// <summary>Worker-thread mesh generation. Touches no scene-tree state.</summary>
     private void BuildChunk(Vector2I coord, int lod, bool withCollision, int[] neighbourLods)
     {
+        if (_shutdown.IsCancellationRequested) return;
         try
         {
             int res = Math.Max(5, ((BaseResolution - 1) >> lod) + 1);
